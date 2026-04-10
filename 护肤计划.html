@@ -1780,15 +1780,25 @@
             flex-wrap: wrap
         }
 
-        .auth-btn { position:fixed; top:12px; right:12px; z-index:50; display:flex; align-items:center; gap:8px; background:var(--sur); border:1px solid var(--bd); border-radius:20px; padding:5px 12px 5px 8px; box-shadow:0 2px 8px rgba(0,0,0,.08); font-size:12px; font-family:var(--font); color:var(--tx2); cursor:default; transition:all .2s }
+        /* Auth pill */
+        .auth-btn { position:fixed; top:12px; right:12px; z-index:50; display:flex; align-items:center; gap:0; background:var(--sur); border:1px solid var(--bd); border-radius:20px; padding:0; box-shadow:0 2px 12px rgba(0,0,0,.10); font-size:12px; font-family:var(--font); color:var(--tx2); cursor:default; overflow:hidden; transition:border-color .2s }
         .auth-btn.signed-in { border-color:var(--gr-br) }
-        .auth-sign-in { background:none; border:none; cursor:pointer; font-size:12px; font-family:var(--font); color:var(--bl); padding:0; font-weight:500 }
-        .auth-sign-in:hover { text-decoration:underline }
-        .auth-avatar { width:20px; height:20px; border-radius:50%; object-fit:cover }
-        .auth-btn button { background:none; border:none; cursor:pointer; font-size:11px; color:var(--tx3); font-family:var(--font); padding:0 0 0 6px }
-        .auth-btn button:hover { color:var(--tx) }
-        .sync-status { position:fixed; bottom:16px; right:16px; font-size:11px; font-family:var(--mono); color:var(--tx3); background:var(--sur); border:1px solid var(--bd); border-radius:10px; padding:3px 10px; opacity:0; transition:opacity .4s; pointer-events:none; z-index:50 }
-        .sync-status.show { opacity:1 }
+        .auth-pill-left { display:flex; align-items:center; gap:7px; padding:6px 10px 6px 8px }
+        .auth-pill-sync { padding:6px 10px; border-left:1px solid var(--bd); border-right:1px solid var(--bd); font-size:11px; font-family:var(--mono); min-width:72px; text-align:center; transition:all .3s }
+        .auth-pill-sync.ok { color:#22a06b }
+        .auth-pill-sync.syncing { color:var(--tx3) }
+        .auth-pill-sync.err { color:#e2483d }
+        .auth-pill-signout { background:none; border:none; cursor:pointer; font-size:11px; font-family:var(--font); color:var(--tx3); padding:6px 12px; transition:color .15s }
+        .auth-pill-signout:hover { color:#e2483d; background:rgba(226,72,61,.06) }
+        .auth-sign-in { background:none; border:none; cursor:pointer; font-size:12px; font-family:var(--font); color:var(--bl); padding:7px 14px; font-weight:500 }
+        .auth-sign-in:hover { background:rgba(0,100,230,.06) }
+        .auth-avatar { width:22px; height:22px; border-radius:50%; object-fit:cover }
+        /* Step pulse on tap */
+        @keyframes step-tap { 0%{transform:scale(1)} 40%{transform:scale(1.18)} 100%{transform:scale(1)} }
+        .tn-step.tapped .tn-n { animation:step-tap .25s ease }
+        /* Sync toast */
+        .sync-toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); font-size:13px; font-family:var(--font); background:rgba(30,30,30,.88); color:#fff; border-radius:20px; padding:8px 20px; opacity:0; pointer-events:none; z-index:200; transition:opacity .35s; white-space:nowrap }
+        .sync-toast.show { opacity:1 }
         .bk-note {
             font-size: 11px;
             color: var(--tx3);
@@ -1845,7 +1855,8 @@
                 <div id="auth-btn" class="auth-btn"><button class="auth-sign-in" onclick="signInGoogle()">🔐 Google 登录同步</button></div>
             </div>
         </div>
-        <div id="sync-status-el" class="sync-status">✓ 已同步</div>
+        <div id="sync-status-el" class="sync-status" style="display:none"></div>
+        <div id="sync-toast-el" class="sync-toast"></div>
         <div class="tabs-wrap">
             <div class="tabs">
                 <button class="tab active" onclick="show('tonight',this)">今晚</button>
@@ -2702,6 +2713,11 @@
             if (isNowDone) done.add(prodName); else done.delete(prodName);
             saveDoneSteps(done);
             el.classList.toggle('done', isNowDone);
+            // Tap pulse animation
+            el.classList.remove('tapped');
+            void el.offsetWidth; // reflow
+            el.classList.add('tapped');
+            setTimeout(() => el.classList.remove('tapped'), 300);
             // Write tracked products to journal
             const tag = journalTagForProd(prodName);
             if (tag) {
@@ -3268,8 +3284,8 @@
         function schedulePush() {
             if (!_db || !_user) return;
             clearTimeout(_pushTimer);
-            showSyncStatus('⧗ 同步中…');
-            _pushTimer = setTimeout(pushToCloud, 2500);
+            showSyncStatus('⧗ 保存中…', 'syncing');
+            _pushTimer = setTimeout(pushToCloud, 2000);
         }
 
         async function pushToCloud() {
@@ -3279,17 +3295,31 @@
             CLOUD_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v !== null) { try { data[k] = JSON.parse(v); } catch { data[k] = v; } } });
             try {
                 await _db.collection('users').doc(_user.uid).set(data, { merge: true });
-                showSyncStatus('✓ 已同步');
-            } catch(e) { console.warn('上传失败:', e); showSyncStatus('⚠ 同步失败'); }
+                showSyncStatus('✓ 已保存', 'ok');
+            } catch(e) { console.warn('上传失败:', e); showSyncStatus('⚠️ 同步失败，请检查网络', 'err'); }
             _pushing = false;
         }
 
-        let _syncFadeTimer = null;
-        function showSyncStatus(msg) {
-            const el = document.getElementById('sync-status-el'); if (!el) return;
-            el.textContent = msg; el.classList.add('show');
+        let _syncFadeTimer = null, _syncState = 'ok';
+        function showSyncStatus(msg, state) {
+            // state: 'syncing' | 'ok' | 'err'
+            state = state || 'ok';
+            _syncState = state;
+            // Update inline auth pill status
+            const pill = document.getElementById('sync-pill');
+            if (pill) {
+                pill.textContent = msg;
+                pill.className = 'auth-pill-sync ' + state;
+            }
+            // Show bottom toast for ok/err
             clearTimeout(_syncFadeTimer);
-            _syncFadeTimer = setTimeout(() => el.classList.remove('show'), 2500);
+            if (state !== 'syncing') {
+                const toast = document.getElementById('sync-toast-el');
+                if (toast) { toast.textContent = msg; toast.classList.add('show'); }
+                _syncFadeTimer = setTimeout(() => {
+                    if (toast) toast.classList.remove('show');
+                }, state === 'err' ? 6000 : 3500);
+            }
         }
 
         function signInGoogle() {
@@ -3303,7 +3333,11 @@
             const el = document.getElementById('auth-btn'); if (!el) return;
             if (_user) {
                 const name = _user.displayName ? _user.displayName.split(' ')[0] : '已登录';
-                el.innerHTML = `<img src="${_user.photoURL}" class="auth-avatar" alt=""><span style="color:var(--tx)">${name}</span><button onclick="signOut()">退出</button>`;
+                const photo = _user.photoURL ? `<img src="${_user.photoURL}" class="auth-avatar" alt="">` : '👤';
+                el.innerHTML = `
+                    <div class="auth-pill-left">${photo}<span style="color:var(--tx);font-size:12px">${name}</span></div>
+                    <div class="auth-pill-sync syncing" id="sync-pill">✓ 已登录</div>
+                    <button class="auth-pill-signout" onclick="signOut()">退出登录</button>`;
                 el.className = 'auth-btn signed-in';
             } else {
                 el.innerHTML = `<button class="auth-sign-in" onclick="signInGoogle()">🔐 Google 登录同步</button>`;
