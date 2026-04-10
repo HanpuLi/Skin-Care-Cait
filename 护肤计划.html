@@ -3168,7 +3168,7 @@
 
         function signInGoogle() {
             if (typeof firebase === 'undefined') { alert('请先填入 Firebase 配置'); return; }
-            firebase.auth().signInWithRedirect(new firebase.auth.GoogleAuthProvider()).catch(e => alert('登录失败: ' + e.message));
+            firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(e => alert('登录失败如果使用了Safari拦截弹窗，请允许弹窗，或使用电脑端登录。详细报错: ' + e.message));
         }
         function signOut() {
             if (confirm('确定退出登录？退出后将使用本地缓存。')) firebase.auth().signOut();
