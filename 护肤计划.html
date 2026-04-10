@@ -9,6 +9,9 @@
     <meta name="theme-color" content="#141210" media="(prefers-color-scheme: dark)">
     <title>护肤计划</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧴</text></svg>" type="image/svg+xml">
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link
         href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&family=DM+Mono:wght@300;400&display=swap"
@@ -1887,6 +1890,17 @@
             <div class="tn-plan" id="tn-plan"></div>
             <p style="font-size:11px;color:var(--tx3);font-family:var(--mono);margin-top:.75rem">点击步骤可打勾标记完成（跨切换持久保存）
             </p>
+            <div style="background:var(--sur2);border-radius:var(--rs);padding:1rem;margin-top:1.5rem">
+                <div style="font-size:13px;font-weight:500;margin-bottom:8px">快速记录今日皮肤状态</div>
+                <div class="chips" id="tn-ql-chips">
+                    <div class="chip" data-cls="s-ok" onclick="logTonightStatus('稳定')">✓ 稳定</div>
+                    <div class="chip" data-cls="s-warn" onclick="logTonightStatus('出油')">💧 出油</div>
+                    <div class="chip" data-cls="s-warn" onclick="logTonightStatus('干燥')">🏜 干燥</div>
+                    <div class="chip" data-cls="s-bad" onclick="logTonightStatus('爆痘')">⚡ 爆痘</div>
+                    <div class="chip" data-cls="s-bad" onclick="logTonightStatus('泛红')">🔴 泛红</div>
+                </div>
+                <div id="tn-ql-msg" class="svm" style="margin-top:8px"></div>
+            </div>
         </div>
 
         <!-- ══ 早晨 ══ -->
@@ -2036,6 +2050,8 @@
         <div id="stats" class="panel">
             <div class="sg" id="stat-grid"></div>
             <div id="barrier-breakdown" style="font-size:12px;line-height:1.6;padding:0 4px 8px;display:none;background:var(--sur2);border-radius:var(--rs);margin-bottom:12px"></div>
+            <div class="sec-title" style="margin-bottom:8px">自动护肤洞察</div>
+            <div id="stats-insights" style="background:var(--sur2);border-radius:var(--rs);padding:12px;font-size:13px;color:var(--tx);margin-bottom:1.5rem;line-height:1.5"></div>
             <div class="sec-title" style="margin-bottom:8px">过去14天皮肤热力图</div>
             <div class="hlr"><span id="hs-start"></span><span>今天</span></div>
             <div class="hg" id="heat-grid"></div>
@@ -2525,6 +2541,30 @@
             const key = panel === 'am' ? K.amsteps : K.tnsteps;
             ls(key, { date: today(), done: [...set] });
         }
+        function logTonightStatus(status) {
+            const t = today();
+            const e = lg(K.jrnl) || [];
+            let entry = e.find(x => x.date === t);
+            let isNew = false;
+            if (!entry) {
+                entry = { date: t, status: [], products: [], note: '', phase: '' };
+                isNew = true;
+            }
+            if (entry.status.includes(status)) entry.status = entry.status.filter(s => s !== status);
+            else entry.status.push(status);
+            
+            if (isNew) e.unshift(entry);
+            ls(K.jrnl, e.slice(0, 365));
+            
+            const msg = document.getElementById('tn-ql-msg');
+            if (msg) {
+                msg.textContent = entry.status.includes(status) ? '✓ 已添加：' + status : '已移除：' + status;
+                msg.classList.add('show');
+                setTimeout(() => msg.classList.remove('show'), 2000);
+            }
+            renderTn(); renderAm(); renderStats(); renderBarrierBadge();
+            if(window.location.hash !== '#jrnl') renderJrnl(); 
+        }
         function toggleStep(el) {
             const prodName = el.dataset.prod;
             const panel = el.closest('#am-plan') ? 'am' : 'tn';
@@ -2678,6 +2718,19 @@
             if (PS.sunscreen !== 'owned') skips.push('⚠ 明早无防晒 → 痘印风险！尽快购入');
 
             const done = loadDoneSteps('tn');
+            
+            // Highlight used statuses in quick log
+            const todayEntry = (lg(K.jrnl) || []).find(e => e.date === today());
+            const todayStatus = todayEntry ? (todayEntry.status || []) : [];
+            const qlChips = document.getElementById('tn-ql-chips');
+            if (qlChips) {
+                Array.from(qlChips.children).forEach(chip => {
+                    const val = chip.textContent.replace('✓ ', '').replace('💧 ', '').replace('🏜 ', '').replace('⚡ ', '').replace('🔴 ', '').trim();
+                    if (todayStatus.includes(val)) chip.className = 'chip ' + chip.dataset.cls;
+                    else chip.className = 'chip';
+                });
+            }
+            
             const pl = document.getElementById('tn-plan'); if (!pl) return;
             const stH = steps.map((s, i) => `<div class="tn-step${done.has(s.p) ? ' done' : ''}" data-prod="${s.p}" onclick="toggleStep(this)">
     <div class="tn-n"><span class="tn-n-inner">${i + 1}</span></div>
@@ -3072,6 +3125,25 @@
                     bd.innerHTML = breakdown;
                 }
             }
+            
+            // Generate Intelligent Insights
+            const insights = document.getElementById('stats-insights');
+            if (insights) {
+                let msgs = [];
+                if (score !== null) {
+                    if (score < 60) msgs.push('⚠️ <b>屏障受损预警</b>：近期分数低下，建议停用所有酸类和视黄醇，专注极简修护（B5点涂/封层）。');
+                    else if (score >= 80) msgs.push('✅ <b>状态极佳</b>：屏障健康分良好，可以继续维持目前的去角质频率。');
+                    else msgs.push('💡 <b>状态稳定</b>：屏障分处于正常水平，注意观察微小波动。');
+                }
+                if (acids > 8) msgs.push('⚠️ <b>用酸过频</b>：过去4周用酸超8次，如果同期出现泛红/爆痘，须立即拉长用酸间隔。');
+                
+                if (streak >= 7) msgs.push(`🔥 <b>记录达人</b>：已连续记录 ${streak} 天！持续的数据让分析更准确。`);
+                else if (streak === 0) msgs.push('📝 <b>今日未打卡</b>：今天还没记录皮肤状态，记得去「今晚」面板快速点选。');
+                
+                if (!msgs.length) msgs.push('📊 每天记录状态，这里会自动生成针对性护肤建议。');
+                
+                insights.innerHTML = msgs.map(m => `<div style="margin-bottom:6px">${m}</div>`).join('');
+            }
 
             const hg = document.getElementById('heat-grid'), hs = document.getElementById('hs-start');
             if (hg) {
@@ -3323,6 +3395,17 @@
         }
 
         initFirebase();
+        
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').then(reg => {
+                    console.log('ServiceWorker registration successful');
+                }).catch(err => {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            });
+        }
     </script>
 
 </body>

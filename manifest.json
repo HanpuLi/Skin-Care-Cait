@@ -1,0 +1,16 @@
+{
+  "name": "护肤计划",
+  "short_name": "护肤计划",
+  "start_url": "./护肤计划.html",
+  "display": "standalone",
+  "background_color": "#fafaf9",
+  "theme_color": "#fafaf9",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
