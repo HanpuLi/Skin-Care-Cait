@@ -1861,9 +1861,7 @@
             <div class="tabs">
                 <button class="tab active" onclick="show('tonight',this)">今晚</button>
                 <button class="tab" onclick="show('am',this)">早晨</button>
-                <button class="tab" onclick="show('pms',this)">洗澡夜</button>
-                <button class="tab" onclick="show('pmn',this)">非洗澡夜</button>
-                <button class="tab" onclick="show('shv',this)">刮胡日</button>
+                <button class="tab" onclick="show('guide',this)">指南</button>
                 <button class="tab" onclick="show('wkly',this)">排班</button>
                 <button class="tab" onclick="show('jrnl',this)">日志</button>
                 <button class="tab" onclick="show('stats',this)">统计</button>
@@ -1891,257 +1889,32 @@
 
         <!-- ══ 早晨 ══ -->
 
+        <!-- ══ 早晨 ══ -->
         <div id="am" class="panel">
-            <div class="alert success">
-                <div class="at">早晨：一步即可</div>用过酸的次日只需防晒。其他均可选。
-            </div>
-            <div class="section">
-                <div class="step">
-                    <div class="num gh">0</div>
-                    <div class="sc">
-                        <div class="prod">清水冲洗 30秒</div>
-                        <div class="how">不需要洁面产品</div>
-                    </div>
-                </div>
-                <div class="step">
-                    <div class="num wn">!</div>
-                    <div class="sc">
-                        <div class="prod danger" id="am-spf-name">SPF 30+ 防晒<span class="tag must"
-                                id="am-spf-tag">待购入</span></div>
-                        <div class="how">用了酸类的次日无防晒 = 加深痘印。Altruist SPF50（£3–5）或 La Roche-Posay Anthelios UVMUNE</div>
-                    </div>
-                </div>
-                <div class="step dim">
-                    <div class="num gh">+</div>
-                    <div class="sc">
-                        <div class="prod">Toleriane Ultra Light <span class="tag skip">仅紧绷时</span></div>
-                        <div class="how">防晒前薄涂打底，平时跳过</div>
-                    </div>
-                </div>
-                <div class="step dim">
-                    <div class="num gh">+</div>
-                    <div class="sc">
-                        <div class="prod">MZ Skin 眼霜 <span class="tag skip">可选</span></div>
-                        <div class="how">只用晚上也完全够</div>
-                    </div>
-                </div>
-            </div>
+            <div id="am-plan"></div>
+            <p style="font-size:11px;color:var(--tx3);font-family:var(--mono);margin-top:.75rem">与“今晚”同样，点击步骤可打勾标记完成</p>
         </div>
 
-        <!-- ══ 洗澡夜 ══ -->
-
-        <div id="pms" class="panel">
+        <!-- ══ 使用指南 ══ -->
+        <div id="guide" class="panel">
+           <div class="alert info">
+                <div class="at">洗澡夜（约2次/周）</div>洗澡后渗透性增强——酸类优先安排在洗澡夜。
+            </div>
             <div class="alert info">
-                <div class="at">洗澡夜（每4天）</div>洗澡后渗透性增强——酸类优先安排在洗澡夜。
+                <div class="at">非洗澡夜（约5天/周）</div>屏障修复主要时段，使用微温水或 Bioderma粉水 简单清洁，修护为主。
             </div>
-            <div class="section">
-                <div class="sec-title">洁面</div>
-                <div class="step">
-                    <div class="num pm">1</div>
-                    <div class="sc">
-                        <div class="prod">Lancôme Clarifique 洁面泡沫</div>
-                        <div class="how">轻柔画圈60秒，温水冲净。T区多停留，两颊轻过，不超过90秒</div>
-                    </div>
-                </div>
-            </div>
-            <div class="section">
-                <div class="sec-title">去角质（上限见排班酸类频率）</div>
-                <div class="step">
-                    <div class="num pm">2A</div>
-                    <div class="sc">
-                        <div class="prod">Paula's Choice 6%杏仁酸+2%乳酸 <span class="tag acid">T区主选</span></div>
-                        <div class="how">额头+鼻翼+下颌，停留3–5分钟，无需冲洗。两颊有刺激感则跳过</div>
-                    </div>
-                </div>
-                <div class="step">
-                    <div class="num pm">2B</div>
-                    <div class="sc">
-                        <div class="prod">Votary 10%乳酸 <span class="tag acid">全脸/两颊主选</span></div>
-                        <div class="how">与PC交替，不同晚叠加。乳酸保湿性更强，适合两颊偏干</div>
-                    </div>
-                </div>
-                <div class="step" id="gg-step">
-                    <div class="num gh" id="gg-num">✗</div>
-                    <div class="sc">
-                        <div class="prod" id="gg-name">Sunday Riley Good Genes <span class="tag skip"
-                                id="gg-tag">暂缓</span></div>
-                        <div class="how" id="gg-how">高酒精+乙醇酸对当前屏障过激进。屏障稳定4周后再评估</div>
-                    </div>
-                </div>
-            </div>
-            <div class="section">
-                <div class="sec-title">精华</div>
-                <div class="step">
-                    <div class="num pm">3</div>
-                    <div class="sc">
-                        <div class="prod">Dr Sebagh Rose de Vie <span class="tag act">无酸夜使用</span></div>
-                        <div class="how">酸类当晚跳过，直接保湿。非酸夜全脸3–4滴</div>
-                    </div>
-                </div>
-                <div class="step">
-                    <div class="num pm">4</div>
-                    <div class="sc">
-                        <div class="prod">MZ Skin 眼霜</div>
-                        <div class="how">无名指轻拍眼眶骨</div>
-                    </div>
-                </div>
-            </div>
-            <div class="section">
-                <div class="sec-title">保湿封层</div>
-                <div class="step">
-                    <div class="num pm">5</div>
-                    <div class="sc">
-                        <div class="prod">Skin Rocks The Moisturiser FF <span class="tag barrier">首选</span></div>
-                        <div class="how">无香精，酸类夜必用</div>
-                    </div>
-                </div>
-                <div class="step dim">
-                    <div class="num gh">5B</div>
-                    <div class="sc">
-                        <div class="prod">Estée Lauder Revitalizing Supreme+ <span class="tag caution">仅两颊极干时</span>
-                        </div>
-                        <div class="how">含香精，避开T区，仅叠加于干燥颊部</div>
-                    </div>
-                </div>
-                <div class="step">
-                    <div class="num pm">6</div>
-                    <div class="sc">
-                        <div class="prod">Cicaplast B5 <span class="tag barrier">点涂</span></div>
-                        <div class="how">活跃痘痘逐个薄涂；口罩线加强修护</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ══ 非洗澡夜 ══ -->
-
-        <div id="pmn" class="panel">
-            <div class="alert info">
-                <div class="at">非洗澡夜（约3天/周）</div>屏障修复主要时段，轻柔洁面，修护为主。
-            </div>
-            <div class="section">
-                <div class="sec-title">洁面</div>
-                <div class="step">
-                    <div class="num pm">1</div>
-                    <div class="sc">
-                        <div class="prod">温水冲洗 / 卸妆水<span class="tag skip" id="bio-tag">待购入</span></div>
-                        <div class="how" id="bio-how">无彩妆：温水30秒。有防晒/彩妆：Bioderma Sensibio H2O（待购）再水洗</div>
-                    </div>
-                </div>
-            </div>
-            <div class="section">
-                <div class="sec-title">修护精华</div>
-                <div class="step">
-                    <div class="num pm">2</div>
-                    <div class="sc">
-                        <div class="prod">Dr Sebagh Rose de Vie</div>
-                        <div class="how">全脸3–4滴</div>
-                    </div>
-                </div>
-                <div class="step">
-                    <div class="num pm">3</div>
-                    <div class="sc">
-                        <div class="prod">Agent Nateur Holi(Oil) <span class="tag caution">两颊/非痘区</span></div>
-                        <div class="how">1–2滴，仅两颊和颈部。额头严格避开。当周额头有活跃新痘时全周暂停</div>
-                    </div>
-                </div>
-                <div class="step">
-                    <div class="num pm">4</div>
-                    <div class="sc">
-                        <div class="prod">MZ Skin 眼霜</div>
-                    </div>
-                </div>
-            </div>
-            <div class="section">
-                <div class="sec-title">保湿</div>
-                <div class="step">
-                    <div class="num pm">5</div>
-                    <div class="sc">
-                        <div class="prod">La Roche-Posay Toleriane Ultra Light</div>
-                        <div class="how">轻薄全脸，非洗澡夜无需厚封层</div>
-                    </div>
-                </div>
-                <div class="step">
-                    <div class="num pm">6</div>
-                    <div class="sc">
-                        <div class="prod">Cicaplast B5 <span class="tag barrier">点涂</span></div>
-                    </div>
-                </div>
-            </div>
-            <div class="section">
-                <div class="sec-title">视黄醇（屏障稳定后）</div>
-                <div class="step" id="rt-step">
-                    <div class="num gh" id="rt-num">→</div>
-                    <div class="sc">
-                        <div class="prod" id="rt-name">Lancaster 眼霜小样（视黄醇）<span class="tag caution"
-                                id="rt-tag">谨慎引入</span></div>
-                        <div class="how" id="rt-how">1次/周，仅非酸夜、非刮胡日。观察4周无反应再维持</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ══ 刮胡日 ══ -->
-
-        <div id="shv" class="panel">
             <div class="alert warn">
-                <div class="at">刮胡 = 机械性去角质</div>刮胡日当晚禁用所有酸类和视黄醇。
+                <div class="at">刮胡 = 机械性去角质</div>刮胡日当晚必须跳过所有剥脱性酸类和视黄醇。刮胡后全脸薄涂 Cicaplast B5 是必须的动作。
+            </div>
+            <div class="section" style="margin-top:2rem">
+                <div class="sec-title">叠涂顺序口诀</div>
+                <div class="step"><div class="num pm">1</div><div class="sc"><div class="prod">稀薄到浓厚</div><div class="how">酸类 → 水/精华 → 面霜/乳液 → 油 → 防晒（早晨）</div></div></div>
+                <div class="step"><div class="num pm">2</div><div class="sc"><div class="prod">酸类后等待3分钟</div><div class="how">让皮肤pH稳定后再叠后续步骤</div></div></div>
+                <div class="step"><div class="num pm">3</div><div class="sc"><div class="prod">Cicaplast B5 最后封层</div><div class="how">大分子结构会阻碍后续成分渗透</div></div></div>
             </div>
             <div class="section">
-                <div class="sec-title">刮胡前</div>
-                <div class="step">
-                    <div class="num no">1</div>
-                    <div class="sc">
-                        <div class="prod">温水湿润面部 1–2分钟</div>
-                        <div class="how">软化毛发，降低摩擦</div>
-                    </div>
-                </div>
-                <div class="step">
-                    <div class="num no">2</div>
-                    <div class="sc">
-                        <div class="prod">Toleriane Ultra Light 或 Cicaplast B5 薄涂</div>
-                        <div class="how">替代刮胡膏，顺毛发方向刮</div>
-                    </div>
-                </div>
-            </div>
-            <div class="section">
-                <div class="sec-title">刮胡后（立即）</div>
-                <div class="step">
-                    <div class="num no">3</div>
-                    <div class="sc">
-                        <div class="prod">凉水冲洗</div>
-                    </div>
-                </div>
-                <div class="step">
-                    <div class="num no">4</div>
-                    <div class="sc">
-                        <div class="prod">Cicaplast B5 全脸薄涂 <span class="tag barrier">必须</span></div>
-                        <div class="how">修护微创口、抗菌。最重要的单步骤</div>
-                    </div>
-                </div>
-                <div class="step">
-                    <div class="num no">5</div>
-                    <div class="sc">
-                        <div class="prod">Avène Tolérance Extreme 面膜（可选）</div>
-                        <div class="how">泛红/刺痛时涂抹10–15分钟镇定</div>
-                    </div>
-                </div>
-            </div>
-            <div class="section">
-                <div class="sec-title">刮胡日晚间</div>
-                <div class="step">
-                    <div class="num no">6</div>
-                    <div class="sc">
-                        <div class="prod">跳过所有酸类 + 视黄醇</div>
-                    </div>
-                </div>
-                <div class="step">
-                    <div class="num no">7</div>
-                    <div class="sc">
-                        <div class="prod">Dr Sebagh → Skin Rocks FF → Cicaplast B5</div>
-                        <div class="how">修护精华 → 无香面霜 → B5点涂收尾</div>
-                    </div>
-                </div>
+                <div class="sec-title">HRT 皮肤变化预警</div>
+                <p style="font-size:13px;color:var(--tx2);margin-bottom:12px;line-height:1.5">进入 E2 周期后，由于雌激素波动，前 3-6 个月可能会经历短暂的爆发期。如果突发连续长痘，遵循以下原则：<br>1. 立即将酸类降至 1 次/周甚至停用，仅在痘痘处点涂。<br>2. 暂停使用 精华油，避免滋养痤疮丙酸杆菌。<br>3. 基础夜间护肤缩减为 <b>洗面奶 → Skin Rocks FF 面霜 → Cicaplast B5点涂修护</b>。</p>
             </div>
         </div>
 
@@ -2424,27 +2197,35 @@
 
         // ══ Products ════════════════════════════════════════════════
         const DEFAULT_PD = [
-            { id:'sunscreen',icon:'☀️',name:'SPF 防晒',cat:'早晨 · 必备',journalTag:'',statuses:['pending','owned'],labels:{pending:'待购入',owned:'已购入'},pillCls:{pending:'pending',owned:'owned'},notes:['Altruist SPF50（£3–5）—预算首选','La Roche-Posay Anthelios UVMUNE—升级选择','用酸次日无防晒 = 加深痘印'],schedule:{type:'daily',maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},builtin:true },
-            { id:'bioderma',icon:'💧',name:'Bioderma Sensibio H2O',cat:'洁面 · 卸妆水',journalTag:'',statuses:['pending','owned'],labels:{pending:'待购入',owned:'已购入'},pillCls:{pending:'pending',owned:'owned'},notes:['非洗澡夜有防晒/彩妆时使用','极温和，适合屏障修护期'],schedule:{type:'daily',maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},builtin:true },
-            { id:'clay',icon:'🫙',name:'IPSA 深层净化泥面膜',cat:'去角质 · 泥膜',journalTag:'泥面膜',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['1次/周，洗澡夜使用','使用当晚视为酸类占用','泛红/敏感期暂停'],schedule:{type:'mask',maxPerWeek:1,minDaysBetween:0,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:false,enableAutoSchedule:true},builtin:true },
-            { id:'goodGenes',icon:'🧪',name:'Sunday Riley Good Genes',cat:'去角质 · 乙醇酸',journalTag:'Good Genes',statuses:['paused','active'],labels:{paused:'暂缓使用',active:'可以使用'},pillCls:{paused:'paused',active:'active'},notes:['高酒精+乙醇酸，屏障稳定4周后再评估','使用时替换PC或Votary，不得叠用'],schedule:{type:'acid',maxPerWeek:1,minDaysBetween:2,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:true,enableAutoSchedule:true},builtin:true },
-            { id:'retinol',icon:'🔬',name:'Lancaster 视黄醇小样',cat:'抗衰 · 极谨慎',journalTag:'视黄醇',statuses:['cautious','active'],labels:{cautious:'谨慎引入',active:'已纳入常规'},pillCls:{cautious:'cautious',active:'active'},notes:['1次/周起步，仅非酸夜、非刮胡日','观察4周无刺激再维持频率'],schedule:{type:'retinol',maxPerWeek:1,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:true,avoidAcid:true,avoidRetinol:false,enableAutoSchedule:true},builtin:true },
-            { id:'pc',icon:'🧴',name:"Paula's Choice 6%杏仁酸+2%乳酸",cat:'去角质 · T区',journalTag:'PC酸',statuses:['active'],labels:{active:'正常使用'},pillCls:{active:'active'},notes:['T区主选：额头、鼻翼、下颌','停留3–5分钟，无需冲洗'],schedule:{type:'acid',maxPerWeek:1,minDaysBetween:2,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:true,enableAutoSchedule:true},builtin:true },
-            { id:'votary',icon:'🧴',name:'Votary 10%乳酸',cat:'去角质 · 全脸',journalTag:'Votary酸',statuses:['active'],labels:{active:'正常使用'},pillCls:{active:'active'},notes:['全脸/两颊主选，保湿性更强','与PC交替，乳酸对屏障更温和'],schedule:{type:'acid',maxPerWeek:1,minDaysBetween:2,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:true,enableAutoSchedule:true},builtin:true },
+            { id:'sunscreen',icon:'☀️',name:'SPF 防晒',cat:'早晨 · 必备',journalTag:'',statuses:['pending','owned'],labels:{pending:'待购入',owned:'已购入'},pillCls:{pending:'pending',owned:'owned'},notes:['Altruist SPF50（£3–5）—预算首选','La Roche-Posay Anthelios UVMUNE—升级选择','用酸次日无防晒 = 加深痘印'],schedule:{type:'daily',time:['am'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
+            { id:'bioderma',icon:'💧',name:'Bioderma Sensibio H2O',cat:'洁面 · 卸妆水',journalTag:'',statuses:['pending','owned'],labels:{pending:'待购入',owned:'已购入'},pillCls:{pending:'pending',owned:'owned'},notes:['非洗澡夜有防晒/彩妆时使用','极温和，适合屏障修护期'],schedule:{type:'daily',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
+            { id:'clay',icon:'🫙',name:'IPSA 深层净化泥面膜',cat:'去角质 · 泥膜',journalTag:'泥面膜',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['1次/周，洗澡夜使用','使用当晚视为酸类占用','泛红/敏感期暂停'],schedule:{type:'mask',time:['pm'],maxPerWeek:1,minDaysBetween:0,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:false,enableAutoSchedule:true},paoMonths:6,builtin:true },
+            { id:'goodGenes',icon:'🧪',name:'Sunday Riley Good Genes',cat:'去角质 · 乙醇酸',journalTag:'Good Genes',statuses:['paused','active'],labels:{paused:'暂缓使用',active:'可以使用'},pillCls:{paused:'paused',active:'active'},notes:['高酒精+乙醇酸，屏障稳定4周后再评估','使用时替换PC或Votary，不得叠用'],schedule:{type:'acid',time:['pm'],maxPerWeek:1,minDaysBetween:2,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:true,enableAutoSchedule:true},paoMonths:12,builtin:true },
+            { id:'retinol',icon:'🔬',name:'Lancaster 视黄醇小样',cat:'抗衰 · 极谨慎',journalTag:'视黄醇',statuses:['cautious','active'],labels:{cautious:'谨慎引入',active:'已纳入常规'},pillCls:{cautious:'cautious',active:'active'},notes:['1次/周起步，仅非酸夜、非刮胡日','观察4周无刺激再维持频率'],schedule:{type:'retinol',time:['pm'],maxPerWeek:1,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:true,avoidAcid:true,avoidRetinol:false,enableAutoSchedule:true},paoMonths:12,builtin:true },
+            { id:'pc',icon:'🧴',name:"Paula's Choice 6%杏仁酸+2%乳酸",cat:'去角质 · T区',journalTag:'PC酸',statuses:['active'],labels:{active:'正常使用'},pillCls:{active:'active'},notes:['T区主选：额头、鼻翼、下颌','停留3–5分钟，无需冲洗'],schedule:{type:'acid',time:['pm'],maxPerWeek:1,minDaysBetween:2,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:true,enableAutoSchedule:true},paoMonths:12,builtin:true },
+            { id:'votary',icon:'🧴',name:'Votary 10%乳酸',cat:'去角质 · 全脸',journalTag:'Votary酸',statuses:['active'],labels:{active:'正常使用'},pillCls:{active:'active'},notes:['全脸/两颊主选，保湿性更强','与PC交替，乳酸对屏障更温和'],schedule:{type:'acid',time:['pm'],maxPerWeek:1,minDaysBetween:2,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:true,enableAutoSchedule:true},paoMonths:6,builtin:true },
             // ── 每晚固定护理品 ─────────────────────────────────────────
-            { id:'lancome',icon:'🧼',name:'Lancôme Clarifique 洁面泡沫',cat:'洁面 · 洗澡夜',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['洗澡夜使用，60秒按摩，T区多停留','替代温水冲洗，清洁力更强'],schedule:{type:'base',maxPerWeek:0,minDaysBetween:0,preferShowerNight:true,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},builtin:true },
-            { id:'sebagh',icon:'💎',name:'Dr Sebagh Rose de Vie 精华',cat:'精华 · 修护夜',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['修护夜和非酸夜使用（酸类夜跳过）','全脸3–4滴，轻拍至吸收'],schedule:{type:'base',maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},builtin:true },
-            { id:'agentholi',icon:'🌿',name:'Agent Nateur Holi(Oil) 精华油',cat:'精华油 · 修护夜',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['非洗澡夜使用，1–2滴','两颊和颈部，额头避开'],schedule:{type:'base',maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},builtin:true },
-            { id:'mzskin',icon:'👁',name:'MZ Skin 眼霜',cat:'眼部 · 每晚',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['无名指轻拍眼眶骨，不要触碰眼球','每晚使用，补水+淡化'],schedule:{type:'base',maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},builtin:true },
-            { id:'skinrocks',icon:'🫧',name:'Skin Rocks FF 面霜',cat:'面霜 · 每晚',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['无香精配方，酸类夜首选','轻薄质地，全脸封层'],schedule:{type:'base',maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},builtin:true },
-            { id:'cicaplast',icon:'🩹',name:'Cicaplast B5 修护霜',cat:'修护 · 每晚',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['活跃痘痘处、口罩线点涂','刮胡后全脸薄涂修护微创口'],schedule:{type:'base',maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},builtin:true },
-            { id:'avene',icon:'🍃',name:'Avène Tolérance Extrême',cat:'修护 · 刮胡后',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['刮胡后泛红/刺痛时使用（可选）','10–15分钟后再叠后续步骤'],schedule:{type:'base',maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},builtin:true },
+            { id:'lancome',icon:'🧼',name:'Lancôme Clarifique 洁面泡沫',cat:'洁面 · 洗澡夜',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['洗澡夜使用，60秒按摩，T区多停留','替代温水冲洗，清洁力更强'],schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:true,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
+            { id:'sebagh',icon:'💎',name:'Dr Sebagh Rose de Vie 精华',cat:'精华 · 修护',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['白天可代替面霜，晚上无酸夜使用','全脸3–4滴，轻拍至吸收'],schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:true,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
+            { id:'agentholi',icon:'🌿',name:'Agent Nateur Holi(Oil) 精华油',cat:'精华油 · 修护夜',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['非洗澡夜使用，1–2滴','两颊和颈部，额头避开'],schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
+            { id:'mzskin',icon:'👁',name:'MZ Skin 眼霜',cat:'眼部 · 护理',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['无名指轻拍眼眶骨，不要触碰眼球','补水+淡化'],schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
+            { id:'skinrocks',icon:'🫧',name:'Skin Rocks FF 面霜',cat:'面霜 · 每晚',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['无香精配方，酸类夜首选','轻薄质地，全脸封层'],schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
+            { id:'cicaplast',icon:'🩹',name:'Cicaplast B5 修护霜',cat:'修护 · 每晚',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['活跃痘痘处、口罩线点涂','刮胡后全脸薄涂修护微创口'],schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
+            { id:'avene',icon:'🍃',name:'Avène Tolérance Extrême',cat:'修护 · 刮胡后',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['刮胡后泛红/刺痛时使用（可选）','10–15分钟后再叠后续步骤'],schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
         ];
         function loadPD() {
             const saved = lg(K.prodDefs);
             if (saved) {
-                // Ensure all saved products have schedule field (migration)
-                saved.forEach(p => { if (!p.schedule) p.schedule = {type:'none',maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false}; });
+                // Ensure all saved products have schedule field & new properties (migration)
+                saved.forEach(p => { 
+                    if (!p.schedule) p.schedule = {type:'none',maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false}; 
+                    if (!p.schedule.time) {
+                        if (p.id === 'sunscreen') p.schedule.time = ['am'];
+                        else if (['sebagh','mzskin','bioderma'].includes(p.id)) p.schedule.time = ['am','pm'];
+                        else p.schedule.time = ['pm'];
+                    }
+                    if (typeof p.paoMonths === 'undefined') p.paoMonths = 0;
+                });
                 // Merge: add any new builtin products not yet in saved list
                 DEFAULT_PD.filter(d => d.builtin).forEach(def => {
                     if (!saved.find(s => s.id === def.id)) saved.push(JSON.parse(JSON.stringify(def)));
@@ -2480,14 +2261,20 @@
             const prod = id ? PD.find(p => p.id === id) : null;
             document.getElementById('modal-title').textContent = prod ? '编辑产品' : '添加产品';
             const TYPES = [{value:'acid',label:'酸类'},{value:'retinol',label:'视黄醇'},{value:'mask',label:'面膜'},{value:'base',label:'基础固定步骤'},{value:'daily',label:'日常(不排班)'},{value:'none',label:'不排班'}];
-            const sch = prod ? prod.schedule : {type:'none',maxPerWeek:1,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false};
+            const sch = prod ? prod.schedule : {type:'none',time:['pm'],maxPerWeek:1,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false};
+            const pTime = sch.time || ['pm'];
             document.getElementById('modal-body').innerHTML = `
                 <div class="fg"><label class="fg-label">产品名称</label><input class="fg-input" id="m-name" value="${esc(prod?prod.name:'')}"></div>
                 <div class="fg-row"><div class="fg"><label class="fg-label">分类</label><input class="fg-input" id="m-cat" value="${esc(prod?prod.cat:'')}"></div>
                 <div class="fg"><label class="fg-label">图标</label><input class="fg-input" id="m-icon" value="${prod?prod.icon:'🧴'}" style="width:60px"></div></div>
                 <div class="fg"><label class="fg-label">备注（每行一条）</label><textarea class="fg-input" id="m-notes" rows="3" style="resize:vertical">${prod?prod.notes.join('\n'):''}</textarea></div>
-                <div class="fg"><label class="fg-label">日志标签（用于记录追踪）</label><input class="fg-input" id="m-jtag" value="${esc(prod?prod.journalTag||'':'')}"></div>
-                <div class="fg"><label class="fg-label">排班类型</label><select class="fg-select" id="m-stype" onchange="toggleSchedFields()">${TYPES.map(t=>`<option value="${t.value}" ${sch.type===t.value?'selected':''}>${t.label}</option>`).join('')}</select></div>
+                <div class="fg"><label class="fg-label">日志标签</label><input class="fg-input" id="m-jtag" value="${esc(prod?prod.journalTag||'':'')}"></div>
+                <div class="fg-row"><div class="fg"><label class="fg-label">排班类型</label><select class="fg-select" id="m-stype" onchange="toggleSchedFields()">${TYPES.map(t=>`<option value="${t.value}" ${sch.type===t.value?'selected':''}>${t.label}</option>`).join('')}</select></div>
+                <div class="fg"><label class="fg-label">保质期 (PAO月数, 0为不提醒)</label><input type="number" class="fg-input" id="m-pao" min="0" value="${prod?prod.paoMonths||0:0}"></div></div>
+                <div class="fg"><label class="fg-label">适用时段（至少选一项）</label>
+                    <div class="fg-toggle"><span>早晨 (AM)</span>${tglHTML('m-tam',pTime.includes('am'))}</div>
+                    <div class="fg-toggle"><span>夜晚 (PM)</span>${tglHTML('m-tpm',pTime.includes('pm'))}</div>
+                </div>
                 <div id="sched-fields">
                     <div class="fg-row"><div class="fg"><label class="fg-label">每周上限</label><input type="number" class="fg-input" id="m-max" min="0" max="7" value="${sch.maxPerWeek||1}"></div>
                     <div class="fg"><label class="fg-label">最小间隔天数</label><input type="number" class="fg-input" id="m-gap" min="0" max="6" value="${sch.minDaysBetween||0}"></div></div>
@@ -2509,8 +2296,14 @@
             const cat = document.getElementById('m-cat').value.trim();
             const notes = document.getElementById('m-notes').value.trim().split('\n').filter(Boolean);
             const journalTag = document.getElementById('m-jtag').value.trim();
+            const timeArr = [];
+            if (document.getElementById('m-tam').checked) timeArr.push('am');
+            if (document.getElementById('m-tpm').checked) timeArr.push('pm');
+            if (!timeArr.length) { alert('请至少选择一个适用时段'); return; }
+            
             const schedule = {
                 type: document.getElementById('m-stype').value,
+                time: timeArr,
                 maxPerWeek: parseInt(document.getElementById('m-max').value)||1,
                 minDaysBetween: parseInt(document.getElementById('m-gap').value)||0,
                 preferShowerNight: document.getElementById('m-shower').checked,
@@ -2519,12 +2312,13 @@
                 avoidRetinol: document.getElementById('m-retinol').checked,
                 enableAutoSchedule: document.getElementById('m-auto').checked
             };
+            const paoMonths = parseInt(document.getElementById('m-pao').value)||0;
             if (editingProdId) {
                 const p = PD.find(p => p.id === editingProdId);
-                if (p) { Object.assign(p, {name,icon,cat,notes,journalTag,schedule}); }
+                if (p) { Object.assign(p, {name,icon,cat,notes,journalTag,schedule,paoMonths}); }
             } else {
                 const id = 'custom_'+Date.now();
-                PD.push({id,icon,name,cat,notes,journalTag,statuses:['active','paused'],labels:{active:'使用中',paused:'已暂停'},pillCls:{active:'active',paused:'paused'},schedule,builtin:false});
+                PD.push({id,icon,name,cat,notes,journalTag,statuses:['active','paused'],labels:{active:'使用中',paused:'已暂停'},pillCls:{active:'active',paused:'paused'},schedule,paoMonths,builtin:false});
                 PS[id] = 'active'; ls(K.prods, PS);
             }
             ls(K.prodDefs, PD); closeProdModal(); renderProds(); updateProdUI(); renderWk(); renderTn();
@@ -2545,14 +2339,22 @@
                 const can = def.statuses.length > 1;
                 const notes = def.notes.map(n => `<div class="pcni">· ${esc(n)}</div>`).join('');
                 const wo = weeksOpen(def.id);
-                const woHtml = wo !== null ? `<span class="popen-lbl">已开封 ${wo} 周</span>` : '';
+                let woHtml = wo !== null ? `<span class="popen-lbl">已开封 ${wo} 周</span>` : '';
+                const paoMonths = def.paoMonths || 0;
+                let paoTag = '';
+                if (paoMonths > 0 && wo !== null) {
+                    const paoWeeksLimit = Math.round(paoMonths * 4.345);
+                    if (wo >= paoWeeksLimit) paoTag = `<span class="sched-tag" style="background:var(--danger);color:#fff">⚠️已过期(超${paoMonths}M)</span>`;
+                    else if (wo >= paoWeeksLimit - 4) paoTag = `<span class="sched-tag" style="background:var(--warn);color:#000">⏳即将过期(${paoMonths}M)</span>`;
+                    else paoTag = `<span class="sched-tag">PAO: ${paoMonths}M</span>`;
+                }
                 const sch = def.schedule || {};
                 const typeL = {acid:'酸类',retinol:'视黄醇',mask:'面膜',daily:'日常',none:'—'};
                 let schedTags = '';
                 if (sch.enableAutoSchedule) schedTags = `<div class="sched-info"><span class="sched-tag">${typeL[sch.type]||sch.type}</span>${sch.maxPerWeek?`<span class="sched-tag">${sch.maxPerWeek}次/周</span>`:''}${sch.minDaysBetween?`<span class="sched-tag">间隔≥${sch.minDaysBetween}天</span>`:''}${sch.preferShowerNight?`<span class="sched-tag">洗澡日优先</span>`:''}</div>`;
                 return `<div class="pc"><div class="pch" onclick="togglePCB('${def.id}')">
       <div class="pci">${def.icon}</div>
-      <div class="pci2"><div class="pcn">${esc(def.name)}</div><div class="pcc">${esc(def.cat)}${wo!==null?` · 开封${wo}周`:''}</div>${schedTags}</div>
+      <div class="pci2"><div class="pcn">${esc(def.name)}</div><div class="pcc">${esc(def.cat)}${wo!==null?` · 开封${wo}周`:''}</div><div class="sched-info" style="margin-top:4px">${paoTag}</div>${schedTags}</div>
       ${can?`<button class="pcp ${def.pillCls[s]}" onclick="cyclePS('${def.id}',event)">${def.labels[s]}</button>`:`<span class="pcp ${def.pillCls[s]}">${def.labels[s]}</span>`}
     </div><div class="pcb" id="pcb-${def.id}">
       <div style="margin-top:0">${notes}</div>
@@ -2677,11 +2479,11 @@
         }
         let TN = initTN();
 
-        function toggleTn(k) { TN[k] = !TN[k]; TN.date = today(); TN.manual = true; ls(K.tn, TN); renderTn(); }
+        function toggleTn(k) { TN[k] = !TN[k]; TN.date = today(); TN.manual = true; ls(K.tn, TN); renderTn(); renderAm(); }
         function resetTnToSchedule() {
             const wk = loadWkForDate(); const idx = todayWkIdx();
             TN = { shower: wk.shower[idx], shave: wk.shave[idx], date: today(), manual: false };
-            ls(K.tn, TN); renderTn();
+            ls(K.tn, TN); renderTn(); renderAm();
         }
 
         // Products that need journal tracking (by journalTag)
@@ -2852,6 +2654,36 @@
             const recentBO = (lg(K.jrnl) || []).slice(0, 7).some(e => (e.status || []).includes('爆痘'));
             const bnr = document.getElementById('hrt-bnr');
             if (bnr) bnr.innerHTML = recentBO ? `<div class="alert warn" style="margin-bottom:.75rem"><div class="at">⚡ 近期日志显示爆痘</div>建议本周酸类降至1次（或暂停），优先修护</div>` : '';
+        }
+
+        function renderAm() {
+            const pd = id => PD.find(p => p.id === id);
+            const active = id => { const p = pd(id); return p && !p.hidden && isSchedActive(p, PS[id] || p.statuses[0]); };
+            
+            let steps = [{ p: '微温水冲洗 30秒', h: '早晨尽量不干预角质层，无需洁面产品' }];
+            let skips = [];
+
+            if (active('bioderma')) steps.push({ p: 'Bioderma 粉水 (仅限出油多)', h: '仅T区出油严重时可用，代替洗面奶稍微擦拭' });
+            if (active('sebagh')) steps.push({ p: pd('sebagh').name, h: '全脸3-4滴，轻柔按压' });
+            if (active('mzskin')) steps.push({ p: pd('mzskin').name, h: '无名指轻拍眼眶骨' });
+
+            const hasSunscreen = active('sunscreen');
+            if (hasSunscreen) {
+                const dsla = daysSinceLastAcid();
+                if (dsla === 1) steps.push({ p: pd('sunscreen').name, h: '⚠️昨晚使用了酸类，今日防晒必须足量涂抹！' });
+                else steps.push({ p: pd('sunscreen').name, h: '出门前涂抹硬币大小' });
+            } else {
+                skips.push('⚠ 防晒待购入（用了酸类的次日无防晒 = 加深痘印！）');
+            }
+
+            const done = loadDoneSteps();
+            const pl = document.getElementById('am-plan'); if (!pl) return;
+            const stH = steps.map((s, i) => `<div class="tn-step${done.has(s.p) ? ' done' : ''}" data-prod="${s.p}" onclick="toggleStep(this)">
+    <div class="tn-n"><span class="tn-n-inner">${i + 1}</span></div>
+    <div><div class="tn-prod">${s.p}</div>${s.h ? `<div class="tn-how">${s.h}</div>` : ''}</div>
+  </div>`).join('');
+            const skH = skips.map(s => `<div class="tn-skip"><div class="tn-x">✕</div><div class="tn-sp">${s}</div></div>`).join('');
+            pl.innerHTML = `<div class="tn-hdr"><div class="tn-hdr-t">早晨保护</div><div class="tn-hdr-s">精简防晒 · 开启新的一天</div></div>${stH}${skH}`;
         }
 
         // ══ Weekly (history: keeps 8 weeks) ════════════════════════
@@ -3236,12 +3068,13 @@
             if (id === 'wkly') renderWk();
             if (id === 'prods') renderProds();
             if (id === 'tonight') renderTn();
+            if (id === 'am') renderAm();
         }
 
         // ══ Init ════════════════════════════════════════════════════
         WK = loadWk();
         renderBarrierBadge();
-        renderProds(); updateProdUI(); renderWk(); renderTn();
+        renderProds(); updateProdUI(); renderWk(); renderTn(); renderAm();
 
         // ══ Firebase 云同步 ═══════════════════════════════════
         const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_proddefs1'];
@@ -3270,7 +3103,7 @@
         function renderAll() {
             WK = loadWk(); renderBarrierBadge();
             PD = loadPD(); PS = lg(K.prods) || PS;
-            renderProds(); updateProdUI(); renderWk(); renderTn();
+            renderProds(); updateProdUI(); renderWk(); renderTn(); renderAm();
         }
 
         function setupRealtimeSync() {
