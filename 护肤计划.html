@@ -3257,9 +3257,14 @@
             } catch(e) { console.warn('初始化 Firebase 失败:', e); renderAuthBtn(); }
         }
 
+        let _unsub = null;
         async function handleAuthChange(user) {
             _user = user; renderAuthBtn();
-            if (user) { await pullFromCloud(); renderAll(); showSyncStatus('☁ 已从云端加载'); }
+            if (user) {
+                setupRealtimeSync();
+            } else {
+                if (_unsub) { _unsub(); _unsub = null; }
+            }
         }
 
         function renderAll() {
@@ -3268,16 +3273,23 @@
             renderProds(); updateProdUI(); renderWk(); renderTn();
         }
 
-        async function pullFromCloud() {
+        function setupRealtimeSync() {
             if (!_db || !_user) return;
-            try {
-                const doc = await _db.collection('users').doc(_user.uid).get();
-                if (doc.exists) {
-                    Object.entries(doc.data()).forEach(([k, v]) => {
-                        try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch {}
-                    });
-                }
-            } catch(e) { console.warn('拉取云端数据失败:', e); }
+            if (_unsub) _unsub();
+            _unsub = _db.collection('users').doc(_user.uid).onSnapshot(doc => {
+                let isInit = !_unsub.initialized; _unsub.initialized = true;
+                if (!doc.exists) { if(isInit) showSyncStatus('✓ 云端已连接(全新账号)'); return; }
+                let changed = false;
+                Object.entries(doc.data()).forEach(([k, v]) => {
+                    const localV = localStorage.getItem(k);
+                    const cloudV = typeof v === 'string' ? v : JSON.stringify(v);
+                    if (localV !== cloudV) {
+                        try { localStorage.setItem(k, cloudV); changed = true; } catch {}
+                    }
+                });
+                if (changed) { renderAll(); showSyncStatus('☁ 已从云端更新'); }
+                else if (isInit) { showSyncStatus('✓ 云端已连接'); }
+            }, e => console.warn('监听云端数据失败:', e));
         }
 
         function schedulePush() {
