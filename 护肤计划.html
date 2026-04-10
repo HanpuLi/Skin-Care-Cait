@@ -8,6 +8,7 @@
     <meta name="theme-color" content="#fafaf9" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#141210" media="(prefers-color-scheme: dark)">
     <title>护肤计划</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧴</text></svg>" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link
         href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&family=DM+Mono:wght@300;400&display=swap"
@@ -1874,6 +1875,7 @@
         <div id="tonight" class="panel active">
             <div id="hrt-bnr"></div>
             <div id="barrier-limit-banner"></div>
+            <div id="pao-alert-tn"></div>
             <div id="tn-meta-row" class="tn-meta"></div>
             <div id="sync-note-area"></div>
             <p style="font-size:12px;color:var(--tx3);margin-bottom:.6rem">今天的情况（可手动覆盖）：</p>
@@ -1891,6 +1893,7 @@
 
         <!-- ══ 早晨 ══ -->
         <div id="am" class="panel">
+            <div id="pao-alert-am"></div>
             <div id="am-plan"></div>
             <p style="font-size:11px;color:var(--tx3);font-family:var(--mono);margin-top:.75rem">与“今晚”同样，点击步骤可打勾标记完成</p>
         </div>
@@ -2018,7 +2021,7 @@
                     <span class="svm" id="sv-msg">✓ 已保存</span>
                 </div>
             </div>
-            <div class="jht">最近14天</div>
+            <div style="display:flex;align-items:center;justify-content:space-between"><div class="jht">最近记录</div><button class="expbtn" id="jrnl-show-more" onclick="toggleJrnlHistory()" style="font-size:11px;padding:3px 10px">显示更多</button></div>
             <div id="jh-list"></div>
             <div style="margin-top:10px">
                 <button class="expbtn" onclick="exportCSV()">⬇ 导出 CSV</button>
@@ -2032,6 +2035,7 @@
 
         <div id="stats" class="panel">
             <div class="sg" id="stat-grid"></div>
+            <div id="barrier-breakdown" style="font-size:12px;line-height:1.6;padding:0 4px 8px;display:none;background:var(--sur2);border-radius:var(--rs);margin-bottom:12px"></div>
             <div class="sec-title" style="margin-bottom:8px">过去14天皮肤热力图</div>
             <div class="hlr"><span id="hs-start"></span><span>今天</span></div>
             <div class="hg" id="heat-grid"></div>
@@ -2161,6 +2165,8 @@
         function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
         // Single versioned keys — migrate old keys on load
+        let _jrnlShowAll = false;
+        function toggleJrnlHistory() { _jrnlShowAll = !_jrnlShowAll; renderJrnl(); }
         const K = {
             wk: 'sk_wk1',
             jrnl: 'sk_jrnl1',
@@ -2169,6 +2175,7 @@
             popen: 'sk_popen1',
             tn: 'sk_tn1',
             tnsteps: 'sk_tnsteps1',
+            amsteps: 'sk_amsteps1',
             prodDefs: 'sk_proddefs1'
         };
         // One-time migration from old keys
@@ -2428,6 +2435,10 @@
             if (s < 65) return 1;  // caution: max 1
             return 2;          // normal
         }
+        function showBarrierBreakdown() {
+            const bd = document.getElementById('barrier-breakdown');
+            if (bd) { bd.style.display = bd.style.display === 'none' ? 'block' : 'none'; renderStats(); }
+        }
         function renderBarrierBadge() {
             const s = barrierScore();
             const el = document.getElementById('barrier-badge');
@@ -2495,33 +2506,36 @@
         function isTrackedProd(prodName) { return getTrackedProds().some(p => p.name === prodName || p.journalTag === prodName); }
         function journalTagForProd(prodName) { const p = getTrackedProds().find(d => d.name === prodName); return p ? p.journalTag : null; }
 
-        // Persist step completion — primary store is K.tnsteps for UI state
-        // Tracked products (acid, retinol, mask) are ALSO written to today's journal
-        function loadDoneSteps() {
-            const d = lg(K.tnsteps) || { date: '', done: [] };
+        // Persist step completion — separate stores for AM vs PM
+        function loadDoneSteps(panel) {
+            const key = panel === 'am' ? K.amsteps : K.tnsteps;
+            const d = lg(key) || { date: '', done: [] };
             const base = d.date === today() ? new Set(d.done) : new Set();
             // Also mark products found in today's journal as done
             const todayEntry = (lg(K.jrnl) || []).find(e => e.date === today());
             if (todayEntry) {
                 (todayEntry.products || []).forEach(tag => {
-                    // Find product by journalTag and add its display name to done set
                     const prod = PD.find(p => p.journalTag === tag);
                     if (prod) base.add(prod.name);
                 });
             }
             return base;
         }
-        function saveDoneSteps(set) { ls(K.tnsteps, { date: today(), done: [...set] }); }
+        function saveDoneSteps(set, panel) {
+            const key = panel === 'am' ? K.amsteps : K.tnsteps;
+            ls(key, { date: today(), done: [...set] });
+        }
         function toggleStep(el) {
             const prodName = el.dataset.prod;
-            const done = loadDoneSteps();
+            const panel = el.closest('#am-plan') ? 'am' : 'tn';
+            const done = loadDoneSteps(panel);
             const isNowDone = !done.has(prodName);
             if (isNowDone) done.add(prodName); else done.delete(prodName);
-            saveDoneSteps(done);
+            saveDoneSteps(done, panel);
             el.classList.toggle('done', isNowDone);
             // Tap pulse animation
             el.classList.remove('tapped');
-            void el.offsetWidth; // reflow
+            void el.offsetWidth;
             el.classList.add('tapped');
             setTimeout(() => el.classList.remove('tapped'), 300);
             // Write tracked products to journal
@@ -2539,7 +2553,6 @@
                     todayEntry.products = todayEntry.products.filter(p => p !== tag);
                 }
                 ls(K.jrnl, entries.slice(0, 365));
-                // Refresh acid counter in header
                 renderBarrierBadge();
                 const meta = document.getElementById('tn-meta-row');
                 if (meta) {
@@ -2550,6 +2563,24 @@
                     meta.innerHTML = `<div class="tn-meta-item ${cls}">本周酸类 ${acidCnt}/${maxAcid} 次</div><div class="tn-meta-item">${dslaStr}</div>`;
                 }
             }
+        }
+
+        // PAO expiry alerts for Tonight/Morning panels
+        function renderPaoAlerts() {
+            const alerts = [];
+            PD.forEach(p => {
+                if (p.hidden || p.paoMonths <= 0) return;
+                const wo = weeksOpen(p.id);
+                if (wo === null) return;
+                const limitWeeks = p.paoMonths * 4;
+                if (wo >= limitWeeks) alerts.push({ name: p.icon + ' ' + p.name, cls: 'danger', msg: `已过期（开封${wo}周，PAO ${p.paoMonths}个月）—建议更换` });
+                else if (wo >= limitWeeks - 2) alerts.push({ name: p.icon + ' ' + p.name, cls: 'warn', msg: `即将过期（开封${wo}周/${limitWeeks}周）` });
+            });
+            const html = alerts.map(a => `<div class="alert ${a.cls}" style="margin-bottom:8px;padding:8px 12px"><div class="at">${a.name}</div>${a.msg}</div>`).join('');
+            const tn = document.getElementById('pao-alert-tn');
+            const am = document.getElementById('pao-alert-am');
+            if (tn) tn.innerHTML = html;
+            if (am) am.innerHTML = html;
         }
 
         function renderTn() {
@@ -2646,7 +2677,7 @@
 
             if (PS.sunscreen !== 'owned') skips.push('⚠ 明早无防晒 → 痘印风险！尽快购入');
 
-            const done = loadDoneSteps();
+            const done = loadDoneSteps('tn');
             const pl = document.getElementById('tn-plan'); if (!pl) return;
             const stH = steps.map((s, i) => `<div class="tn-step${done.has(s.p) ? ' done' : ''}" data-prod="${s.p}" onclick="toggleStep(this)">
     <div class="tn-n"><span class="tn-n-inner">${i + 1}</span></div>
@@ -2680,7 +2711,7 @@
                 skips.push('⚠ 防晒待购入（用了酸类的次日无防晒 = 加深痘印！）');
             }
 
-            const done = loadDoneSteps();
+            const done = loadDoneSteps('am');
             const pl = document.getElementById('am-plan'); if (!pl) return;
             const stH = steps.map((s, i) => `<div class="tn-step${done.has(s.p) ? ' done' : ''}" data-prod="${s.p}" onclick="toggleStep(this)">
     <div class="tn-n"><span class="tn-n-inner">${i + 1}</span></div>
@@ -2920,10 +2951,12 @@
             updateCd();
             const e = lg(K.jrnl) || [];
             const cut = new Date(); cut.setDate(cut.getDate() - 14);
-            const recent = e.filter(x => new Date(x.date) >= cut);
+            const entries = _jrnlShowAll ? e : e.filter(x => new Date(x.date) >= cut);
+            const showMoreBtn = document.getElementById('jrnl-show-more');
+            if (showMoreBtn) showMoreBtn.textContent = _jrnlShowAll ? '只看近14天' : `显示全部 (${e.length}条)`;
             const list = document.getElementById('jh-list'); if (!list) return;
-            if (!recent.length) { list.innerHTML = '<div class="jhem">暂无记录</div>'; return; }
-            list.innerHTML = recent.map(x => {
+            if (!entries.length) { list.innerHTML = '<div class="jhem">暂无记录</div>'; return; }
+            list.innerHTML = entries.map(x => {
                 const chips = [...(x.status || []).map(s => `<span class="jhch ${sCls(s)}">${s}</span>`),
                 ...(x.products || []).map(p => `<span class="jhch blue">${p}</span>`)].join('');
                 return `<div class="jhe">
@@ -3017,7 +3050,28 @@
     <div class="sc2"><div class="sn ${bo === 0 ? 'ok' : bo <= 2 ? 'warn' : 'bad'}">${bo}</div><div class="sl">爆痘天数</div></div>
     <div class="sc2"><div class="sn ${acids <= 8 ? 'ok' : 'warn'}">${acids}</div><div class="sl">酸类/4周</div></div>
     <div class="sc2"><div class="sn ${streak >= 7 ? 'ok' : streak >= 3 ? 'warn' : 'bad'}">${streak}</div><div class="sl">连续记录天</div></div>
-    <div class="sc2"><div class="sn ${score === null ? '' : score >= 65 ? 'ok' : score >= 45 ? 'warn' : 'bad'}">${score === null ? '—' : score}</div><div class="sl">屏障健康分</div></div>`;
+    <div class="sc2" onclick="showBarrierBreakdown()" style="cursor:pointer"><div class="sn ${score === null ? '' : score >= 65 ? 'ok' : score >= 45 ? 'warn' : 'bad'}">${score === null ? '—' : score}</div><div class="sl">屏障健康分 ⓘ</div></div>`;
+
+            // Barrier score breakdown panel
+            const bd = document.getElementById('barrier-breakdown');
+            if (bd) {
+                if (score === null) { bd.innerHTML = '<div style="font-size:12px;color:var(--tx3);padding:8px">暂无日志数据，开始记录后自动计算</div>'; }
+                else {
+                    const entries7 = (lg(K.jrnl) || []).slice(0, 7);
+                    let breakdown = '<div style="font-size:11px;color:var(--tx2);margin-bottom:4px">基础分 60 + 最近7天日志调整：</div>';
+                    const rules = ['爆痘 -10','泛红 -7','敏感 -5','干燥 -3','出油 -2','稳定 +8','好转 +12'];
+                    const tags = ['爆痘','泛红','敏感','干燥','出油','稳定','好转'];
+                    const weights = [-10,-7,-5,-3,-2,8,12];
+                    let details = [];
+                    tags.forEach((tag, ti) => {
+                        const cnt = entries7.filter(x => (x.status||[]).includes(tag)).length;
+                        if (cnt > 0) details.push(`<span style="color:${weights[ti]>0?'var(--gr)':'var(--rd)'}">${tag} ×${cnt} = ${cnt*weights[ti]>0?'+':''}${cnt*weights[ti]}</span>`);
+                    });
+                    breakdown += details.length ? details.join(' · ') : '<span style="color:var(--tx3)">无状态标记</span>';
+                    breakdown += `<div style="margin-top:4px;font-weight:500">最终 = clamp(0, 60 ${details.length ? '+ 上述调整' : ''}, 100) = <span style="color:${score>=65?'var(--gr)':score>=45?'var(--am)':'var(--rd)'}">${score}</span></div>`;
+                    bd.innerHTML = breakdown;
+                }
+            }
 
             const hg = document.getElementById('heat-grid'), hs = document.getElementById('hs-start');
             if (hg) {
@@ -3105,7 +3159,11 @@
                     });
                 }
                 svg += `</svg>`;
-                tc.innerHTML = svg;
+                if (!pts.length) {
+                    tc.innerHTML = `<div style="text-align:center;padding:20px 0;color:var(--tx3);font-size:12px">📊 在「日志」页面记录皮肤状态后，这里会出现屏障分走势曲线<br><span style="font-size:11px;color:var(--bl)">💧 = 使用了酸类的日子</span></div>`;
+                } else {
+                    tc.innerHTML = svg;
+                }
             }
 
             const ab = document.getElementById('acid-bars');
@@ -3136,6 +3194,8 @@
             document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.getElementById(id).classList.add('active'); btn.classList.add('active');
+            // Auto-scroll active tab into view on mobile
+            btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
             if (id === 'jrnl') { renderJrnl(); updateCd(); }
             if (id === 'stats') renderStats();
             if (id === 'wkly') renderWk();
@@ -3147,10 +3207,10 @@
         // ══ Init ════════════════════════════════════════════════════
         WK = loadWk();
         renderBarrierBadge();
-        renderProds(); updateProdUI(); renderWk(); renderTn(); renderAm();
+        renderProds(); updateProdUI(); renderWk(); renderTn(); renderAm(); renderPaoAlerts();
 
         // ══ Firebase 云同步 ═══════════════════════════════════
-        const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_proddefs1'];
+        const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_amsteps1','sk_proddefs1'];
         let _db = null, _user = null, _pushTimer = null, _pushing = false;
 
         function initFirebase() {
@@ -3176,7 +3236,7 @@
         function renderAll() {
             WK = loadWk(); renderBarrierBadge();
             PD = loadPD(); PS = lg(K.prods) || PS;
-            renderProds(); updateProdUI(); renderWk(); renderTn(); renderAm();
+            renderProds(); updateProdUI(); renderWk(); renderTn(); renderAm(); renderPaoAlerts();
         }
 
         function setupRealtimeSync() {
