@@ -1,0 +1,3317 @@
+<!DOCTYPE html>
+
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#fafaf9" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#141210" media="(prefers-color-scheme: dark)">
+    <title>护肤计划</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&family=DM+Mono:wght@300;400&display=swap"
+        rel="stylesheet">
+    <!-- Firebase SDK (compat v9) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <!-- Firebase Config: paste your config below -->
+    <script>
+    // ══ 填入你的 Firebase 配置 ═════════════════════════════
+    const FIREBASE_CONFIG = {
+        apiKey: "AIzaSyCMSnGZaS3GTE3wuVRuNzCLf7c6ZU_fzc8",
+        authDomain: "skin-care-cait.firebaseapp.com",
+        projectId: "skin-care-cait",
+        storageBucket: "skin-care-cait.firebasestorage.app",
+        messagingSenderId: "952590966787",
+        appId: "1:952590966787:web:df0af5620b48d4a8722e36",
+        measurementId: "G-S82KP9EN65"
+    };
+    // ═══════════════════════════════════════════════
+    </script>
+    <style>
+        :root {
+            --bg: #fafaf9;
+            --sur: #fff;
+            --sur2: #f5f4f2;
+            --bd: #e8e6e1;
+            --bd2: #d4d0c8;
+            --tx: #1c1a17;
+            --tx2: #6b6560;
+            --tx3: #9e9892;
+            --bl: #2563c7;
+            --bl-bg: #ebf0fb;
+            --bl-br: #9bb5ef;
+            --gr: #1a7a55;
+            --gr-bg: #e6f4ee;
+            --gr-br: #7fbfa3;
+            --am: #b45309;
+            --am-bg: #fef3cd;
+            --am-br: #e9c46a;
+            --rd: #c0392b;
+            --rd-bg: #fdecea;
+            --rd-br: #e8a09a;
+            --pu: #5b47d6;
+            --pu-bg: #eeecfd;
+            --pu-br: #b8b0f0;
+            --r: 10px;
+            --rs: 6px;
+            --font: 'DM Sans', -apple-system, sans-serif;
+            --mono: 'DM Mono', monospace;
+        }
+
+        @media(prefers-color-scheme:dark) {
+            :root {
+                --bg: #141210;
+                --sur: #1e1c19;
+                --sur2: #272420;
+                --bd: #2e2b26;
+                --bd2: #3d3930;
+                --tx: #f0ede8;
+                --tx2: #9e9892;
+                --tx3: #635f58;
+                --bl: #6b9ef5;
+                --bl-bg: #1a2540;
+                --bl-br: #2d4070;
+                --gr: #4dbb8a;
+                --gr-bg: #142a20;
+                --gr-br: #1e4535;
+                --am: #f0a942;
+                --am-bg: #2a1f08;
+                --am-br: #4a3510;
+                --rd: #f07070;
+                --rd-bg: #2a1212;
+                --rd-br: #4a2020;
+                --pu: #9b8ef5;
+                --pu-bg: #1e1840;
+                --pu-br: #352d60;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0
+        }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--tx);
+            padding: 1.25rem 1rem 4rem;
+            -webkit-font-smoothing: antialiased;
+            line-height: 1.5
+        }
+
+        .wrap {
+            max-width: 680px;
+            margin: 0 auto
+        }
+
+        /* Header */
+        .header {
+            margin-bottom: 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start
+        }
+
+        .header h1 {
+            font-size: 15px;
+            font-weight: 500;
+            letter-spacing: -.01em
+        }
+
+        .header .sub {
+            font-size: 11px;
+            color: var(--tx3);
+            font-family: var(--mono);
+            margin-top: 2px
+        }
+
+        .barrier-badge {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+            flex-shrink: 0
+        }
+
+        .barrier-num {
+            font-size: 22px;
+            font-weight: 500;
+            font-family: var(--mono);
+            line-height: 1
+        }
+
+        .barrier-lbl {
+            font-size: 10px;
+            font-family: var(--mono);
+            color: var(--tx3)
+        }
+
+        .barrier-num.great {
+            color: var(--gr)
+        }
+
+        .barrier-num.good {
+            color: var(--bl)
+        }
+
+        .barrier-num.caution {
+            color: var(--am)
+        }
+
+        .barrier-num.repair {
+            color: var(--rd)
+        }
+
+        /* Tabs */
+        .tabs-wrap {
+            overflow-x: auto;
+            margin-bottom: 1.25rem;
+            border-bottom: 1px solid var(--bd);
+            scrollbar-width: none
+        }
+
+        .tabs-wrap::-webkit-scrollbar {
+            display: none
+        }
+
+        .tabs {
+            display: flex;
+            white-space: nowrap;
+            min-width: max-content
+        }
+
+        .tab {
+            padding: 6px 13px 8px;
+            border: none;
+            border-bottom: 2px solid transparent;
+            font-size: 13px;
+            font-family: var(--font);
+            cursor: pointer;
+            background: transparent;
+            color: var(--tx3);
+            margin-bottom: -1px;
+            transition: color .15s, border-color .15s
+        }
+
+        .tab:hover {
+            color: var(--tx2)
+        }
+
+        .tab.active {
+            color: var(--tx);
+            font-weight: 500;
+            border-bottom-color: var(--tx)
+        }
+
+        .panel {
+            display: none
+        }
+
+        .panel.active {
+            display: block;
+            animation: fi .18s ease
+        }
+
+        @keyframes fi {
+            from {
+                opacity: 0;
+                transform: translateY(3px)
+            }
+
+            to {
+                opacity: 1;
+                transform: none
+            }
+        }
+
+        /* Sections */
+        .section {
+            margin-bottom: 1.5rem
+        }
+
+        .sec-title {
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: .1em;
+            color: var(--tx3);
+            text-transform: uppercase;
+            font-family: var(--mono);
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--bd)
+        }
+
+        .step {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            padding: 9px 0;
+            border-bottom: 1px solid var(--bd)
+        }
+
+        .step:last-child {
+            border-bottom: none
+        }
+
+        .step.dim {
+            opacity: .35
+        }
+
+        .num {
+            min-width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 500;
+            font-family: var(--mono);
+            margin-top: 1px;
+            flex-shrink: 0
+        }
+
+        .num.pm {
+            background: var(--pu-bg);
+            color: var(--pu)
+        }
+
+        .num.no {
+            background: var(--gr-bg);
+            color: var(--gr)
+        }
+
+        .num.wn {
+            background: var(--rd-bg);
+            color: var(--rd)
+        }
+
+        .num.gh {
+            background: var(--sur2);
+            color: var(--tx3)
+        }
+
+        .sc {
+            flex: 1;
+            min-width: 0
+        }
+
+        .prod {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--tx);
+            line-height: 1.4
+        }
+
+        .prod.danger {
+            color: var(--rd)
+        }
+
+        .how {
+            font-size: 12px;
+            color: var(--tx2);
+            margin-top: 3px;
+            line-height: 1.55
+        }
+
+        .tag {
+            display: inline-block;
+            font-size: 10px;
+            font-family: var(--mono);
+            padding: 2px 7px;
+            border-radius: 20px;
+            margin-left: 6px;
+            vertical-align: middle;
+            white-space: nowrap
+        }
+
+        .tag.acid {
+            background: var(--am-bg);
+            color: var(--am);
+            border: 1px solid var(--am-br)
+        }
+
+        .tag.barrier {
+            background: var(--gr-bg);
+            color: var(--gr);
+            border: 1px solid var(--gr-br)
+        }
+
+        .tag.act {
+            background: var(--pu-bg);
+            color: var(--pu);
+            border: 1px solid var(--pu-br)
+        }
+
+        .tag.caution {
+            background: var(--rd-bg);
+            color: var(--rd);
+            border: 1px solid var(--rd-br)
+        }
+
+        .tag.skip {
+            background: var(--sur2);
+            color: var(--tx3);
+            border: 1px solid var(--bd2)
+        }
+
+        .tag.must {
+            background: var(--rd-bg);
+            color: var(--rd);
+            border: 1px solid var(--rd-br)
+        }
+
+        .tag.new {
+            background: var(--gr-bg);
+            color: var(--gr);
+            border: 1px solid var(--gr-br)
+        }
+
+        /* Alerts */
+        .alert {
+            border: 1px solid var(--bd);
+            border-radius: var(--r);
+            padding: 11px 14px;
+            margin-bottom: 1rem;
+            font-size: 13px;
+            line-height: 1.6;
+            background: var(--sur)
+        }
+
+        .alert.warn {
+            border-left: 3px solid var(--am);
+            background: var(--am-bg);
+            border-color: var(--am-br)
+        }
+
+        .alert.info {
+            border-left: 3px solid var(--bl);
+            background: var(--bl-bg);
+            border-color: var(--bl-br)
+        }
+
+        .alert.danger {
+            border-left: 3px solid var(--rd);
+            background: var(--rd-bg);
+            border-color: var(--rd-br)
+        }
+
+        .alert.success {
+            border-left: 3px solid var(--gr);
+            background: var(--gr-bg);
+            border-color: var(--gr-br)
+        }
+
+        .alert.repair {
+            border-left: 3px solid var(--rd);
+            background: var(--rd-bg);
+            border-color: var(--rd-br)
+        }
+
+        .at {
+            font-weight: 500;
+            margin-bottom: 3px;
+            font-size: 13px
+        }
+
+        /* Tonight */
+        .tn-meta {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: .75rem;
+            align-items: center
+        }
+
+        .tn-meta-item {
+            font-size: 11px;
+            font-family: var(--mono);
+            color: var(--tx3);
+            padding: 3px 9px;
+            border: 1px solid var(--bd);
+            border-radius: 20px;
+            background: var(--sur)
+        }
+
+        .tn-meta-item.acid-ok {
+            border-color: var(--gr-br);
+            color: var(--gr);
+            background: var(--gr-bg)
+        }
+
+        .tn-meta-item.acid-caution {
+            border-color: var(--am-br);
+            color: var(--am);
+            background: var(--am-bg)
+        }
+
+        .tn-meta-item.acid-full {
+            border-color: var(--rd-br);
+            color: var(--rd);
+            background: var(--rd-bg)
+        }
+
+        .tn-btns {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 1.25rem;
+            flex-wrap: wrap
+        }
+
+        .tn-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--bd2);
+            border-radius: 20px;
+            font-size: 13px;
+            font-family: var(--font);
+            cursor: pointer;
+            background: var(--sur);
+            color: var(--tx2);
+            transition: all .12s
+        }
+
+        .tn-btn.on-shower {
+            background: var(--bl-bg);
+            border-color: var(--bl-br);
+            color: var(--bl);
+            font-weight: 500
+        }
+
+        .tn-btn.on-shave {
+            background: var(--gr-bg);
+            border-color: var(--gr-br);
+            color: var(--gr);
+            font-weight: 500
+        }
+
+        .tn-plan {
+            border: 1px solid var(--bd);
+            border-radius: var(--r);
+            background: var(--sur);
+            overflow: hidden
+        }
+
+        .tn-hdr {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--bd);
+            background: var(--sur2)
+        }
+
+        .tn-hdr-t {
+            font-size: 13px;
+            font-weight: 500
+        }
+
+        .tn-hdr-s {
+            font-size: 11px;
+            color: var(--tx3);
+            font-family: var(--mono);
+            margin-top: 2px
+        }
+
+        .tn-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--bd);
+            cursor: pointer;
+            transition: background .1s;
+            user-select: none
+        }
+
+        .tn-step:last-child {
+            border-bottom: none
+        }
+
+        .tn-step:active {
+            background: var(--sur2)
+        }
+
+        .tn-step.done {
+            opacity: .4
+        }
+
+        .tn-step.done .tn-prod {
+            text-decoration: line-through
+        }
+
+        .tn-step.done .tn-n {
+            background: var(--gr-bg);
+            color: var(--gr)
+        }
+
+        .tn-step:not(.done) .tn-n-inner {
+            display: inline
+        }
+
+        .tn-step.done .tn-n-inner {
+            display: none
+        }
+
+        .tn-n {
+            min-width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 500;
+            font-family: var(--mono);
+            margin-top: 1px;
+            flex-shrink: 0;
+            background: var(--pu-bg);
+            color: var(--pu);
+            transition: all .15s
+        }
+
+        .tn-step.done .tn-n::after {
+            content: ‘✓’
+        }
+
+        .tn-prod {
+            font-size: 13px;
+            font-weight: 500
+        }
+
+        .tn-how {
+            font-size: 11px;
+            color: var(--tx2);
+            margin-top: 2px;
+            line-height: 1.5
+        }
+
+        .tn-skip {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 8px 16px;
+            border-bottom: 1px solid var(--bd);
+            opacity: .4
+        }
+
+        .tn-skip:last-child {
+            border-bottom: none
+        }
+
+        .tn-x {
+            min-width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            background: var(--sur2);
+            color: var(--tx3);
+            flex-shrink: 0;
+            margin-top: 1px
+        }
+
+        .tn-sp {
+            font-size: 12px;
+            color: var(--tx2);
+            text-decoration: line-through
+        }
+
+        .sync-note {
+            font-size: 11px;
+            color: var(--tx3);
+            font-family: var(--mono);
+            margin-bottom: .6rem;
+            display: flex;
+            align-items: center;
+            gap: 5px
+        }
+
+        .sync-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--gr);
+            flex-shrink: 0
+        }
+
+        .sync-dot.manual {
+            background: var(--am)
+        }
+
+        .tn-reset {
+            font-size: 11px;
+            font-family: var(--mono);
+            color: var(--tx3);
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            text-decoration: underline;
+            text-underline-offset: 2px
+        }
+
+        .tn-reset:hover {
+            color: var(--tx2)
+        }
+
+        /* Weekly */
+        .wk-label {
+            font-size: 11px;
+            color: var(--tx3);
+            font-family: var(--mono);
+            margin-bottom: 8px
+        }
+
+        .tr {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            align-items: center
+        }
+
+        .tl {
+            font-size: 11px;
+            color: var(--tx3);
+            font-family: var(--mono)
+        }
+
+        .tb {
+            padding: 5px 13px;
+            border: 1px solid var(--bd2);
+            border-radius: 20px;
+            font-size: 12px;
+            font-family: var(--font);
+            cursor: pointer;
+            background: var(--sur);
+            color: var(--tx2);
+            transition: all .12s
+        }
+
+        .tb.on-shower {
+            background: var(--bl-bg);
+            border-color: var(--bl-br);
+            color: var(--bl);
+            font-weight: 500
+        }
+
+        .tb.on-shave {
+            background: var(--gr-bg);
+            border-color: var(--gr-br);
+            color: var(--gr);
+            font-weight: 500
+        }
+
+        .tb.on-clear {
+            background: var(--sur2);
+            color: var(--tx2);
+            font-weight: 500
+        }
+
+        .dtg {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+            margin-bottom: 1rem
+        }
+
+        @media(max-width:480px) {
+            .dtg {
+                grid-template-columns: repeat(4, 1fr)
+            }
+        }
+
+        .dbw {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px
+        }
+
+        .dn {
+            font-size: 10px;
+            color: var(--tx3);
+            font-family: var(--mono)
+        }
+
+        .db {
+            width: 100%;
+            padding: 6px 2px;
+            border: 1px solid var(--bd);
+            border-radius: var(--rs);
+            font-size: 11px;
+            font-family: var(--font);
+            cursor: pointer;
+            background: var(--sur);
+            color: var(--tx3);
+            text-align: center;
+            min-height: 52px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            transition: all .12s
+        }
+
+        .db .bi {
+            font-size: 16px;
+            line-height: 1
+        }
+
+        .db .bl2 {
+            font-size: 9px;
+            opacity: .8
+        }
+
+        .db.shower {
+            background: var(--bl-bg);
+            border-color: var(--bl-br);
+            color: var(--bl);
+            font-weight: 500
+        }
+
+        .db.shave {
+            background: var(--gr-bg);
+            border-color: var(--gr-br);
+            color: var(--gr);
+            font-weight: 500
+        }
+
+        .db.both {
+            background: var(--pu-bg);
+            border-color: var(--pu-br);
+            color: var(--pu);
+            font-weight: 500
+        }
+
+        .db.today-ring {
+            box-shadow: 0 0 0 2px var(--tx3)
+        }
+
+        .leg-wrap {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 1rem
+        }
+
+        .leg {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 10px;
+            color: var(--tx3);
+            font-family: var(--mono)
+        }
+
+        .ld {
+            width: 9px;
+            height: 9px;
+            border-radius: 3px;
+            flex-shrink: 0
+        }
+
+        .wks {
+            border: 1px solid var(--bd);
+            border-radius: var(--r);
+            padding: 10px 14px;
+            margin-bottom: 1.25rem;
+            background: var(--sur)
+        }
+
+        .wr {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px solid var(--bd);
+            align-items: center
+        }
+
+        .wr:last-child {
+            border-bottom: none
+        }
+
+        .wrl {
+            color: var(--tx2);
+            font-size: 12px
+        }
+
+        .wrv {
+            font-weight: 500;
+            font-size: 12px;
+            font-family: var(--mono);
+            color: var(--tx)
+        }
+
+        .wrv.ok {
+            color: var(--gr)
+        }
+
+        .wrv.warn {
+            color: var(--am)
+        }
+
+        .wrv.bad {
+            color: var(--rd)
+        }
+
+        .dpg {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+            margin-bottom: 1rem
+        }
+
+        @media(max-width:540px) {
+            .dpg {
+                grid-template-columns: repeat(4, 1fr)
+            }
+        }
+
+        .dp {
+            border: 1px solid var(--bd);
+            border-radius: var(--rs);
+            padding: 6px 5px;
+            min-height: 80px;
+            background: var(--sur)
+        }
+
+        .dpn {
+            font-weight: 500;
+            font-size: 10px;
+            color: var(--tx2);
+            margin-bottom: 4px;
+            text-align: center;
+            font-family: var(--mono)
+        }
+
+        .dpt {
+            display: block;
+            margin: 2px 0;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-size: 9px;
+            font-family: var(--mono);
+            line-height: 1.4;
+            text-align: center
+        }
+
+        .dpt.sh {
+            background: var(--bl-bg);
+            color: var(--bl)
+        }
+
+        .dpt.sv {
+            background: var(--gr-bg);
+            color: var(--gr)
+        }
+
+        .dpt.ac {
+            background: var(--am-bg);
+            color: var(--am)
+        }
+
+        .dpt.re {
+            background: var(--sur2);
+            color: var(--tx3)
+        }
+
+        .dpt.mk {
+            background: var(--pu-bg);
+            color: var(--pu)
+        }
+
+        .dpt.rt {
+            background: var(--rd-bg);
+            color: var(--rd)
+        }
+
+        .dpt.av {
+            background: var(--gr-bg);
+            color: var(--gr)
+        }
+
+        .dpt.cf {
+            background: var(--rd-bg);
+            color: var(--rd);
+            font-weight: 600
+        }
+
+        .dp.is-shower {
+            border-color: var(--bl-br)
+        }
+
+        .dp.is-shave {
+            border-color: var(--gr-br)
+        }
+
+        .dp.is-both {
+            border-color: var(--pu-br)
+        }
+
+        .dp.is-today {
+            border-width: 2px
+        }
+
+        .cfb {
+            border: 1px solid var(--rd-br);
+            border-left: 3px solid var(--rd);
+            border-radius: var(--r);
+            padding: 10px 14px;
+            margin-bottom: 8px;
+            font-size: 12px;
+            background: var(--rd-bg);
+            color: var(--rd);
+            line-height: 1.5
+        }
+
+        .cfb strong {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 2px
+        }
+
+        /* Limit warning banner */
+        .limit-banner {
+            border-left: 3px solid var(--am);
+            background: var(--am-bg);
+            border: 1px solid var(--am-br);
+            border-left-width: 3px;
+            border-radius: var(--r);
+            padding: 9px 14px;
+            margin-bottom: 1rem;
+            font-size: 12px;
+            color: var(--am);
+            line-height: 1.5
+        }
+
+        .limit-banner.repair-mode {
+            border-color: var(--rd-br);
+            border-left-color: var(--rd);
+            background: var(--rd-bg);
+            color: var(--rd)
+        }
+
+        /* Journal */
+        .cdc {
+            border: 1px solid var(--bd);
+            border-radius: var(--r);
+            padding: 14px 16px;
+            margin-bottom: 1rem;
+            background: var(--sur)
+        }
+
+        .cdh {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 10px
+        }
+
+        .cdt {
+            font-size: 12px;
+            font-weight: 500
+        }
+
+        .cdb {
+            font-size: 10px;
+            font-family: var(--mono);
+            padding: 2px 8px;
+            border-radius: 20px;
+            background: var(--am-bg);
+            color: var(--am);
+            border: 1px solid var(--am-br)
+        }
+
+        .cdb.done {
+            background: var(--gr-bg);
+            color: var(--gr);
+            border-color: var(--gr-br)
+        }
+
+        .pw {
+            background: var(--sur2);
+            border-radius: 4px;
+            height: 6px;
+            overflow: hidden;
+            margin-bottom: 8px
+        }
+
+        .pb {
+            height: 100%;
+            border-radius: 4px;
+            background: linear-gradient(90deg, var(--gr), var(--bl));
+            transition: width .3s
+        }
+
+        .cm {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--tx3);
+            font-family: var(--mono)
+        }
+
+        .cir {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 10px
+        }
+
+        .cir label {
+            font-size: 11px;
+            color: var(--tx2);
+            flex-shrink: 0
+        }
+
+        .cir input[type=date] {
+            flex: 1;
+            border: 1px solid var(--bd2);
+            border-radius: var(--rs);
+            padding: 5px 9px;
+            font-size: 12px;
+            font-family: var(--mono);
+            background: var(--sur);
+            color: var(--tx);
+            outline: none
+        }
+
+        .cir input[type=date]:focus {
+            border-color: var(--bl)
+        }
+
+        /* Quick Log presets */
+        .ql-wrap {
+            border: 1px solid var(--bd);
+            border-radius: var(--r);
+            padding: 12px 14px;
+            margin-bottom: 1rem;
+            background: var(--sur)
+        }
+
+        .ql-title {
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--tx)
+        }
+
+        .ql-btns {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap
+        }
+
+        .ql-btn {
+            padding: 6px 12px;
+            border: 1px solid var(--bd2);
+            border-radius: 20px;
+            font-size: 11px;
+            font-family: var(--font);
+            cursor: pointer;
+            background: var(--sur2);
+            color: var(--tx2);
+            transition: all .12s
+        }
+
+        .ql-btn:hover {
+            border-color: var(--tx3);
+            color: var(--tx)
+        }
+
+        .ql-btn:active {
+            background: var(--sur2);
+            transform: scale(.97)
+        }
+
+        .jfc {
+            border: 1px solid var(--bd);
+            border-radius: var(--r);
+            padding: 14px 16px;
+            margin-bottom: 1rem;
+            background: var(--sur)
+        }
+
+        .jft {
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 12px
+        }
+
+        .jfl {
+            font-size: 11px;
+            color: var(--tx2);
+            margin-bottom: 6px;
+            display: block
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-bottom: 12px
+        }
+
+        .chip {
+            padding: 5px 11px;
+            border: 1px solid var(--bd2);
+            border-radius: 20px;
+            font-size: 11px;
+            font-family: var(--font);
+            cursor: pointer;
+            background: var(--sur2);
+            color: var(--tx2);
+            transition: all .12s;
+            user-select: none
+        }
+
+        .chip.s-ok {
+            background: var(--gr-bg);
+            border-color: var(--gr-br);
+            color: var(--gr);
+            font-weight: 500
+        }
+
+        .chip.s-warn {
+            background: var(--am-bg);
+            border-color: var(--am-br);
+            color: var(--am);
+            font-weight: 500
+        }
+
+        .chip.s-bad {
+            background: var(--rd-bg);
+            border-color: var(--rd-br);
+            color: var(--rd);
+            font-weight: 500
+        }
+
+        .chip.s-blue {
+            background: var(--bl-bg);
+            border-color: var(--bl-br);
+            color: var(--bl);
+            font-weight: 500
+        }
+
+        .jfn {
+            width: 100%;
+            border: 1px solid var(--bd2);
+            border-radius: var(--rs);
+            padding: 8px 10px;
+            font-size: 12px;
+            font-family: var(--font);
+            background: var(--sur);
+            color: var(--tx);
+            resize: none;
+            outline: none;
+            line-height: 1.5;
+            margin-bottom: 10px
+        }
+
+        .jfn:focus {
+            border-color: var(--bl)
+        }
+
+        .hf {
+            border: 1px solid var(--bd2);
+            border-radius: var(--rs);
+            padding: 5px 9px;
+            font-size: 12px;
+            font-family: var(--mono);
+            background: var(--sur);
+            color: var(--tx);
+            outline: none;
+            width: 180px
+        }
+
+        .hf:focus {
+            border-color: var(--bl)
+        }
+
+        .bsv {
+            padding: 7px 18px;
+            border: none;
+            border-radius: var(--rs);
+            background: var(--tx);
+            color: var(--bg);
+            font-size: 12px;
+            font-weight: 500;
+            font-family: var(--font);
+            cursor: pointer;
+            transition: opacity .12s
+        }
+
+        .bsv:hover {
+            opacity: .8
+        }
+
+        .svm {
+            font-size: 11px;
+            color: var(--gr);
+            font-family: var(--mono);
+            opacity: 0;
+            transition: opacity .2s
+        }
+
+        .svm.show {
+            opacity: 1
+        }
+
+        .jht {
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: .1em;
+            color: var(--tx3);
+            text-transform: uppercase;
+            font-family: var(--mono);
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--bd)
+        }
+
+        .jhe {
+            padding: 10px 12px;
+            border: 1px solid var(--bd);
+            border-radius: var(--rs);
+            margin-bottom: 6px;
+            background: var(--sur);
+            font-size: 12px
+        }
+
+        .jhd {
+            font-family: var(--mono);
+            font-size: 10px;
+            color: var(--tx3);
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center
+        }
+
+        .jhc {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 4px
+        }
+
+        .jhch {
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-family: var(--mono)
+        }
+
+        .jhch.ok {
+            background: var(--gr-bg);
+            color: var(--gr);
+            border: 1px solid var(--gr-br)
+        }
+
+        .jhch.warn {
+            background: var(--am-bg);
+            color: var(--am);
+            border: 1px solid var(--am-br)
+        }
+
+        .jhch.bad {
+            background: var(--rd-bg);
+            color: var(--rd);
+            border: 1px solid var(--rd-br)
+        }
+
+        .jhch.blue {
+            background: var(--bl-bg);
+            color: var(--bl);
+            border: 1px solid var(--bl-br)
+        }
+
+        .jhn {
+            color: var(--tx2);
+            line-height: 1.5;
+            font-size: 12px
+        }
+
+        .jhem {
+            color: var(--tx3);
+            font-size: 12px;
+            font-family: var(--mono);
+            padding: 12px 0
+        }
+
+        .jhdel {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 11px;
+            color: var(--tx3);
+            padding: 0;
+            font-family: var(--mono)
+        }
+
+        .jhdel:hover {
+            color: var(--rd)
+        }
+
+        .expbtn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 14px;
+            border: 1px solid var(--bd2);
+            border-radius: var(--rs);
+            font-size: 12px;
+            font-family: var(--font);
+            cursor: pointer;
+            background: var(--sur2);
+            color: var(--tx2);
+            transition: all .12s;
+            margin-top: 10px;
+            margin-right: 8px
+        }
+
+        .expbtn:hover {
+            border-color: var(--tx3);
+            color: var(--tx)
+        }
+
+        /* Stats */
+        .sg {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 1.25rem
+        }
+
+        .sc2 {
+            border: 1px solid var(--bd);
+            border-radius: var(--r);
+            padding: 12px 14px;
+            background: var(--sur)
+        }
+
+        .sn {
+            font-size: 22px;
+            font-weight: 500;
+            font-family: var(--mono);
+            line-height: 1;
+            margin-bottom: 4px
+        }
+
+        .sn.ok {
+            color: var(--gr)
+        }
+
+        .sn.warn {
+            color: var(--am)
+        }
+
+        .sn.bad {
+            color: var(--rd)
+        }
+
+        .sl {
+            font-size: 10px;
+            color: var(--tx3);
+            font-family: var(--mono)
+        }
+
+        .hg {
+            display: grid;
+            grid-template-columns: repeat(14, 1fr);
+            gap: 3px;
+            margin-bottom: 1rem
+        }
+
+        @media(max-width:480px) {
+            .hg {
+                grid-template-columns: repeat(7, 1fr)
+            }
+        }
+
+        .hc {
+            aspect-ratio: 1;
+            border-radius: 3px;
+            background: var(--sur2);
+            position: relative;
+            cursor: default
+        }
+
+        .hc:hover .ht {
+            display: block
+        }
+
+        .ht {
+            display: none;
+            position: absolute;
+            bottom: calc(100% + 4px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--tx);
+            color: var(--bg);
+            font-size: 10px;
+            font-family: var(--mono);
+            padding: 3px 7px;
+            border-radius: 4px;
+            white-space: nowrap;
+            z-index: 10;
+            pointer-events: none
+        }
+
+        .hlr {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: var(--tx3);
+            font-family: var(--mono);
+            margin-bottom: 6px
+        }
+
+        .hl-wrap {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 1rem
+        }
+
+        .hli {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 10px;
+            color: var(--tx3);
+            font-family: var(--mono)
+        }
+
+        .hld {
+            width: 10px;
+            height: 10px;
+            border-radius: 3px
+        }
+
+        .br {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px
+        }
+
+        .brl {
+            font-size: 11px;
+            color: var(--tx2);
+            width: 70px;
+            flex-shrink: 0;
+            font-family: var(--mono)
+        }
+
+        .brt {
+            flex: 1;
+            background: var(--sur2);
+            border-radius: 4px;
+            height: 8px;
+            overflow: hidden
+        }
+
+        .brf {
+            height: 100%;
+            border-radius: 4px;
+            transition: width .4s
+        }
+
+        .brv {
+            font-size: 11px;
+            font-family: var(--mono);
+            color: var(--tx3);
+            min-width: 28px;
+            text-align: right
+        }
+
+        /* Products */
+        .pc {
+            border: 1px solid var(--bd);
+            border-radius: var(--r);
+            margin-bottom: 8px;
+            background: var(--sur);
+            overflow: hidden
+        }
+
+        .pch {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            cursor: pointer
+        }
+
+        .pci {
+            font-size: 18px;
+            flex-shrink: 0
+        }
+
+        .pci2 {
+            flex: 1;
+            min-width: 0
+        }
+
+        .pcn {
+            font-size: 13px;
+            font-weight: 500
+        }
+
+        .pcc {
+            font-size: 10px;
+            color: var(--tx3);
+            font-family: var(--mono);
+            margin-top: 1px
+        }
+
+        .pcp {
+            font-size: 10px;
+            font-family: var(--mono);
+            padding: 3px 10px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all .12s;
+            border: none;
+            white-space: nowrap
+        }
+
+        .pcp.owned {
+            background: var(--gr-bg);
+            color: var(--gr);
+            border: 1px solid var(--gr-br)
+        }
+
+        .pcp.pending {
+            background: var(--am-bg);
+            color: var(--am);
+            border: 1px solid var(--am-br)
+        }
+
+        .pcp.paused {
+            background: var(--sur2);
+            color: var(--tx3);
+            border: 1px solid var(--bd2)
+        }
+
+        .pcp.active {
+            background: var(--bl-bg);
+            color: var(--bl);
+            border: 1px solid var(--bl-br)
+        }
+
+        .pcp.cautious {
+            background: var(--rd-bg);
+            color: var(--rd);
+            border: 1px solid var(--rd-br)
+        }
+
+        .pcb {
+            padding: 0 14px 12px;
+            font-size: 12px;
+            color: var(--tx2);
+            line-height: 1.6;
+            display: none
+        }
+
+        .pcb.open {
+            display: block
+        }
+
+        .pcni {
+            padding: 3px 0;
+            border-bottom: 1px solid var(--bd);
+            font-size: 11px;
+            color: var(--tx2)
+        }
+
+        .pcni:last-child {
+            border-bottom: none
+        }
+
+        .pch2 {
+            font-size: 10px;
+            color: var(--tx3);
+            font-family: var(--mono);
+            margin-top: 8px
+        }
+
+        .popen {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--bd)
+        }
+
+        .popen label {
+            font-size: 11px;
+            color: var(--tx2)
+        }
+
+        .popen input[type=date] {
+            border: 1px solid var(--bd2);
+            border-radius: var(--rs);
+            padding: 4px 8px;
+            font-size: 11px;
+            font-family: var(--mono);
+            background: var(--sur);
+            color: var(--tx);
+            outline: none
+        }
+
+        .popen input[type=date]:focus {
+            border-color: var(--bl)
+        }
+
+        .popen-lbl {
+            font-size: 10px;
+            font-family: var(--mono);
+            color: var(--tx3);
+            margin-left: 4px
+        }
+
+        .shop-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 9px 0;
+            border-bottom: 1px solid var(--bd);
+            gap: 10px
+        }
+
+        .shop-item:last-child {
+            border-bottom: none
+        }
+
+        .shop-pri {
+            font-size: 10px;
+            font-family: var(--mono);
+            padding: 2px 7px;
+            border-radius: 20px;
+            flex-shrink: 0;
+            margin-top: 2px
+        }
+
+        .shop-pri.p1 {
+            background: var(--rd-bg);
+            color: var(--rd);
+            border: 1px solid var(--rd-br)
+        }
+
+        .shop-pri.p2 {
+            background: var(--am-bg);
+            color: var(--am);
+            border: 1px solid var(--am-br)
+        }
+
+        .si {
+            flex: 1
+        }
+
+        .sn2 {
+            font-size: 13px;
+            font-weight: 500
+        }
+
+        .sw {
+            font-size: 11px;
+            color: var(--tx2);
+            margin-top: 2px
+        }
+
+        .cpb {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 14px;
+            border: 1px solid var(--bd2);
+            border-radius: var(--rs);
+            font-size: 12px;
+            font-family: var(--font);
+            cursor: pointer;
+            background: var(--sur2);
+            color: var(--tx2);
+            transition: all .12s;
+            margin-top: 12px;
+            margin-right: 6px
+        }
+
+        .cpb:hover {
+            border-color: var(--tx3);
+            color: var(--tx)
+        }
+
+        .cpb.copied {
+            background: var(--gr-bg);
+            border-color: var(--gr-br);
+            color: var(--gr)
+        }
+
+        /* Backup section */
+        .bk-wrap {
+            border: 1px solid var(--bd);
+            border-radius: var(--r);
+            padding: 12px 14px;
+            background: var(--sur);
+            margin-top: 1.5rem
+        }
+
+        .bk-title {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--tx2);
+            margin-bottom: 8px;
+            font-family: var(--mono);
+            letter-spacing: .05em;
+            text-transform: uppercase
+        }
+
+        .bk-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap
+        }
+
+        .auth-btn { position:fixed; top:12px; right:12px; z-index:50; display:flex; align-items:center; gap:8px; background:var(--sur); border:1px solid var(--bd); border-radius:20px; padding:5px 12px 5px 8px; box-shadow:0 2px 8px rgba(0,0,0,.08); font-size:12px; font-family:var(--font); color:var(--tx2); cursor:default; transition:all .2s }
+        .auth-btn.signed-in { border-color:var(--gr-br) }
+        .auth-sign-in { background:none; border:none; cursor:pointer; font-size:12px; font-family:var(--font); color:var(--bl); padding:0; font-weight:500 }
+        .auth-sign-in:hover { text-decoration:underline }
+        .auth-avatar { width:20px; height:20px; border-radius:50%; object-fit:cover }
+        .auth-btn button { background:none; border:none; cursor:pointer; font-size:11px; color:var(--tx3); font-family:var(--font); padding:0 0 0 6px }
+        .auth-btn button:hover { color:var(--tx) }
+        .sync-status { position:fixed; bottom:16px; right:16px; font-size:11px; font-family:var(--mono); color:var(--tx3); background:var(--sur); border:1px solid var(--bd); border-radius:10px; padding:3px 10px; opacity:0; transition:opacity .4s; pointer-events:none; z-index:50 }
+        .sync-status.show { opacity:1 }
+        .bk-note {
+            font-size: 11px;
+            color: var(--tx3);
+            margin-top: 6px;
+            font-family: var(--mono)
+        }
+        /* Modal */
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:100; align-items:center; justify-content:center; padding:1rem }
+        .modal-overlay.open { display:flex }
+        .modal-box { background:var(--sur); border:1px solid var(--bd); border-radius:var(--r); width:100%; max-width:520px; max-height:85vh; overflow-y:auto; animation:fi .18s ease }
+        .modal-hdr { padding:14px 20px; border-bottom:1px solid var(--bd); display:flex; justify-content:space-between; align-items:center }
+        .modal-hdr h3 { font-size:14px; font-weight:500 }
+        .modal-close { background:none; border:none; cursor:pointer; font-size:18px; color:var(--tx3); padding:0; line-height:1 }
+        .modal-close:hover { color:var(--tx) }
+        .modal-body { padding:16px 20px }
+        .modal-footer { padding:12px 20px; border-top:1px solid var(--bd); display:flex; justify-content:flex-end; gap:8px }
+        .fg { margin-bottom:14px }
+        .fg:last-child { margin-bottom:0 }
+        .fg-label { display:block; font-size:11px; color:var(--tx2); font-family:var(--mono); margin-bottom:5px }
+        .fg-input,.fg-select { width:100%; border:1px solid var(--bd2); border-radius:var(--rs); padding:7px 10px; font-size:12px; font-family:var(--font); background:var(--sur); color:var(--tx); outline:none }
+        .fg-input:focus,.fg-select:focus { border-color:var(--bl) }
+        .fg-row { display:grid; grid-template-columns:1fr 1fr; gap:10px }
+        .fg-toggle { display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--bd); font-size:12px; color:var(--tx2) }
+        .fg-toggle:last-child { border-bottom:none }
+        .tgl { position:relative; width:36px; height:20px; flex-shrink:0 }
+        .tgl input { opacity:0; width:0; height:0 }
+        .tgl-slider { position:absolute; inset:0; background:var(--bd2); border-radius:20px; cursor:pointer; transition:.2s }
+        .tgl-slider::before { content:''; position:absolute; height:14px; width:14px; left:3px; bottom:3px; background:var(--sur); border-radius:50%; transition:.2s }
+        .tgl input:checked+.tgl-slider { background:var(--gr) }
+        .tgl input:checked+.tgl-slider::before { transform:translateX(16px) }
+        .add-prod-btn { display:flex; align-items:center; justify-content:center; gap:6px; width:100%; padding:12px; border:2px dashed var(--bd2); border-radius:var(--r); font-size:13px; font-family:var(--font); color:var(--tx3); background:transparent; cursor:pointer; transition:all .15s; margin-bottom:8px }
+        .add-prod-btn:hover { border-color:var(--bl-br); color:var(--bl); background:var(--bl-bg) }
+        .prod-acts { display:flex; gap:6px; margin-top:10px; padding-top:10px; border-top:1px solid var(--bd) }
+        .prod-act { padding:4px 10px; border:1px solid var(--bd2); border-radius:var(--rs); font-size:11px; font-family:var(--font); cursor:pointer; background:var(--sur2); color:var(--tx2); transition:all .12s }
+        .prod-act:hover { border-color:var(--tx3); color:var(--tx) }
+        .prod-act.del:hover { border-color:var(--rd-br); color:var(--rd); background:var(--rd-bg) }
+        .sched-info { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px }
+        .sched-tag { font-size:9px; font-family:var(--mono); padding:2px 6px; border-radius:10px; background:var(--sur2); color:var(--tx3); border:1px solid var(--bd) }
+        .btn-cancel { padding:7px 16px; border:1px solid var(--bd2); border-radius:var(--rs); font-size:12px; font-family:var(--font); cursor:pointer; background:var(--sur2); color:var(--tx2) }
+        .btn-cancel:hover { border-color:var(--tx3) }
+    </style>
+
+</head>
+
+<body>
+    <div class="wrap">
+        <div class="header">
+            <div>
+                <h1>护肤计划</h1>
+                <div class="sub" id="header-sub">混油皮 · E2 HRT · 屏障修护</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+                <div class="barrier-badge" id="barrier-badge"></div>
+                <div id="auth-btn" class="auth-btn"><button class="auth-sign-in" onclick="signInGoogle()">🔐 Google 登录同步</button></div>
+            </div>
+        </div>
+        <div id="sync-status-el" class="sync-status">✓ 已同步</div>
+        <div class="tabs-wrap">
+            <div class="tabs">
+                <button class="tab active" onclick="show('tonight',this)">今晚</button>
+                <button class="tab" onclick="show('am',this)">早晨</button>
+                <button class="tab" onclick="show('pms',this)">洗澡夜</button>
+                <button class="tab" onclick="show('pmn',this)">非洗澡夜</button>
+                <button class="tab" onclick="show('shv',this)">刮胡日</button>
+                <button class="tab" onclick="show('wkly',this)">排班</button>
+                <button class="tab" onclick="show('jrnl',this)">日志</button>
+                <button class="tab" onclick="show('stats',this)">统计</button>
+                <button class="tab" onclick="show('prods',this)">产品</button>
+            </div>
+        </div>
+
+        <!-- ══ 今晚 ══ -->
+
+        <div id="tonight" class="panel active">
+            <div id="hrt-bnr"></div>
+            <div id="barrier-limit-banner"></div>
+            <div id="tn-meta-row" class="tn-meta"></div>
+            <div id="sync-note-area"></div>
+            <p style="font-size:12px;color:var(--tx3);margin-bottom:.6rem">今天的情况（可手动覆盖）：</p>
+            <div class="tn-btns">
+                <button class="tn-btn" id="tn-sh" onclick="toggleTn('shower')">🚿 今天洗澡</button>
+                <button class="tn-btn" id="tn-sv" onclick="toggleTn('shave')">✂️ 今天刮胡</button>
+                <button class="tn-reset" onclick="resetTnToSchedule()">重置为排班</button>
+            </div>
+            <div class="tn-plan" id="tn-plan"></div>
+            <p style="font-size:11px;color:var(--tx3);font-family:var(--mono);margin-top:.75rem">点击步骤可打勾标记完成（跨切换持久保存）
+            </p>
+        </div>
+
+        <!-- ══ 早晨 ══ -->
+
+        <div id="am" class="panel">
+            <div class="alert success">
+                <div class="at">早晨：一步即可</div>用过酸的次日只需防晒。其他均可选。
+            </div>
+            <div class="section">
+                <div class="step">
+                    <div class="num gh">0</div>
+                    <div class="sc">
+                        <div class="prod">清水冲洗 30秒</div>
+                        <div class="how">不需要洁面产品</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num wn">!</div>
+                    <div class="sc">
+                        <div class="prod danger" id="am-spf-name">SPF 30+ 防晒<span class="tag must"
+                                id="am-spf-tag">待购入</span></div>
+                        <div class="how">用了酸类的次日无防晒 = 加深痘印。Altruist SPF50（£3–5）或 La Roche-Posay Anthelios UVMUNE</div>
+                    </div>
+                </div>
+                <div class="step dim">
+                    <div class="num gh">+</div>
+                    <div class="sc">
+                        <div class="prod">Toleriane Ultra Light <span class="tag skip">仅紧绷时</span></div>
+                        <div class="how">防晒前薄涂打底，平时跳过</div>
+                    </div>
+                </div>
+                <div class="step dim">
+                    <div class="num gh">+</div>
+                    <div class="sc">
+                        <div class="prod">MZ Skin 眼霜 <span class="tag skip">可选</span></div>
+                        <div class="how">只用晚上也完全够</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══ 洗澡夜 ══ -->
+
+        <div id="pms" class="panel">
+            <div class="alert info">
+                <div class="at">洗澡夜（每4天）</div>洗澡后渗透性增强——酸类优先安排在洗澡夜。
+            </div>
+            <div class="section">
+                <div class="sec-title">洁面</div>
+                <div class="step">
+                    <div class="num pm">1</div>
+                    <div class="sc">
+                        <div class="prod">Lancôme Clarifique 洁面泡沫</div>
+                        <div class="how">轻柔画圈60秒，温水冲净。T区多停留，两颊轻过，不超过90秒</div>
+                    </div>
+                </div>
+            </div>
+            <div class="section">
+                <div class="sec-title">去角质（上限见排班酸类频率）</div>
+                <div class="step">
+                    <div class="num pm">2A</div>
+                    <div class="sc">
+                        <div class="prod">Paula's Choice 6%杏仁酸+2%乳酸 <span class="tag acid">T区主选</span></div>
+                        <div class="how">额头+鼻翼+下颌，停留3–5分钟，无需冲洗。两颊有刺激感则跳过</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num pm">2B</div>
+                    <div class="sc">
+                        <div class="prod">Votary 10%乳酸 <span class="tag acid">全脸/两颊主选</span></div>
+                        <div class="how">与PC交替，不同晚叠加。乳酸保湿性更强，适合两颊偏干</div>
+                    </div>
+                </div>
+                <div class="step" id="gg-step">
+                    <div class="num gh" id="gg-num">✗</div>
+                    <div class="sc">
+                        <div class="prod" id="gg-name">Sunday Riley Good Genes <span class="tag skip"
+                                id="gg-tag">暂缓</span></div>
+                        <div class="how" id="gg-how">高酒精+乙醇酸对当前屏障过激进。屏障稳定4周后再评估</div>
+                    </div>
+                </div>
+            </div>
+            <div class="section">
+                <div class="sec-title">精华</div>
+                <div class="step">
+                    <div class="num pm">3</div>
+                    <div class="sc">
+                        <div class="prod">Dr Sebagh Rose de Vie <span class="tag act">无酸夜使用</span></div>
+                        <div class="how">酸类当晚跳过，直接保湿。非酸夜全脸3–4滴</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num pm">4</div>
+                    <div class="sc">
+                        <div class="prod">MZ Skin 眼霜</div>
+                        <div class="how">无名指轻拍眼眶骨</div>
+                    </div>
+                </div>
+            </div>
+            <div class="section">
+                <div class="sec-title">保湿封层</div>
+                <div class="step">
+                    <div class="num pm">5</div>
+                    <div class="sc">
+                        <div class="prod">Skin Rocks The Moisturiser FF <span class="tag barrier">首选</span></div>
+                        <div class="how">无香精，酸类夜必用</div>
+                    </div>
+                </div>
+                <div class="step dim">
+                    <div class="num gh">5B</div>
+                    <div class="sc">
+                        <div class="prod">Estée Lauder Revitalizing Supreme+ <span class="tag caution">仅两颊极干时</span>
+                        </div>
+                        <div class="how">含香精，避开T区，仅叠加于干燥颊部</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num pm">6</div>
+                    <div class="sc">
+                        <div class="prod">Cicaplast B5 <span class="tag barrier">点涂</span></div>
+                        <div class="how">活跃痘痘逐个薄涂；口罩线加强修护</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══ 非洗澡夜 ══ -->
+
+        <div id="pmn" class="panel">
+            <div class="alert info">
+                <div class="at">非洗澡夜（约3天/周）</div>屏障修复主要时段，轻柔洁面，修护为主。
+            </div>
+            <div class="section">
+                <div class="sec-title">洁面</div>
+                <div class="step">
+                    <div class="num pm">1</div>
+                    <div class="sc">
+                        <div class="prod">温水冲洗 / 卸妆水<span class="tag skip" id="bio-tag">待购入</span></div>
+                        <div class="how" id="bio-how">无彩妆：温水30秒。有防晒/彩妆：Bioderma Sensibio H2O（待购）再水洗</div>
+                    </div>
+                </div>
+            </div>
+            <div class="section">
+                <div class="sec-title">修护精华</div>
+                <div class="step">
+                    <div class="num pm">2</div>
+                    <div class="sc">
+                        <div class="prod">Dr Sebagh Rose de Vie</div>
+                        <div class="how">全脸3–4滴</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num pm">3</div>
+                    <div class="sc">
+                        <div class="prod">Agent Nateur Holi(Oil) <span class="tag caution">两颊/非痘区</span></div>
+                        <div class="how">1–2滴，仅两颊和颈部。额头严格避开。当周额头有活跃新痘时全周暂停</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num pm">4</div>
+                    <div class="sc">
+                        <div class="prod">MZ Skin 眼霜</div>
+                    </div>
+                </div>
+            </div>
+            <div class="section">
+                <div class="sec-title">保湿</div>
+                <div class="step">
+                    <div class="num pm">5</div>
+                    <div class="sc">
+                        <div class="prod">La Roche-Posay Toleriane Ultra Light</div>
+                        <div class="how">轻薄全脸，非洗澡夜无需厚封层</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num pm">6</div>
+                    <div class="sc">
+                        <div class="prod">Cicaplast B5 <span class="tag barrier">点涂</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="section">
+                <div class="sec-title">视黄醇（屏障稳定后）</div>
+                <div class="step" id="rt-step">
+                    <div class="num gh" id="rt-num">→</div>
+                    <div class="sc">
+                        <div class="prod" id="rt-name">Lancaster 眼霜小样（视黄醇）<span class="tag caution"
+                                id="rt-tag">谨慎引入</span></div>
+                        <div class="how" id="rt-how">1次/周，仅非酸夜、非刮胡日。观察4周无反应再维持</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══ 刮胡日 ══ -->
+
+        <div id="shv" class="panel">
+            <div class="alert warn">
+                <div class="at">刮胡 = 机械性去角质</div>刮胡日当晚禁用所有酸类和视黄醇。
+            </div>
+            <div class="section">
+                <div class="sec-title">刮胡前</div>
+                <div class="step">
+                    <div class="num no">1</div>
+                    <div class="sc">
+                        <div class="prod">温水湿润面部 1–2分钟</div>
+                        <div class="how">软化毛发，降低摩擦</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num no">2</div>
+                    <div class="sc">
+                        <div class="prod">Toleriane Ultra Light 或 Cicaplast B5 薄涂</div>
+                        <div class="how">替代刮胡膏，顺毛发方向刮</div>
+                    </div>
+                </div>
+            </div>
+            <div class="section">
+                <div class="sec-title">刮胡后（立即）</div>
+                <div class="step">
+                    <div class="num no">3</div>
+                    <div class="sc">
+                        <div class="prod">凉水冲洗</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num no">4</div>
+                    <div class="sc">
+                        <div class="prod">Cicaplast B5 全脸薄涂 <span class="tag barrier">必须</span></div>
+                        <div class="how">修护微创口、抗菌。最重要的单步骤</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num no">5</div>
+                    <div class="sc">
+                        <div class="prod">Avène Tolérance Extreme 面膜（可选）</div>
+                        <div class="how">泛红/刺痛时涂抹10–15分钟镇定</div>
+                    </div>
+                </div>
+            </div>
+            <div class="section">
+                <div class="sec-title">刮胡日晚间</div>
+                <div class="step">
+                    <div class="num no">6</div>
+                    <div class="sc">
+                        <div class="prod">跳过所有酸类 + 视黄醇</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num no">7</div>
+                    <div class="sc">
+                        <div class="prod">Dr Sebagh → Skin Rocks FF → Cicaplast B5</div>
+                        <div class="how">修护精华 → 无香面霜 → B5点涂收尾</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══ 排班 ══ -->
+
+        <div id="wkly" class="panel">
+            <div class="wk-label" id="wk-label"></div>
+            <p style="font-size:12px;color:var(--tx3);margin-bottom:.75rem">选择模式后点击日期。今天以外框标注。排班会同步至"今晚"面板。</p>
+            <div class="tr">
+                <span class="tl">模式：</span>
+                <button class="tb on-shower" id="mode-shower" onclick="setMode('shower')">🚿 洗澡日</button>
+                <button class="tb" id="mode-shave" onclick="setMode('shave')">✂️ 刮胡日</button>
+                <button class="tb" id="mode-clear" onclick="setMode('clear')">✕ 清除</button>
+            </div>
+            <div class="dtg" id="day-toggles"></div>
+            <div class="leg-wrap">
+                <div class="leg">
+                    <div class="ld" style="background:var(--bl-bg);border:1px solid var(--bl-br)"></div>洗澡
+                </div>
+                <div class="leg">
+                    <div class="ld" style="background:var(--gr-bg);border:1px solid var(--gr-br)"></div>刮胡
+                </div>
+                <div class="leg">
+                    <div class="ld" style="background:var(--am-bg);border:1px solid var(--am-br)"></div>酸类
+                </div>
+                <div class="leg">
+                    <div class="ld" style="background:var(--pu-bg);border:1px solid var(--pu-br)"></div>泥面膜
+                </div>
+                <div class="leg">
+                    <div class="ld" style="background:var(--rd-bg);border:1px solid var(--rd-br)"></div>视黄醇
+                </div>
+                <div class="leg">
+                    <div class="ld" style="border:2px solid var(--tx3)"></div>今天
+                </div>
+            </div>
+            <div class="wks" id="wk-sum"></div>
+            <div id="cf-alerts"></div>
+            <div id="jrnl-alert-wk"></div>
+            <div class="sec-title" style="margin-bottom:8px">晚间安排总览</div>
+            <div class="dpg" id="dp-grid"></div>
+        </div>
+
+        <!-- ══ 日志 ══ -->
+
+        <div id="jrnl" class="panel">
+            <div class="cdc">
+                <div class="cdh">
+                    <div class="cdt">🛡️ Good Genes 解禁倒计时</div>
+                    <div class="cdb" id="cd-badge">未设置</div>
+                </div>
+                <div class="pw">
+                    <div class="pb" id="cd-bar" style="width:0%"></div>
+                </div>
+                <div class="cm"><span id="cd-left">屏障稳定需4周</span><span id="cd-pct">0%</span></div>
+                <div class="cir"><label>开始修护日期：</label><input type="date" id="cd-start" onchange="saveCd()"></div>
+            </div>
+
+            <!-- Quick log presets -->
+
+            <div class="ql-wrap">
+                <div class="ql-title">⚡ 快速记录</div>
+                <div class="ql-btns">
+                    <button class="ql-btn" onclick="quickLog('repair')">🛡 修护夜 · 稳定</button>
+                    <button class="ql-btn" onclick="quickLog('shower-repair')">🚿 洗澡夜 · 稳定</button>
+                    <button class="ql-btn" onclick="quickLog('pc-acid')">PC酸夜 · 稳定</button>
+                    <button class="ql-btn" onclick="quickLog('votary-acid')">Votary酸夜 · 稳定</button>
+                    <button class="ql-btn" onclick="quickLog('shave')">✂️ 刮胡日 · 稳定</button>
+                </div>
+            </div>
+
+            <div class="jfc">
+                <div class="jft">📝 今日记录</div>
+                <label class="jfl">皮肤状态</label>
+                <div class="chips" id="sc-chips">
+                    <div class="chip" data-val="稳定" data-cls="s-ok" onclick="toggleChip(this,'s')">✓ 稳定</div>
+                    <div class="chip" data-val="出油" data-cls="s-warn" onclick="toggleChip(this,'s')">💧 出油</div>
+                    <div class="chip" data-val="干燥" data-cls="s-warn" onclick="toggleChip(this,'s')">🏜 干燥</div>
+                    <div class="chip" data-val="泛红" data-cls="s-bad" onclick="toggleChip(this,'s')">🔴 泛红</div>
+                    <div class="chip" data-val="爆痘" data-cls="s-bad" onclick="toggleChip(this,'s')">⚡ 爆痘</div>
+                    <div class="chip" data-val="敏感" data-cls="s-warn" onclick="toggleChip(this,'s')">⚠ 敏感</div>
+                    <div class="chip" data-val="好转" data-cls="s-ok" onclick="toggleChip(this,'s')">↑ 好转</div>
+                </div>
+                <label class="jfl">今晚使用</label>
+                <div class="chips" id="pc-chips">
+                    <div class="chip" data-val="PC酸" data-cls="s-blue" onclick="toggleChip(this,'p')">PC 杏仁酸</div>
+                    <div class="chip" data-val="Votary酸" data-cls="s-blue" onclick="toggleChip(this,'p')">Votary 乳酸
+                    </div>
+                    <div class="chip" data-val="Good Genes" data-cls="s-blue" onclick="toggleChip(this,'p')">Good Genes
+                    </div>
+                    <div class="chip" data-val="视黄醇" data-cls="s-blue" onclick="toggleChip(this,'p')">视黄醇</div>
+                    <div class="chip" data-val="泥面膜" data-cls="s-blue" onclick="toggleChip(this,'p')">泥面膜</div>
+                    <div class="chip" data-val="修护夜" data-cls="s-ok" onclick="toggleChip(this,'p')">修护夜</div>
+                    <div class="chip" data-val="刮胡" data-cls="s-blue" onclick="toggleChip(this,'p')">刮胡</div>
+                </div>
+                <label class="jfl">HRT / E2 阶段</label>
+                <div style="margin-bottom:10px"><input class="hf" id="hrt-ph" placeholder="如：第3个月、稳定期"></div>
+                <label class="jfl">备注</label>
+                <textarea class="jfn" id="jf-note" rows="2" placeholder="今天有什么特别观察？"></textarea>
+                <div style="display:flex;align-items:center;gap:10px">
+                    <button class="bsv" onclick="saveEntry()">保存记录</button>
+                    <span class="svm" id="sv-msg">✓ 已保存</span>
+                </div>
+            </div>
+            <div class="jht">最近14天</div>
+            <div id="jh-list"></div>
+            <div style="margin-top:10px">
+                <button class="expbtn" onclick="exportCSV()">⬇ 导出 CSV</button>
+                <button class="expbtn" onclick="exportJSON()">⬇ 导出备份（JSON）</button>
+                <label class="expbtn" style="cursor:pointer">⬆ 恢复备份<input type="file" accept=".json"
+                        onchange="importJSON(this)" style="display:none"></label>
+            </div>
+        </div>
+
+        <!-- ══ 统计 ══ -->
+
+        <div id="stats" class="panel">
+            <div class="sg" id="stat-grid"></div>
+            <div class="sec-title" style="margin-bottom:8px">过去14天皮肤热力图</div>
+            <div class="hlr"><span id="hs-start"></span><span>今天</span></div>
+            <div class="hg" id="heat-grid"></div>
+            <div class="hl-wrap">
+                <div class="hli">
+                    <div class="hld" style="background:var(--sur2)"></div>无记录
+                </div>
+                <div class="hli">
+                    <div class="hld" style="background:var(--gr)"></div>稳定/好转
+                </div>
+                <div class="hli">
+                    <div class="hld" style="background:var(--am)"></div>出油/干燥/敏感
+                </div>
+                <div class="hli">
+                    <div class="hld" style="background:var(--rd)"></div>泛红/爆痘
+                </div>
+            </div>
+            <div class="sec-title" style="margin-bottom:8px">过去4周酸类频率</div>
+            <div id="acid-bars"></div>
+            <div class="sec-title" style="margin:1rem 0 8px">HRT 阶段记录</div>
+            <div id="hrt-tl"></div>
+        </div>
+
+        <!-- ══ 产品 ══ -->
+
+        <div id="prods" class="panel">
+            <p style="font-size:12px;color:var(--tx3);margin-bottom:1rem">点击状态按钮循环切换；点击产品行展开详情。</p>
+            <div id="prod-list"></div>
+            <div class="section" style="margin-top:1.5rem">
+                <div class="sec-title">待购清单</div>
+                <div id="shop-pending"></div>
+                <button class="cpb" id="cpb" onclick="copyShop()">📋 复制购物清单</button>
+            </div>
+
+            <!-- Backup -->
+
+            <div class="bk-wrap">
+                <div class="bk-title">数据备份 / 恢复</div>
+                <div class="bk-row">
+                    <button class="cpb" onclick="exportJSON()">⬇ 导出 JSON</button>
+                    <label class="cpb" style="cursor:pointer">⬆ 导入 JSON<input type="file" accept=".json"
+                            onchange="importJSON(this)" style="display:none"></label>
+                </div>
+                <div class="bk-note">备份包含所有日志、排班和产品状态</div>
+            </div>
+
+            <div class="section" style="margin-top:2rem">
+                <div class="sec-title">绝对禁止同晚叠用</div>
+                <div class="alert danger">
+                    <div class="at">酸类 × 视黄醇</div>任何酸类当晚，Lancaster 视黄醇小样禁止使用
+                </div>
+                <div class="alert danger">
+                    <div class="at">多种酸类叠加</div>PC、Votary、Good Genes 任意两款不可同晚使用
+                </div>
+                <div class="alert warn">
+                    <div class="at">刮胡日 × 酸类/视黄醇</div>刮胡当晚全部活性成分跳过
+                </div>
+            </div>
+            <div class="section">
+                <div class="sec-title">叠涂顺序</div>
+                <div class="step">
+                    <div class="num pm">①</div>
+                    <div class="sc">
+                        <div class="prod">稀薄到浓厚</div>
+                        <div class="how">酸类 → 精华 → 面霜 → 油 → 防晒（早晨）</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num pm">②</div>
+                    <div class="sc">
+                        <div class="prod">酸类后等待3分钟</div>
+                        <div class="how">pH稳定后再叠后续步骤</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num pm">③</div>
+                    <div class="sc">
+                        <div class="prod">Cicaplast B5 最后封层</div>
+                        <div class="how">高分子结构会阻碍后续成分渗透</div>
+                    </div>
+                </div>
+            </div>
+            <div class="section">
+                <div class="sec-title">HRT联动</div>
+                <div class="step">
+                    <div class="num no">→</div>
+                    <div class="sc">
+                        <div class="prod">激素过渡期爆痘窗口（3–6个月）</div>
+                        <div class="how">集中爆痘时当周酸类降至1次，优先修护</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num no">→</div>
+                    <div class="sc">
+                        <div class="prod">皮肤变薄是趋势</div>
+                        <div class="how">每季度重新评估酸类频率</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num no">→</div>
+                    <div class="sc">
+                        <div class="prod">视黄醇 + E2 叠加效应</div>
+                        <div class="how">E2本身促皮肤更新，视黄醇引入更保守（1次/周起步）</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /wrap -->
+
+    <div class="modal-overlay" id="prod-modal" onclick="if(event.target===this)closeProdModal()">
+        <div class="modal-box">
+            <div class="modal-hdr"><h3 id="modal-title">添加产品</h3><button class="modal-close" onclick="closeProdModal()">×</button></div>
+            <div class="modal-body" id="modal-body"></div>
+            <div class="modal-footer"><button class="btn-cancel" onclick="closeProdModal()">取消</button><button class="bsv" onclick="saveProdModal()">保存</button></div>
+        </div>
+    </div>
+
+    <script>
+        // ══ Storage ══════════════════════════════════════════════════
+        function lg(k) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null } catch { return null } }
+        function ls(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); schedulePush(); } catch { } }
+        function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+        // Single versioned keys — migrate old keys on load
+        const K = {
+            wk: 'sk_wk1',
+            jrnl: 'sk_jrnl1',
+            cd: 'sk_cd1',
+            prods: 'sk_prods1',
+            popen: 'sk_popen1',
+            tn: 'sk_tn1',
+            tnsteps: 'sk_tnsteps1',
+            prodDefs: 'sk_proddefs1'
+        };
+        // One-time migration from old keys
+        (function migrate() {
+            const old = { wk: 'sc_wk3', jrnl: 'sc_jrnl2', cd: 'sc_cd1', prods: 'sc_prods1', tn: 'sc_tn1' };
+            if (!lg(K.jrnl) && lg(old.jrnl)) { ls(K.jrnl, lg(old.jrnl)); }
+            if (!lg(K.prods) && lg(old.prods)) { ls(K.prods, lg(old.prods)); }
+            if (!lg(K.cd) && lg(old.cd)) { ls(K.cd, lg(old.cd)); }
+        })();
+
+        // ══ Dates ════════════════════════════════════════════════════
+        function today() { return new Date().toISOString().split('T')[0] }
+        function fmtD(d) { return d instanceof Date ? d.toISOString().split('T')[0] : d }
+        function isoWeek(d = new Date()) {
+            const t = new Date(d); t.setHours(0, 0, 0, 0); t.setDate(t.getDate() + 3 - (t.getDay() + 6) % 7);
+            const w = new Date(t.getFullYear(), 0, 4);
+            return t.getFullYear() + '-W' + String(1 + Math.round(((t - w) / 86400000 - 3 + (w.getDay() + 6) % 7) / 7)).padStart(2, '0');
+        }
+        // Monday of week containing d
+        function monday(d = new Date()) {
+            const day = d.getDay(), diff = day === 0 ? -6 : 1 - day, m = new Date(d);
+            m.setDate(d.getDate() + diff); m.setHours(0, 0, 0, 0); return m;
+        }
+        // Monday of week N weeks ago (0=this week)
+        function mondayNWeeksAgo(n) { const d = new Date(); d.setDate(d.getDate() - n * 7); return monday(d); }
+        // Sunday of week starting on a given Monday
+        function sundayOf(mon) { const d = new Date(mon); d.setDate(d.getDate() + 6); return d; }
+        // 0=Mon…6=Sun
+        function todayWkIdx() { const d = new Date().getDay(); return d === 0 ? 6 : d - 1; }
+
+        // ══ Products ════════════════════════════════════════════════
+        const DEFAULT_PD = [
+            { id:'sunscreen',icon:'☀️',name:'SPF 防晒',cat:'早晨 · 必备',journalTag:'',statuses:['pending','owned'],labels:{pending:'待购入',owned:'已购入'},pillCls:{pending:'pending',owned:'owned'},notes:['Altruist SPF50（£3–5）—预算首选','La Roche-Posay Anthelios UVMUNE—升级选择','用酸次日无防晒 = 加深痘印'],schedule:{type:'daily',maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},builtin:true },
+            { id:'bioderma',icon:'💧',name:'Bioderma Sensibio H2O',cat:'洁面 · 卸妆水',journalTag:'',statuses:['pending','owned'],labels:{pending:'待购入',owned:'已购入'},pillCls:{pending:'pending',owned:'owned'},notes:['非洗澡夜有防晒/彩妆时使用','极温和，适合屏障修护期'],schedule:{type:'daily',maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},builtin:true },
+            { id:'clay',icon:'🫙',name:'IPSA 深层净化泥面膜',cat:'去角质 · 泥膜',journalTag:'泥面膜',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['1次/周，洗澡夜使用','使用当晚视为酸类占用','泛红/敏感期暂停'],schedule:{type:'mask',maxPerWeek:1,minDaysBetween:0,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:false,enableAutoSchedule:true},builtin:true },
+            { id:'goodGenes',icon:'🧪',name:'Sunday Riley Good Genes',cat:'去角质 · 乙醇酸',journalTag:'Good Genes',statuses:['paused','active'],labels:{paused:'暂缓使用',active:'可以使用'},pillCls:{paused:'paused',active:'active'},notes:['高酒精+乙醇酸，屏障稳定4周后再评估','使用时替换PC或Votary，不得叠用'],schedule:{type:'acid',maxPerWeek:1,minDaysBetween:2,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:true,enableAutoSchedule:true},builtin:true },
+            { id:'retinol',icon:'🔬',name:'Lancaster 视黄醇小样',cat:'抗衰 · 极谨慎',journalTag:'视黄醇',statuses:['cautious','active'],labels:{cautious:'谨慎引入',active:'已纳入常规'},pillCls:{cautious:'cautious',active:'active'},notes:['1次/周起步，仅非酸夜、非刮胡日','观察4周无刺激再维持频率'],schedule:{type:'retinol',maxPerWeek:1,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:true,avoidAcid:true,avoidRetinol:false,enableAutoSchedule:true},builtin:true },
+            { id:'pc',icon:'🧴',name:"Paula's Choice 6%杏仁酸+2%乳酸",cat:'去角质 · T区',journalTag:'PC酸',statuses:['active'],labels:{active:'正常使用'},pillCls:{active:'active'},notes:['T区主选：额头、鼻翼、下颌','停留3–5分钟，无需冲洗'],schedule:{type:'acid',maxPerWeek:1,minDaysBetween:2,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:true,enableAutoSchedule:true},builtin:true },
+            { id:'votary',icon:'🧴',name:'Votary 10%乳酸',cat:'去角质 · 全脸',journalTag:'Votary酸',statuses:['active'],labels:{active:'正常使用'},pillCls:{active:'active'},notes:['全脸/两颊主选，保湿性更强','与PC交替，乳酸对屏障更温和'],schedule:{type:'acid',maxPerWeek:1,minDaysBetween:2,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:true,enableAutoSchedule:true},builtin:true },
+            // ── 每晚固定护理品 ─────────────────────────────────────────
+            { id:'lancome',icon:'🧼',name:'Lancôme Clarifique 洁面泡沫',cat:'洁面 · 洗澡夜',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['洗澡夜使用，60秒按摩，T区多停留','替代温水冲洗，清洁力更强'],schedule:{type:'base',maxPerWeek:0,minDaysBetween:0,preferShowerNight:true,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},builtin:true },
+            { id:'sebagh',icon:'💎',name:'Dr Sebagh Rose de Vie 精华',cat:'精华 · 修护夜',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['修护夜和非酸夜使用（酸类夜跳过）','全脸3–4滴，轻拍至吸收'],schedule:{type:'base',maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},builtin:true },
+            { id:'agentholi',icon:'🌿',name:'Agent Nateur Holi(Oil) 精华油',cat:'精华油 · 修护夜',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['非洗澡夜使用，1–2滴','两颊和颈部，额头避开'],schedule:{type:'base',maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},builtin:true },
+            { id:'mzskin',icon:'👁',name:'MZ Skin 眼霜',cat:'眼部 · 每晚',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['无名指轻拍眼眶骨，不要触碰眼球','每晚使用，补水+淡化'],schedule:{type:'base',maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},builtin:true },
+            { id:'skinrocks',icon:'🫧',name:'Skin Rocks FF 面霜',cat:'面霜 · 每晚',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['无香精配方，酸类夜首选','轻薄质地，全脸封层'],schedule:{type:'base',maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},builtin:true },
+            { id:'cicaplast',icon:'🩹',name:'Cicaplast B5 修护霜',cat:'修护 · 每晚',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['活跃痘痘处、口罩线点涂','刮胡后全脸薄涂修护微创口'],schedule:{type:'base',maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},builtin:true },
+            { id:'avene',icon:'🍃',name:'Avène Tolérance Extrême',cat:'修护 · 刮胡后',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['刮胡后泛红/刺痛时使用（可选）','10–15分钟后再叠后续步骤'],schedule:{type:'base',maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},builtin:true },
+        ];
+        function loadPD() {
+            const saved = lg(K.prodDefs);
+            if (saved) {
+                // Ensure all saved products have schedule field (migration)
+                saved.forEach(p => { if (!p.schedule) p.schedule = {type:'none',maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false}; });
+                // Merge: add any new builtin products not yet in saved list
+                DEFAULT_PD.filter(d => d.builtin).forEach(def => {
+                    if (!saved.find(s => s.id === def.id)) saved.push(JSON.parse(JSON.stringify(def)));
+                });
+                return saved;
+            }
+            return JSON.parse(JSON.stringify(DEFAULT_PD));
+        }
+        let PD = loadPD();
+        let PS = lg(K.prods) || { sunscreen:'pending',bioderma:'pending',clay:'owned',goodGenes:'paused',retinol:'cautious',pc:'active',votary:'active' };
+        let POPEN = lg(K.popen) || {};
+
+        function isSchedActive(prod, status) { return status !== 'paused' && status !== 'pending'; }
+
+        function cyclePS(id, e) {
+            e.stopPropagation();
+            const def = PD.find(d => d.id === id); if (!def) return;
+            const cur = PS[id] || def.statuses[0];
+            const idx = def.statuses.indexOf(cur);
+            PS[id] = def.statuses[(idx + 1) % def.statuses.length];
+            ls(K.prods, PS); renderProds(); updateProdUI(); renderWk(); renderTn();
+        }
+        function saveOpenDate(id, val) { POPEN[id] = val; ls(K.popen, POPEN); renderProds(); }
+        function togglePCB(id) { const el = document.getElementById('pcb-' + id); if (el) el.classList.toggle('open') }
+        function weeksOpen(id) { if (!POPEN[id]) return null; return Math.floor(Math.floor((new Date() - new Date(POPEN[id])) / 86400000) / 7); }
+
+        // ── Product CRUD ─────────────────────────────────────────────
+        let editingProdId = null;
+        function tglHTML(id, checked) { return `<label class="tgl"><input type="checkbox" id="${id}" ${checked?'checked':''}><span class="tgl-slider"></span></label>`; }
+        function toggleSchedFields() { const t=document.getElementById('m-stype').value; document.getElementById('sched-fields').style.display=['acid','mask','retinol'].includes(t)?'block':'none'; }
+        function showProdModal(id) {
+            editingProdId = id || null;
+            const prod = id ? PD.find(p => p.id === id) : null;
+            document.getElementById('modal-title').textContent = prod ? '编辑产品' : '添加产品';
+            const TYPES = [{value:'acid',label:'酸类'},{value:'retinol',label:'视黄醇'},{value:'mask',label:'面膜'},{value:'base',label:'基础固定步骤'},{value:'daily',label:'日常(不排班)'},{value:'none',label:'不排班'}];
+            const sch = prod ? prod.schedule : {type:'none',maxPerWeek:1,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false};
+            document.getElementById('modal-body').innerHTML = `
+                <div class="fg"><label class="fg-label">产品名称</label><input class="fg-input" id="m-name" value="${esc(prod?prod.name:'')}"></div>
+                <div class="fg-row"><div class="fg"><label class="fg-label">分类</label><input class="fg-input" id="m-cat" value="${esc(prod?prod.cat:'')}"></div>
+                <div class="fg"><label class="fg-label">图标</label><input class="fg-input" id="m-icon" value="${prod?prod.icon:'🧴'}" style="width:60px"></div></div>
+                <div class="fg"><label class="fg-label">备注（每行一条）</label><textarea class="fg-input" id="m-notes" rows="3" style="resize:vertical">${prod?prod.notes.join('\n'):''}</textarea></div>
+                <div class="fg"><label class="fg-label">日志标签（用于记录追踪）</label><input class="fg-input" id="m-jtag" value="${esc(prod?prod.journalTag||'':'')}"></div>
+                <div class="fg"><label class="fg-label">排班类型</label><select class="fg-select" id="m-stype" onchange="toggleSchedFields()">${TYPES.map(t=>`<option value="${t.value}" ${sch.type===t.value?'selected':''}>${t.label}</option>`).join('')}</select></div>
+                <div id="sched-fields">
+                    <div class="fg-row"><div class="fg"><label class="fg-label">每周上限</label><input type="number" class="fg-input" id="m-max" min="0" max="7" value="${sch.maxPerWeek||1}"></div>
+                    <div class="fg"><label class="fg-label">最小间隔天数</label><input type="number" class="fg-input" id="m-gap" min="0" max="6" value="${sch.minDaysBetween||0}"></div></div>
+                    <div class="fg"><label class="fg-label">排班偏好</label>
+                        <div class="fg-toggle"><span>优先洗澡日</span>${tglHTML('m-shower',sch.preferShowerNight)}</div>
+                        <div class="fg-toggle"><span>避开刮胡日</span>${tglHTML('m-shave',sch.avoidShaveDay)}</div>
+                        <div class="fg-toggle"><span>避开酸类日</span>${tglHTML('m-acid',sch.avoidAcid)}</div>
+                        <div class="fg-toggle"><span>避开视黄醇日</span>${tglHTML('m-retinol',sch.avoidRetinol)}</div>
+                        <div class="fg-toggle"><span>纳入自动排班</span>${tglHTML('m-auto',sch.enableAutoSchedule)}</div>
+                    </div>
+                </div>`;
+            toggleSchedFields();
+            document.getElementById('prod-modal').classList.add('open');
+        }
+        function closeProdModal() { document.getElementById('prod-modal').classList.remove('open'); editingProdId = null; }
+        function saveProdModal() {
+            const name = document.getElementById('m-name').value.trim(); if (!name) { alert('请输入产品名称'); return; }
+            const icon = document.getElementById('m-icon').value.trim()||'🧴';
+            const cat = document.getElementById('m-cat').value.trim();
+            const notes = document.getElementById('m-notes').value.trim().split('\n').filter(Boolean);
+            const journalTag = document.getElementById('m-jtag').value.trim();
+            const schedule = {
+                type: document.getElementById('m-stype').value,
+                maxPerWeek: parseInt(document.getElementById('m-max').value)||1,
+                minDaysBetween: parseInt(document.getElementById('m-gap').value)||0,
+                preferShowerNight: document.getElementById('m-shower').checked,
+                avoidShaveDay: document.getElementById('m-shave').checked,
+                avoidAcid: document.getElementById('m-acid').checked,
+                avoidRetinol: document.getElementById('m-retinol').checked,
+                enableAutoSchedule: document.getElementById('m-auto').checked
+            };
+            if (editingProdId) {
+                const p = PD.find(p => p.id === editingProdId);
+                if (p) { Object.assign(p, {name,icon,cat,notes,journalTag,schedule}); }
+            } else {
+                const id = 'custom_'+Date.now();
+                PD.push({id,icon,name,cat,notes,journalTag,statuses:['active','paused'],labels:{active:'使用中',paused:'已暂停'},pillCls:{active:'active',paused:'paused'},schedule,builtin:false});
+                PS[id] = 'active'; ls(K.prods, PS);
+            }
+            ls(K.prodDefs, PD); closeProdModal(); renderProds(); updateProdUI(); renderWk(); renderTn();
+        }
+        function deleteProd(id) {
+            const prod = PD.find(p => p.id === id); if (!prod) return;
+            if (!confirm(`确定${prod.builtin?'隐藏':'删除'}「${prod.name}」？`)) return;
+            if (prod.builtin) { prod.hidden = true; } else { PD.splice(PD.findIndex(p=>p.id===id),1); }
+            ls(K.prodDefs, PD); renderProds(); updateProdUI(); renderWk(); renderTn();
+        }
+        function restoreBuiltins() { PD.forEach(p=>{if(p.builtin)delete p.hidden}); ls(K.prodDefs,PD); renderProds(); }
+
+        function renderProds() {
+            const list = document.getElementById('prod-list'); if (!list) return;
+            const visiblePD = PD.filter(p => !p.hidden);
+            list.innerHTML = visiblePD.map(def => {
+                const s = PS[def.id] || def.statuses[0];
+                const can = def.statuses.length > 1;
+                const notes = def.notes.map(n => `<div class="pcni">· ${esc(n)}</div>`).join('');
+                const wo = weeksOpen(def.id);
+                const woHtml = wo !== null ? `<span class="popen-lbl">已开封 ${wo} 周</span>` : '';
+                const sch = def.schedule || {};
+                const typeL = {acid:'酸类',retinol:'视黄醇',mask:'面膜',daily:'日常',none:'—'};
+                let schedTags = '';
+                if (sch.enableAutoSchedule) schedTags = `<div class="sched-info"><span class="sched-tag">${typeL[sch.type]||sch.type}</span>${sch.maxPerWeek?`<span class="sched-tag">${sch.maxPerWeek}次/周</span>`:''}${sch.minDaysBetween?`<span class="sched-tag">间隔≥${sch.minDaysBetween}天</span>`:''}${sch.preferShowerNight?`<span class="sched-tag">洗澡日优先</span>`:''}</div>`;
+                return `<div class="pc"><div class="pch" onclick="togglePCB('${def.id}')">
+      <div class="pci">${def.icon}</div>
+      <div class="pci2"><div class="pcn">${esc(def.name)}</div><div class="pcc">${esc(def.cat)}${wo!==null?` · 开封${wo}周`:''}</div>${schedTags}</div>
+      ${can?`<button class="pcp ${def.pillCls[s]}" onclick="cyclePS('${def.id}',event)">${def.labels[s]}</button>`:`<span class="pcp ${def.pillCls[s]}">${def.labels[s]}</span>`}
+    </div><div class="pcb" id="pcb-${def.id}">
+      <div style="margin-top:0">${notes}</div>
+      <div class="popen"><label>开封日期：</label><input type="date" value="${POPEN[def.id]||''}" onchange="saveOpenDate('${def.id}',this.value)">${woHtml}</div>
+      <div class="prod-acts"><button class="prod-act" onclick="showProdModal('${def.id}')">✏️ 编辑</button><button class="prod-act del" onclick="deleteProd('${def.id}')">${def.builtin?'👁 隐藏':'🗑 删除'}</button></div>
+      ${can?`<div class="pch2">点击状态循环切换 → ${def.statuses.map(s2=>def.labels[s2]).join(' → ')}</div>`:''}
+    </div></div>`;
+            }).join('') + `<button class="add-prod-btn" onclick="showProdModal()">+ 添加产品</button>`;
+            if (PD.some(p=>p.hidden)) list.innerHTML += `<button class="prod-act" onclick="restoreBuiltins()" style="margin-top:8px">恢复已隐藏的内置产品</button>`;
+            const pend = PD.filter(d => !d.hidden && PS[d.id] === 'pending');
+            const sp = document.getElementById('shop-pending');
+            if (sp) sp.innerHTML = pend.length ? pend.map((d, i) => `<div class="shop-item"><div class="shop-pri ${i===0?'p1':'p2'}">0${i+1}</div><div class="si"><div class="sn2">${esc(d.name)}</div><div class="sw">${esc(d.notes[0]||'')}</div></div></div>`).join('') : '<div style="font-size:12px;color:var(--tx3);font-family:var(--mono);padding:8px 0">所有产品均已购入 ✓</div>';
+        }
+
+        function updateProdUI() {
+            const spfEl = document.getElementById('am-spf-name'), spfTag = document.getElementById('am-spf-tag');
+            if (spfEl && spfTag) { if (PS.sunscreen === 'owned') { spfEl.className = 'prod'; spfTag.textContent = '已购入'; spfTag.className = 'tag new'; } else { spfEl.className = 'prod danger'; spfTag.textContent = '待购入'; spfTag.className = 'tag must'; } }
+            const bTag = document.getElementById('bio-tag'), bHow = document.getElementById('bio-how');
+            if (bTag) { if (PS.bioderma === 'owned') { bTag.textContent = '已购入'; bTag.className = 'tag new'; } else { bTag.textContent = '待购入'; bTag.className = 'tag skip'; } }
+            if (bHow) bHow.textContent = PS.bioderma === 'owned' ? '无彩妆：温水30秒。有防晒/彩妆：Bioderma Sensibio H2O 再水洗' : '无彩妆：温水30秒。有防晒/彩妆：Bioderma Sensibio H2O（待购）再水洗';
+            const ggS = document.getElementById('gg-step'), ggT = document.getElementById('gg-tag'), ggH = document.getElementById('gg-how');
+            if (ggS) { if (PS.goodGenes === 'active') { ggS.classList.remove('dim'); ggT.textContent = '可使用'; ggT.className = 'tag new'; ggH.textContent = '与PC、Votary交替，不可同晚叠用。观察皮肤反应。'; } else { ggS.classList.add('dim'); ggT.textContent = '暂缓'; ggT.className = 'tag skip'; ggH.textContent = '高酒精+乙醇酸对当前屏障过激进。屏障稳定4周后再评估'; } }
+            const rtS = document.getElementById('rt-step'), rtN = document.getElementById('rt-num'), rtT = document.getElementById('rt-tag'), rtH = document.getElementById('rt-how');
+            if (rtS) { if (PS.retinol === 'active') { rtS.classList.remove('dim'); if (rtN) rtN.className = 'num no'; rtT.textContent = '已纳入常规'; rtT.className = 'tag new'; rtH.textContent = '1次/周，仅非酸夜、非刮胡日。维持频率。'; } else { rtS.classList.add('dim'); if (rtN) rtN.className = 'num gh'; rtT.textContent = '谨慎引入'; rtT.className = 'tag caution'; rtH.textContent = '1次/周，仅非酸夜、非刮胡日。观察4周无反应再维持'; } }
+        }
+
+        function copyShop() {
+            const pend = PD.filter(d => !d.hidden && PS[d.id] === 'pending');
+            if (!pend.length) { alert('所有产品均已购入！'); return; }
+            const txt = '护肤待购清单\n\n' + pend.map((d, i) => `${i + 1}. ${d.name}\n   ${d.notes[0]||''}`).join('\n\n');
+            navigator.clipboard.writeText(txt).then(() => {
+                const b = document.getElementById('cpb'); b.textContent = '✓ 已复制'; b.classList.add('copied');
+                setTimeout(() => { b.innerHTML = '📋 复制购物清单'; b.classList.remove('copied'); }, 2000);
+            }).catch(() => alert(txt));
+        }
+
+        // ══ Barrier Health Score ════════════════════════════════════
+        // Derived from last 7 journal entries. Range 0-100.
+        // Returns null if no data. Also drives dynamic acid limit.
+        function barrierScore() {
+            const entries = (lg(K.jrnl) || []).slice(0, 7);
+            if (!entries.length) return null;
+            let score = 60;
+            entries.forEach(e => {
+                const s = e.status || [];
+                if (s.includes('爆痘')) score -= 10;
+                if (s.includes('泛红')) score -= 7;
+                if (s.includes('敏感')) score -= 5;
+                if (s.includes('干燥')) score -= 3;
+                if (s.includes('出油')) score -= 2;
+                if (s.includes('稳定')) score += 8;
+                if (s.includes('好转')) score += 12;
+            });
+            return Math.max(0, Math.min(100, Math.round(score)));
+        }
+        function barrierLabel(s) {
+            if (s >= 85) return { label: '屏障优秀', cls: 'great' };
+            if (s >= 65) return { label: '状态良好', cls: 'good' };
+            if (s >= 45) return { label: '需要注意', cls: 'caution' };
+            return { label: '重点修护', cls: 'repair' };
+        }
+        // Dynamic acid limit based on barrier score
+        function maxAcidPerWeek() {
+            const s = barrierScore();
+            if (s === null) return 2;
+            if (s < 45) return 0;  // repair mode: no acid
+            if (s < 65) return 1;  // caution: max 1
+            return 2;          // normal
+        }
+        function renderBarrierBadge() {
+            const s = barrierScore();
+            const el = document.getElementById('barrier-badge');
+            if (!el) return;
+            if (s === null) { el.innerHTML = ''; return; }
+            const { label, cls } = barrierLabel(s);
+            el.innerHTML = `<div class="barrier-num ${cls}">${s}</div><div class="barrier-lbl">${label}</div>`;
+        }
+
+        // ══ Acid tracking (single source: journal) ═════════════════
+        function getAcidTags() { return PD.filter(p=>!p.hidden&&p.schedule&&p.schedule.type==='acid').map(p=>p.journalTag||p.name); }
+        const ACID_TAGS_COMPAT = { get includes() { const tags = getAcidTags(); return p => tags.includes(p); } };
+        function acidCountThisWeek() {
+            const e = lg(K.jrnl) || [], mon = monday();
+            return e.filter(e2 => { const d = new Date(e2.date); return d >= mon && (e2.products || []).some(p => getAcidTags().includes(p)); }).length;
+        }
+        function lastAcidEntry() {
+            const e = (lg(K.jrnl) || []).filter(e2 => (e2.products || []).some(p => getAcidTags().includes(p)));
+            if (!e.length) return null;
+            e.sort((a, b) => b.date.localeCompare(a.date));
+            return e[0];
+        }
+        function lastAcidUsed() {
+            const entry = lastAcidEntry();
+            if (!entry) return null;
+            // Return the first acid found in that entry (safe even if multiple exist)
+            return (entry.products || []).find(p => getAcidTags().includes(p)) || null;
+        }
+        function daysSinceLastAcid() {
+            const entry = lastAcidEntry();
+            if (!entry) return null;
+            return Math.floor((new Date(today()) - new Date(entry.date)) / 86400000);
+        }
+
+        // ══ Tonight ═════════════════════════════════════════════════
+        function loadWkForDate(date = today()) {
+            const all = lg(K.wk) || {};
+            const wk = isoWeek(new Date(date));
+            return all[wk] || { shower: Array(7).fill(false), shave: Array(7).fill(false) };
+        }
+        function initTN() {
+            let tn = lg(K.tn) || { shower: false, shave: false, date: '', manual: false };
+            const t = today();
+            if (tn.date !== t) {
+                const wk = loadWkForDate(t);
+                const idx = todayWkIdx();
+                tn = { shower: wk.shower[idx], shave: wk.shave[idx], date: t, manual: false };
+                ls(K.tn, tn);
+                // New day: clear step completion
+                ls(K.tnsteps, { date: t, done: [] });
+            }
+            return tn;
+        }
+        let TN = initTN();
+
+        function toggleTn(k) { TN[k] = !TN[k]; TN.date = today(); TN.manual = true; ls(K.tn, TN); renderTn(); }
+        function resetTnToSchedule() {
+            const wk = loadWkForDate(); const idx = todayWkIdx();
+            TN = { shower: wk.shower[idx], shave: wk.shave[idx], date: today(), manual: false };
+            ls(K.tn, TN); renderTn();
+        }
+
+        // Products that need journal tracking (by journalTag)
+        function getTrackedProds() { return PD.filter(p => p.journalTag && !p.hidden); }
+        function isTrackedProd(prodName) { return getTrackedProds().some(p => p.name === prodName || p.journalTag === prodName); }
+        function journalTagForProd(prodName) { const p = getTrackedProds().find(d => d.name === prodName); return p ? p.journalTag : null; }
+
+        // Persist step completion — primary store is K.tnsteps for UI state
+        // Tracked products (acid, retinol, mask) are ALSO written to today's journal
+        function loadDoneSteps() {
+            const d = lg(K.tnsteps) || { date: '', done: [] };
+            const base = d.date === today() ? new Set(d.done) : new Set();
+            // Also mark products found in today's journal as done
+            const todayEntry = (lg(K.jrnl) || []).find(e => e.date === today());
+            if (todayEntry) {
+                (todayEntry.products || []).forEach(tag => {
+                    // Find product by journalTag and add its display name to done set
+                    const prod = PD.find(p => p.journalTag === tag);
+                    if (prod) base.add(prod.name);
+                });
+            }
+            return base;
+        }
+        function saveDoneSteps(set) { ls(K.tnsteps, { date: today(), done: [...set] }); }
+        function toggleStep(el) {
+            const prodName = el.dataset.prod;
+            const done = loadDoneSteps();
+            const isNowDone = !done.has(prodName);
+            if (isNowDone) done.add(prodName); else done.delete(prodName);
+            saveDoneSteps(done);
+            el.classList.toggle('done', isNowDone);
+            // Write tracked products to journal
+            const tag = journalTagForProd(prodName);
+            if (tag) {
+                const entries = lg(K.jrnl) || [];
+                let todayEntry = entries.find(e => e.date === today());
+                if (!todayEntry) {
+                    todayEntry = { date: today(), status: [], products: [], note: '', phase: '' };
+                    entries.unshift(todayEntry);
+                }
+                if (isNowDone) {
+                    if (!todayEntry.products.includes(tag)) todayEntry.products.push(tag);
+                } else {
+                    todayEntry.products = todayEntry.products.filter(p => p !== tag);
+                }
+                ls(K.jrnl, entries.slice(0, 365));
+                // Refresh acid counter in header
+                renderBarrierBadge();
+                const meta = document.getElementById('tn-meta-row');
+                if (meta) {
+                    const maxAcid = maxAcidPerWeek(), acidCnt = acidCountThisWeek();
+                    const dsla = daysSinceLastAcid();
+                    const cls = acidCnt === 0 ? 'acid-ok' : acidCnt < maxAcid ? 'acid-caution' : 'acid-full';
+                    const dslaStr = dsla === null ? '从未记录酸类' : dsla === 0 ? '今天已用酸' : `距上次用酸 ${dsla} 天`;
+                    meta.innerHTML = `<div class="tn-meta-item ${cls}">本周酸类 ${acidCnt}/${maxAcid} 次</div><div class="tn-meta-item">${dslaStr}</div>`;
+                }
+            }
+        }
+
+        function renderTn() {
+            const { shower, shave, manual } = TN;
+            const sBtn = document.getElementById('tn-sh'), vBtn = document.getElementById('tn-sv');
+            if (sBtn) sBtn.className = 'tn-btn' + (shower ? ' on-shower' : '');
+            if (vBtn) vBtn.className = 'tn-btn' + (shave ? ' on-shave' : '');
+
+            // Sync note
+            const sna = document.getElementById('sync-note-area');
+            if (sna) {
+                const wk = loadWkForDate(), idx = todayWkIdx();
+                if (manual) sna.innerHTML = `<div class="sync-note"><div class="sync-dot manual"></div>已手动覆盖排班</div>`;
+                else if (wk.shower[idx] || wk.shave[idx]) sna.innerHTML = `<div class="sync-note"><div class="sync-dot"></div>已从本周排班同步</div>`;
+                else sna.innerHTML = '';
+            }
+
+            const maxAcid = maxAcidPerWeek();
+            const acidCnt = acidCountThisWeek();
+            const dsla = daysSinceLastAcid();
+
+            // Dynamic limit banner
+            const blb = document.getElementById('barrier-limit-banner');
+            if (blb) {
+                const score = barrierScore();
+                if (score !== null && score < 45) blb.innerHTML = `<div class="limit-banner repair-mode" style="margin-bottom:1rem">🛑 屏障健康分 ${score} · 修护模式：本周暂停所有酸类，专注屏障修复</div>`;
+                else if (score !== null && score < 65) blb.innerHTML = `<div class="limit-banner" style="margin-bottom:1rem">⚠️ 屏障健康分 ${score} · 谨慎模式：本周酸类限1次</div>`;
+                else blb.innerHTML = '';
+            }
+
+            // Meta row: acid count, days since last acid
+            const meta = document.getElementById('tn-meta-row');
+            if (meta) {
+                const cls = acidCnt === 0 ? 'acid-ok' : acidCnt < maxAcid ? 'acid-caution' : 'acid-full';
+                const dslaStr = dsla === null ? '从未记录酸类' : dsla === 0 ? '今天已用酸' : `距上次用酸 ${dsla} 天`;
+                meta.innerHTML = `<div class="tn-meta-item ${cls}">本周酸类 ${acidCnt}/${maxAcid} 次</div><div class="tn-meta-item">${dslaStr}</div>`;
+            }
+
+            // === Read today's schedule slot ===
+            const plan = computePlan();
+            const todaySlot = plan[todayWkIdx()];
+            const schedAcid = todaySlot.items.find(it => it.type === 'acid');
+            const schedMask = todaySlot.items.find(it => it.type === 'mask');
+            const schedRet  = todaySlot.items.find(it => it.type === 'retinol');
+            const pd = id => PD.find(p => p.id === id);
+            const active = id => { const p = pd(id); return p && !p.hidden && isSchedActive(p, PS[id] || p.statuses[0]); };
+            const hasScheduledAcid = !!schedAcid && !shave;
+
+            let nightType, nightSub;
+            if (shave) { nightType = '刮胡夜'; nightSub = '跳过所有活性成分，专注修护'; }
+            else if (shower && hasScheduledAcid) { nightType = '洗澡夜 · 酸类夜'; nightSub = '洗澡后渗透性增强，适合酸类'; }
+            else if (shower && schedMask) { nightType = '洗澡夜 · 泥膜夜'; nightSub = '泥膜深层清洁，配合修护'; }
+            else if (shower) { nightType = '洗澡夜 · 修护夜'; nightSub = '今晚修护为主'; }
+            else if (hasScheduledAcid) { nightType = '非洗澡夜 · 酸类夜'; nightSub = `本周酸类 ${acidCnt}/${maxAcid} 次`; }
+            else if (schedRet) { nightType = '视黄醇夜'; nightSub = '1次/周，谨慎使用'; }
+            else { nightType = '修护夜'; nightSub = `本周酸类 ${acidCnt}/${maxAcid} 次，今晚专注修护`; }
+
+            let steps = [], skips = [];
+
+            if (shave) {
+                steps.push({ p: '凉水冲洗（刮胡后立即）', h: '降温止红' });
+                if (active('cicaplast')) steps.push({ p: pd('cicaplast').name, h: '全脸薄涂，修护微创口' });
+                if (active('avene')) steps.push({ p: pd('avene').name, h: '泛红/刺痛时使用（可选）10–15分钟' });
+                if (active('sebagh')) steps.push({ p: pd('sebagh').name, h: '全脸3–4滴，轻拍至吸收' });
+                if (active('skinrocks')) steps.push({ p: pd('skinrocks').name, h: '无香精封层' });
+                if (active('cicaplast')) steps.push({ p: 'Cicaplast B5 点涂', h: '痘痘处收尾' });
+                skips.push('所有酸类', '视黄醇', '泥面膜');
+            } else {
+                // 1. Cleansing
+                if (shower && active('lancome')) steps.push({ p: pd('lancome').name, h: '60秒按摩，T区多停留' });
+                else steps.push({ p: '温水冲洗' + (active('bioderma') ? ' / Bioderma 卸妆水' : ''), h: active('bioderma') ? '有防晒/彩妆时使用卸妆水' : 'Bioderma 待购，暂用温水' });
+
+                // 2. Active treatment (from schedule only)
+                if (hasScheduledAcid) {
+                    const ap = pd(schedAcid.id); const aName = ap ? ap.name : schedAcid.label;
+                    const aHint = (aName.includes('Votary') || aName.includes('乳酸')) ? '两颊主选，保湿性强；停留3–5分钟' : '额头+鼻翼+下颌，停留3–5分钟，无需冲洗';
+                    steps.push({ p: aName, h: aHint });
+                    steps.push({ p: '等待3分钟', h: 'pH稳定后再叠后续' });
+                    skips.push('Dr Sebagh 精华（酸类夜跳过）', '视黄醇（酸类夜禁用）');
+                } else if (schedMask) {
+                    const mp = pd(schedMask.id); if (mp && active(mp.id)) { steps.push({ p: mp.name, h: '敷10–15分钟后冲洗干净' }); skips.push('视黄醇（面膜夜不叠用）'); }
+                } else if (schedRet) {
+                    const rp = pd(schedRet.id); if (rp && active(rp.id)) { steps.push({ p: rp.name, h: '1次/周，薄涂全脸，避开眼周' + (PS[rp.id] === 'active' ? '' : '（谨慎引入期）') }); skips.push('酸类（视黄醇夜不叠加）'); }
+                } else {
+                    if (active('sebagh')) steps.push({ p: pd('sebagh').name, h: '全脸3–4滴，轻拍至吸收' });
+                    if (!shower && active('agentholi')) steps.push({ p: pd('agentholi').name, h: '1–2滴，两颊和颈部，额头避开' });
+                }
+
+                // 3. Eye → Face cream → Spot treatment
+                if (active('mzskin')) steps.push({ p: pd('mzskin').name, h: '无名指轻拍眼眶骨' });
+                if (active('skinrocks')) steps.push({ p: pd('skinrocks').name, h: hasScheduledAcid ? '酸类夜首选，无香精' : '全脸封层' });
+                if (active('cicaplast')) steps.push({ p: 'Cicaplast B5 点涂', h: '活跃痘痘处、口罩线' });
+            }
+
+            if (PS.sunscreen !== 'owned') skips.push('⚠ 明早无防晒 → 痘印风险！尽快购入');
+
+            const done = loadDoneSteps();
+            const pl = document.getElementById('tn-plan'); if (!pl) return;
+            const stH = steps.map((s, i) => `<div class="tn-step${done.has(s.p) ? ' done' : ''}" data-prod="${s.p}" onclick="toggleStep(this)">
+    <div class="tn-n"><span class="tn-n-inner">${i + 1}</span></div>
+    <div><div class="tn-prod">${s.p}</div>${s.h ? `<div class="tn-how">${s.h}</div>` : ''}</div>
+  </div>`).join('');
+            const skH = skips.map(s => `<div class="tn-skip"><div class="tn-x">✕</div><div class="tn-sp">${s}</div></div>`).join('');
+            pl.innerHTML = `<div class="tn-hdr"><div class="tn-hdr-t">${nightType}</div><div class="tn-hdr-s">${nightSub}</div></div>${stH}${skH}`;
+
+            const recentBO = (lg(K.jrnl) || []).slice(0, 7).some(e => (e.status || []).includes('爆痘'));
+            const bnr = document.getElementById('hrt-bnr');
+            if (bnr) bnr.innerHTML = recentBO ? `<div class="alert warn" style="margin-bottom:.75rem"><div class="at">⚡ 近期日志显示爆痘</div>建议本周酸类降至1次（或暂停），优先修护</div>` : '';
+        }
+
+        // ══ Weekly (history: keeps 8 weeks) ════════════════════════
+        const DAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+        let mode = 'shower';
+        // WK is the current week's data { shower:[], shave:[] }
+        function loadWk() { return loadWkForDate(); }
+        let WK = loadWk();
+        function saveWk() {
+            const all = lg(K.wk) || {};
+            const cur = isoWeek();
+            all[cur] = WK;
+            // Trim to 8 most recent weeks
+            const keys = Object.keys(all).sort();
+            while (keys.length > 8) { delete all[keys.shift()]; }
+            ls(K.wk, all);
+        }
+        function setMode(m) {
+            mode = m;
+            document.querySelectorAll('.tb').forEach(b => b.className = 'tb');
+            if (m === 'shower') document.getElementById('mode-shower').classList.add('on-shower');
+            else if (m === 'shave') document.getElementById('mode-shave').classList.add('on-shave');
+            else document.getElementById('mode-clear').classList.add('on-clear');
+        }
+        function toggleDay(i) {
+            if (mode === 'shower') WK.shower[i] = !WK.shower[i];
+            else if (mode === 'shave') WK.shave[i] = !WK.shave[i];
+            else { WK.shower[i] = false; WK.shave[i] = false; }
+            saveWk();
+            // Re-sync tonight if not manually overridden
+            const tn = lg(K.tn) || {};
+            if (!tn.manual && i === todayWkIdx()) {
+                TN = { shower: WK.shower[i], shave: WK.shave[i], date: today(), manual: false };
+                ls(K.tn, TN);
+                renderTn(); // fix: update tonight panel immediately
+            }
+            renderWk();
+        }
+
+        function computePlan() {
+            const maxAcid = maxAcidPerWeek();
+            const journalAcidCnt = acidCountThisWeek();
+            const la = lastAcidUsed();
+
+            let plan = DAYS.map((d, i) => ({ day: d, idx: i, shower: WK.shower[i], shave: WK.shave[i], items: [], conflicts: [] }));
+
+            // Gather schedulable products by type
+            const schedulable = PD.filter(p => !p.hidden && p.schedule && p.schedule.enableAutoSchedule && ['acid','mask','retinol'].includes(p.schedule.type) && isSchedActive(p, PS[p.id] || p.statuses[0]));
+            const acids = schedulable.filter(p => p.schedule.type === 'acid');
+            const masks = schedulable.filter(p => p.schedule.type === 'mask');
+            const retinols = schedulable.filter(p => p.schedule.type === 'retinol');
+
+            // === Phase 1: Acids with spacing ===
+            const acidSlotsLeft = Math.max(0, maxAcid - journalAcidCnt);
+            let acidSlots = [];
+            // Rotate starting acid based on last used
+            let acidOrder = [...acids];
+            if (la) {
+                const li = acidOrder.findIndex(a => (a.journalTag||a.name) === la);
+                if (li > 0) acidOrder = [...acidOrder.slice(li), ...acidOrder.slice(0, li)];
+                // Start from next after last used
+                if (acidOrder.length > 1) acidOrder.push(acidOrder.shift());
+            }
+            acidOrder.forEach(a => { for (let n = 0; n < (a.schedule.maxPerWeek || 1); n++) acidSlots.push(a); });
+            acidSlots = acidSlots.slice(0, acidSlotsLeft);
+
+            const assignedAcidDays = [];
+            for (const prod of acidSlots) {
+                let bestDay = -1, bestScore = -Infinity;
+                for (let i = 0; i < 7; i++) {
+                    if (plan[i].shave && prod.schedule.avoidShaveDay) continue;
+                    if (plan[i].items.some(it => it.type === 'acid')) continue;
+                    // Check spacing (circular week distance)
+                    let minDist = 7;
+                    for (const ai of assignedAcidDays) {
+                        const dist = Math.min(Math.abs(i - ai), 7 - Math.abs(i - ai));
+                        minDist = Math.min(minDist, dist);
+                    }
+                    if (assignedAcidDays.length > 0 && minDist < (prod.schedule.minDaysBetween || 2)) continue;
+                    let score = minDist * 10;
+                    if (plan[i].shower && prod.schedule.preferShowerNight) score += 5;
+                    if (score > bestScore) { bestScore = score; bestDay = i; }
+                }
+                if (bestDay >= 0) { plan[bestDay].items.push({ id: prod.id, type: 'acid', label: prod.name }); assignedAcidDays.push(bestDay); }
+            }
+
+            // === Phase 2: Masks (multi-pass: shower+no acid → any+no acid → any) ===
+            masks.forEach(prod => {
+                let placed = 0;
+                for (let pass = 0; pass < 3 && placed < (prod.schedule.maxPerWeek || 1); pass++) {
+                    for (let i = 0; i < 7 && placed < (prod.schedule.maxPerWeek || 1); i++) {
+                        if (plan[i].shave && prod.schedule.avoidShaveDay) continue;
+                        if (plan[i].items.some(it => it.type === 'mask')) continue;
+                        if (prod.schedule.avoidAcid && plan[i].items.some(it => it.type === 'acid') && pass < 2) continue;
+                        if (prod.schedule.preferShowerNight && !plan[i].shower && pass === 0) continue;
+                        plan[i].items.push({ id: prod.id, type: 'mask', label: prod.name }); placed++;
+                    }
+                }
+            });
+
+            // === Phase 3: Retinol (prefer non-shower, avoid acid & shave) ===
+            retinols.forEach(prod => {
+                let placed = 0;
+                for (let pass = 0; pass < 2 && placed < (prod.schedule.maxPerWeek || 1); pass++) {
+                    for (let i = 0; i < 7 && placed < (prod.schedule.maxPerWeek || 1); i++) {
+                        if (plan[i].shave && prod.schedule.avoidShaveDay) continue;
+                        if (plan[i].items.some(it => it.type === 'retinol')) continue;
+                        if (prod.schedule.avoidAcid && plan[i].items.some(it => it.type === 'acid')) continue;
+                        if (pass === 0 && plan[i].shower) continue; // prefer non-shower first
+                        plan[i].items.push({ id: prod.id, type: 'retinol', label: prod.name }); placed++;
+                    }
+                }
+            });
+
+            // === Phase 4: Conflict auto-fix & shave mark ===
+            plan.forEach(p => {
+                if (p.shave) p.items.push({ id: 'avene', type: 'support', label: 'Avène' });
+                const hasAcid = p.items.some(i => i.type === 'acid');
+                if (p.shave && hasAcid) { p.conflicts.push(`${p.day}：酸类与刮胡冲突，已移出酸类`); p.items = p.items.filter(i => i.type !== 'acid'); }
+                if (hasAcid && p.items.some(i => i.type === 'retinol')) { p.conflicts.push(`${p.day}：视黄醇与酸类冲突，已移出视黄醇`); p.items = p.items.filter(i => i.type !== 'retinol'); }
+                if (p.shave && p.items.some(i => i.type === 'retinol')) { p.conflicts.push(`${p.day}：视黄醇与刮胡冲突，已移出视黄醇`); p.items = p.items.filter(i => i.type !== 'retinol'); }
+                if (p.items.some(i => i.type === 'mask') && p.items.some(i => i.type === 'acid')) { p.conflicts.push(`${p.day}：面膜与酸类同晚`); }
+            });
+
+            // === Backward compat props for rendering ===
+            plan.forEach(p => {
+                const acidItem = p.items.find(i => i.type === 'acid');
+                p.acid = acidItem ? (PD.find(d => d.id === acidItem.id)?.journalTag || acidItem.label) : null;
+                p.acidLabel = acidItem ? acidItem.label : null;
+                p.clay = p.items.some(i => i.type === 'mask');
+                p.retinol = p.items.some(i => i.type === 'retinol');
+                p.avene = p.items.some(i => i.type === 'support');
+            });
+
+            return plan;
+        }
+
+        function renderWk() {
+            const wl = document.getElementById('wk-label'); if (wl) wl.textContent = '本周：' + isoWeek();
+            const todayI = todayWkIdx();
+            document.getElementById('day-toggles').innerHTML = DAYS.map((d, i) => {
+                const both = WK.shower[i] && WK.shave[i];
+                const cls = 'db' + (both ? ' both' : WK.shower[i] ? ' shower' : WK.shave[i] ? ' shave' : '') + (i === todayI ? ' today-ring' : '');
+                const icon = both ? '🚿✂️' : WK.shower[i] ? '🚿' : WK.shave[i] ? '✂️' : '—';
+                const lbl = both ? '洗+刮' : WK.shower[i] ? '洗澡' : WK.shave[i] ? '刮胡' : '';
+                return `<div class="dbw"><div class="dn">${d}${i === todayI ? '·今' : ''}</div><button class="${cls}" onclick="toggleDay(${i})"><span class="bi">${icon}</span>${lbl ? `<span class="bl2">${lbl}</span>` : ''}</button></div>`;
+            }).join('');
+
+            const plan = computePlan();
+            const maxAcid = maxAcidPerWeek();
+            const journalAcidCnt = acidCountThisWeek();
+            const planAcidD = plan.filter(p => p.acid).length;
+            const totalAcid = planAcidD + journalAcidCnt;
+            const acidOk = totalAcid <= maxAcid;
+            const clayPlan = plan.filter(p => p.clay).length;
+            document.getElementById('wk-sum').innerHTML = `
+    <div class="wr"><span class="wrl">洗澡日</span><span class="wrv">${plan.filter(p => p.shower).length} 天</span></div>
+    <div class="wr"><span class="wrl">刮胡日</span><span class="wrv">${plan.filter(p => p.shave).length} 天</span></div>
+    <div class="wr"><span class="wrl">酸类上限</span><span class="wrv ${maxAcid < 2 ? 'warn' : ''}">${maxAcid} 次/周（屏障评分动态）</span></div>
+    <div class="wr"><span class="wrl">去角质酸类</span><span class="wrv ${acidOk ? 'ok' : 'bad'}">${journalAcidCnt > 0 ? `已用${journalAcidCnt}次+计划${planAcidD}次，共${totalAcid}次` : `计划${planAcidD}次`}（上限${maxAcid}次）</span></div>
+    ${PS.clay === 'owned' ? `<div class="wr"><span class="wrl">IPSA 泥面膜</span><span class="wrv ${clayPlan ? 'ok' : ''}">${clayPlan ? '1次，已排入' : '未排入（产品状态：' + (PS.clay === 'owned' ? '正常' : '暂停') + '）'}</span></div>` : ''}
+    <div class="wr"><span class="wrl">Lancaster 视黄醇</span><span class="wrv">${plan.some(p => p.retinol && !p.shave && !p.acid) && maxAcid > 0 ? '1次，已排入' : '未排入'}</span></div>`;
+
+            const allCF = plan.flatMap(p => p.conflicts);
+            document.getElementById('cf-alerts').innerHTML = allCF.length ? allCF.map(c => `<div class="cfb"><strong>⚠ 冲突</strong>${c}</div>`).join('') : '';
+            const rBO = (lg(K.jrnl) || []).slice(0, 7).some(e => (e.status || []).includes('爆痘'));
+            const jal = document.getElementById('jrnl-alert-wk');
+            if (jal) jal.innerHTML = rBO ? `<div class="alert warn" style="margin-bottom:1rem"><div class="at">⚡ 日志提示：近期爆痘</div>建议本周酸类减至1次，优先修护夜。</div>` : '';
+
+            document.getElementById('dp-grid').innerHTML = plan.map((p, i) => {
+                const dc = 'dp' + (p.shower && p.shave ? ' is-both' : p.shower ? ' is-shower' : p.shave ? ' is-shave' : '') + (i === todayI ? ' is-today' : '');
+                let tags = '';
+                if (p.shower) tags += `<span class="dpt sh">🚿</span>`;
+                if (p.shave) tags += `<span class="dpt sv">✂️</span>`;
+                if (p.acid) tags += `<span class="dpt ac">${p.acidLabel.split(' ')[0]}</span>`;
+                if (p.clay) tags += `<span class="dpt mk">泥膜</span>`;
+                if (p.retinol && !p.shave && !p.acid) tags += `<span class="dpt rt">视黄醇</span>`;
+                if (p.avene) tags += `<span class="dpt av">Avène</span>`;
+                if (!p.shave && !p.acid && !p.clay && !p.retinol) tags += `<span class="dpt re">修护</span>`;
+                if (p.conflicts.length) tags += `<span class="dpt cf">冲突</span>`;
+                return `<div class="${dc}"><div class="dpn">${p.day}</div>${tags}</div>`;
+            }).join('');
+        }
+
+        // ══ Quick Log ═══════════════════════════════════════════════
+        const QL_PRESETS = {
+            'repair': { status: ['稳定'], products: ['修护夜'] },
+            'shower-repair': { status: ['稳定'], products: ['修护夜'] },
+            'pc-acid': { status: ['稳定'], products: ['PC酸'] },
+            'votary-acid': { status: ['稳定'], products: ['Votary酸'] },
+            'shave': { status: ['稳定'], products: ['刮胡'] }
+        };
+        function quickLog(preset) {
+            const p = QL_PRESETS[preset]; if (!p) return;
+            const t = today();
+            const existing = (lg(K.jrnl) || []).find(x => x.date === t);
+            if (existing && (existing.note || (existing.status || []).length > 1 || existing.phase)) {
+                if (!confirm('今天已有详细记录，快速记录会覆盖。确认继续？')) return;
+            }
+            const e = (lg(K.jrnl) || []).filter(x => x.date !== t);
+            e.unshift({ date: t, status: p.status, products: p.products, note: '', phase: '' });
+            ls(K.jrnl, e.slice(0, 365));
+            const m = document.getElementById('sv-msg'); m.classList.add('show'); setTimeout(() => m.classList.remove('show'), 2000);
+            renderJrnl(); renderStats(); renderTn(); renderBarrierBadge();
+        }
+
+        // ══ Journal ═════════════════════════════════════════════════
+        let selS = [], selP = [];
+        function toggleChip(el, g) {
+            const val = el.dataset.val, cls = el.dataset.cls;
+            if (g === 's') { if (selS.includes(val)) { selS = selS.filter(v => v !== val); el.className = 'chip'; } else { selS.push(val); el.className = 'chip ' + cls; } }
+            else { if (selP.includes(val)) { selP = selP.filter(v => v !== val); el.className = 'chip'; } else { selP.push(val); el.className = 'chip ' + cls; } }
+        }
+        function saveEntry() {
+            const note = (document.getElementById('jf-note').value || '').trim();
+            const phase = (document.getElementById('hrt-ph').value || '').trim();
+            const t = today();
+            const e = (lg(K.jrnl) || []).filter(x => x.date !== t);
+            e.unshift({ date: t, status: [...selS], products: [...selP], note, phase });
+            ls(K.jrnl, e.slice(0, 365));
+            const m = document.getElementById('sv-msg'); m.classList.add('show'); setTimeout(() => m.classList.remove('show'), 2000);
+            selS = []; selP = [];
+            document.querySelectorAll('#sc-chips .chip,#pc-chips .chip').forEach(c => c.className = 'chip');
+            document.getElementById('jf-note').value = '';
+            renderJrnl(); renderStats(); renderTn(); renderBarrierBadge(); // fix: cascade updates
+        }
+        function delEntry(date) { ls(K.jrnl, (lg(K.jrnl) || []).filter(e => e.date !== date)); renderJrnl(); renderStats(); renderBarrierBadge(); }
+        function sCls(v) { if (['稳定', '好转'].includes(v)) return 'ok'; if (['出油', '干燥', '敏感'].includes(v)) return 'warn'; if (['泛红', '爆痘'].includes(v)) return 'bad'; return 'blue'; }
+        function renderJrnl() {
+            updateCd();
+            const e = lg(K.jrnl) || [];
+            const cut = new Date(); cut.setDate(cut.getDate() - 14);
+            const recent = e.filter(x => new Date(x.date) >= cut);
+            const list = document.getElementById('jh-list'); if (!list) return;
+            if (!recent.length) { list.innerHTML = '<div class="jhem">暂无记录</div>'; return; }
+            list.innerHTML = recent.map(x => {
+                const chips = [...(x.status || []).map(s => `<span class="jhch ${sCls(s)}">${s}</span>`),
+                ...(x.products || []).map(p => `<span class="jhch blue">${p}</span>`)].join('');
+                return `<div class="jhe">
+      <div class="jhd">${x.date}${x.phase ? ` · ${x.phase}` : ''}<button class="jhdel" onclick="delEntry('${x.date}')">删除</button></div>
+      <div class="jhc">${chips || '<span class="jhch">无标记</span>'}</div>
+      ${x.note ? `<div class="jhn">${esc(x.note)}</div>` : ''}
+    </div>`;
+            }).join('');
+        }
+
+        function exportCSV() {
+            const e = lg(K.jrnl) || []; if (!e.length) { alert('暂无日志记录'); return; }
+            const rows = ['日期,皮肤状态,今晚使用,HRT阶段,备注'];
+            e.forEach(x => rows.push(`${x.date},"${(x.status || []).join('|')}","${(x.products || []).join('|')}","${x.phase || ''}","${(x.note || '').replace(/"/g, '""')}"`));
+            const blob = new Blob(['\uFEFF' + rows.join('\n')], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'skincare_' + today() + '.csv'; a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+        function exportJSON() {
+            const data = {};
+            Object.entries(K).forEach(([, key]) => { const v = lg(key); if (v !== null) data[key] = v; });
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'skincare_backup_' + today() + '.json'; a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+        function importJSON(input) {
+            const file = input.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = e => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    Object.entries(data).forEach(([k, v]) => ls(k, v));
+                    location.reload();
+                } catch { alert('备份文件格式错误，请检查文件'); }
+            };
+            reader.readAsText(file);
+        }
+
+        // ══ Countdown ═══════════════════════════════════════════════
+        function saveCd() { ls(K.cd, document.getElementById('cd-start').value); updateCd(); }
+        function updateCd() {
+            const saved = lg(K.cd) || '', inp = document.getElementById('cd-start'); if (!inp) return;
+            if (saved && !inp.value) inp.value = saved;
+            const sv = inp.value || saved;
+            const badge = document.getElementById('cd-badge'), bar = document.getElementById('cd-bar'), left = document.getElementById('cd-left'), pct = document.getElementById('cd-pct');
+            if (!badge) return;
+            if (!sv) { badge.textContent = '未设置'; bar.style.width = '0%'; left.textContent = '请设置开始修护日期'; pct.textContent = '0%'; return; }
+            const elapsed = Math.floor((new Date() - new Date(sv)) / 86400000);
+            const rem = Math.max(0, 28 - elapsed), prog = Math.min(100, Math.round(elapsed / 28 * 100));
+            bar.style.width = prog + '%'; pct.textContent = prog + '%';
+            if (elapsed >= 28) { badge.textContent = '✓ 可评估'; badge.className = 'cdb done'; left.textContent = '已满4周，可评估引入 Good Genes'; }
+            else { badge.textContent = '还剩' + rem + '天'; badge.className = 'cdb'; left.textContent = '已过' + elapsed + '天 / 共28天'; }
+        }
+
+        // ══ Stats ════════════════════════════════════════════════════
+        function logStreak() {
+            const e = lg(K.jrnl) || [];
+            const dates = new Set(e.map(x => x.date));
+            let streak = 0;
+            const d = new Date();
+            while (streak < 365) {
+                const ds = fmtD(d);
+                if (!dates.has(ds)) break;
+                streak++; d.setDate(d.getDate() - 1);
+            }
+            return streak;
+        }
+        // Use proper Monday-based week boundaries for weekly stats
+        function acidCountInWeek(weekStartMon) {
+            const e = lg(K.jrnl) || [];
+            const end = new Date(weekStartMon); end.setDate(end.getDate() + 6); end.setHours(23, 59, 59);
+            return e.filter(x => {
+                const d = new Date(x.date);
+                return d >= weekStartMon && d <= end && (x.products || []).some(p => getAcidTags().includes(p));
+            }).length;
+        }
+        function renderStats() {
+            const e = lg(K.jrnl) || [], now = new Date();
+            const d14 = new Date(now); d14.setDate(now.getDate() - 13);
+            const r14 = e.filter(x => new Date(x.date) >= d14);
+            const total = r14.length, bo = r14.filter(x => (x.status || []).includes('爆痘')).length;
+            const stable = r14.filter(x => (x.status || []).includes('稳定') || (x.status || []).includes('好转')).length;
+            const acids = acidCountInWeek(mondayNWeeksAgo(0)) + acidCountInWeek(mondayNWeeksAgo(1)) + acidCountInWeek(mondayNWeeksAgo(2)) + acidCountInWeek(mondayNWeeksAgo(3));
+            const streak = logStreak();
+            const score = barrierScore();
+            const sg = document.getElementById('stat-grid');
+            if (sg) sg.innerHTML = `
+    <div class="sc2"><div class="sn ${stable > total * .6 ? 'ok' : 'warn'}">${total ? Math.round(stable / total * 100) : '-'}%</div><div class="sl">14天稳定率</div></div>
+    <div class="sc2"><div class="sn ${bo === 0 ? 'ok' : bo <= 2 ? 'warn' : 'bad'}">${bo}</div><div class="sl">爆痘天数</div></div>
+    <div class="sc2"><div class="sn ${acids <= 8 ? 'ok' : 'warn'}">${acids}</div><div class="sl">酸类/4周</div></div>
+    <div class="sc2"><div class="sn ${streak >= 7 ? 'ok' : streak >= 3 ? 'warn' : 'bad'}">${streak}</div><div class="sl">连续记录天</div></div>
+    <div class="sc2"><div class="sn ${score === null ? '' : score >= 65 ? 'ok' : score >= 45 ? 'warn' : 'bad'}">${score === null ? '—' : score}</div><div class="sl">屏障健康分</div></div>`;
+
+            const hg = document.getElementById('heat-grid'), hs = document.getElementById('hs-start');
+            if (hg) {
+                const start = new Date(d14); if (hs) hs.textContent = fmtD(start);
+                const cells = [];
+                for (let i = 0; i < 14; i++) {
+                    const d = new Date(start); d.setDate(start.getDate() + i); const ds = fmtD(d);
+                    const entry = e.find(x => x.date === ds);
+                    let color = 'var(--sur2)', tip = '无记录';
+                    if (entry) {
+                        const s = entry.status || [];
+                        if (s.includes('爆痘') || s.includes('泛红')) { color = 'var(--rd)'; tip = s.join('、'); }
+                        else if (s.includes('出油') || s.includes('干燥') || s.includes('敏感')) { color = 'var(--am)'; tip = s.join('、'); }
+                        else if (s.includes('稳定') || s.includes('好转')) { color = 'var(--gr)'; tip = s.join('、'); }
+                        else if (s.length) { color = 'var(--bl)'; tip = s.join('、'); }
+                        else tip = '有记录（无状态）';
+                    }
+                    cells.push(`<div class="hc" style="background:${color}"><div class="ht">${ds}<br>${tip}</div></div>`);
+                }
+                hg.innerHTML = cells.join('');
+            }
+            const ab = document.getElementById('acid-bars');
+            if (ab) {
+                ab.innerHTML = [0, 1, 2, 3].map(w => {
+                    const wsMon = mondayNWeeksAgo(w);
+                    const cnt = acidCountInWeek(wsMon);
+                    const maxA = maxAcidPerWeek() || 2;
+                    const lbl = w === 0 ? '本周' : w === 1 ? '上周' : `前${w + 1}周`;
+                    const pct = Math.min(100, cnt / maxA * 100);
+                    const col = cnt <= maxA ? 'var(--gr)' : cnt <= 3 ? 'var(--am)' : 'var(--rd)';
+                    return `<div class="br"><div class="brl">${lbl}</div><div class="brt"><div class="brf" style="width:${pct}%;background:${col}"></div></div><div class="brv">${cnt}次</div></div>`;
+                }).join('');
+            }
+            const ht = document.getElementById('hrt-tl');
+            if (ht) {
+                const phases = e.filter(x => x.phase).slice(0, 10).reverse();
+                ht.innerHTML = phases.length ? phases.map(x => `<div class="br" style="gap:8px">
+      <div style="font-size:10px;font-family:var(--mono);color:var(--tx3);width:80px;flex-shrink:0">${x.date}</div>
+      <div style="font-size:12px;color:var(--tx2)">${x.phase}</div>
+      ${(x.status || []).length ? `<div style="font-size:10px;font-family:var(--mono);color:var(--tx3)">${x.status.join('·')}</div>` : ''}
+    </div>`).join('') : '<div class="jhem">暂无HRT阶段记录（在日志中填写）</div>';
+            }
+        }
+
+        // ══ Tabs ════════════════════════════════════════════════════
+        function show(id, btn) {
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById(id).classList.add('active'); btn.classList.add('active');
+            if (id === 'jrnl') { renderJrnl(); updateCd(); }
+            if (id === 'stats') renderStats();
+            if (id === 'wkly') renderWk();
+            if (id === 'prods') renderProds();
+            if (id === 'tonight') renderTn();
+        }
+
+        // ══ Init ════════════════════════════════════════════════════
+        WK = loadWk();
+        renderBarrierBadge();
+        renderProds(); updateProdUI(); renderWk(); renderTn();
+        initFirebase();
+
+        // ══ Firebase 云同步 ═══════════════════════════════════
+        const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_proddefs1'];
+        let _db = null, _user = null, _pushTimer = null, _pushing = false;
+
+        function initFirebase() {
+            const cfg = typeof FIREBASE_CONFIG !== 'undefined' && FIREBASE_CONFIG;
+            if (!cfg || !cfg.apiKey || cfg.apiKey.includes('将你')) { renderAuthBtn(); return; }
+            try {
+                if (!firebase.apps.length) firebase.initializeApp(cfg);
+                _db = firebase.firestore();
+                firebase.auth().onAuthStateChanged(handleAuthChange);
+            } catch(e) { console.warn('初始化 Firebase 失败:', e); renderAuthBtn(); }
+        }
+
+        async function handleAuthChange(user) {
+            _user = user; renderAuthBtn();
+            if (user) { await pullFromCloud(); renderAll(); showSyncStatus('☁ 已从云端加载'); }
+        }
+
+        function renderAll() {
+            WK = loadWk(); renderBarrierBadge();
+            PD = loadPD(); PS = lg(K.prods) || PS;
+            renderProds(); updateProdUI(); renderWk(); renderTn();
+        }
+
+        async function pullFromCloud() {
+            if (!_db || !_user) return;
+            try {
+                const doc = await _db.collection('users').doc(_user.uid).get();
+                if (doc.exists) {
+                    Object.entries(doc.data()).forEach(([k, v]) => {
+                        try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch {}
+                    });
+                }
+            } catch(e) { console.warn('拉取云端数据失败:', e); }
+        }
+
+        function schedulePush() {
+            if (!_db || !_user) return;
+            clearTimeout(_pushTimer);
+            showSyncStatus('⧗ 同步中…');
+            _pushTimer = setTimeout(pushToCloud, 2500);
+        }
+
+        async function pushToCloud() {
+            if (!_db || !_user || _pushing) return;
+            _pushing = true;
+            const data = {};
+            CLOUD_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v !== null) { try { data[k] = JSON.parse(v); } catch { data[k] = v; } } });
+            try {
+                await _db.collection('users').doc(_user.uid).set(data, { merge: true });
+                showSyncStatus('✓ 已同步');
+            } catch(e) { console.warn('上传失败:', e); showSyncStatus('⚠ 同步失败'); }
+            _pushing = false;
+        }
+
+        let _syncFadeTimer = null;
+        function showSyncStatus(msg) {
+            const el = document.getElementById('sync-status-el'); if (!el) return;
+            el.textContent = msg; el.classList.add('show');
+            clearTimeout(_syncFadeTimer);
+            _syncFadeTimer = setTimeout(() => el.classList.remove('show'), 2500);
+        }
+
+        function signInGoogle() {
+            if (typeof firebase === 'undefined') { alert('请先填入 Firebase 配置'); return; }
+            firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(e => alert('登录失败: ' + e.message));
+        }
+        function signOut() {
+            if (confirm('确定退出登录？退出后将使用本地缓存。')) firebase.auth().signOut();
+        }
+        function renderAuthBtn() {
+            const el = document.getElementById('auth-btn'); if (!el) return;
+            if (_user) {
+                const name = _user.displayName ? _user.displayName.split(' ')[0] : '已登录';
+                el.innerHTML = `<img src="${_user.photoURL}" class="auth-avatar" alt=""><span style="color:var(--tx)">${name}</span><button onclick="signOut()">退出</button>`;
+                el.className = 'auth-btn signed-in';
+            } else {
+                el.innerHTML = `<button class="auth-sign-in" onclick="signInGoogle()">🔐 Google 登录同步</button>`;
+                el.className = 'auth-btn';
+            }
+        }
+    </script>
+
+</body>
+
+</html>
