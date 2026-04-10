@@ -3242,7 +3242,6 @@
         WK = loadWk();
         renderBarrierBadge();
         renderProds(); updateProdUI(); renderWk(); renderTn();
-        initFirebase();
 
         // ══ Firebase 云同步 ═══════════════════════════════════
         const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_proddefs1'];
@@ -3324,7 +3323,7 @@
 
         function signInGoogle() {
             if (typeof firebase === 'undefined') { alert('请先填入 Firebase 配置'); return; }
-            firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(e => alert('登录失败: ' + e.message));
+            firebase.auth().signInWithRedirect(new firebase.auth.GoogleAuthProvider()).catch(e => alert('登录失败: ' + e.message));
         }
         function signOut() {
             if (confirm('确定退出登录？退出后将使用本地缓存。')) firebase.auth().signOut();
@@ -3344,6 +3343,8 @@
                 el.className = 'auth-btn';
             }
         }
+
+        initFirebase();
     </script>
 
 </body>
