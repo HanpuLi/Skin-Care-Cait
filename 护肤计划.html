@@ -3149,10 +3149,14 @@
         function importJSON(input) {
             const file = input.files[0]; if (!file) return;
             const reader = new FileReader();
-            reader.onload = e => {
+            reader.onload = async e => {
                 try {
                     const data = JSON.parse(e.target.result);
                     Object.entries(data).forEach(([k, v]) => ls(k, v));
+                    if (typeof pushToCloud === 'function' && _user) {
+                        clearTimeout(_pushTimer);
+                        await pushToCloud();
+                    }
                     location.reload();
                 } catch { alert('备份文件格式错误，请检查文件'); }
             };
