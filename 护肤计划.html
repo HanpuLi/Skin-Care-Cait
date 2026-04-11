@@ -2021,7 +2021,10 @@
             </div>
 
             <div class="jfc">
-                <div class="jft">📝 今日记录</div>
+                <div class="jft" style="display:flex; justify-content:space-between; align-items:center;">
+                    <span id="jf-title-text">📝 今日记录</span>
+                    <input type="date" id="jrnl-date" onchange="loadJrnlForm()" style="font-family:var(--mono); font-size:12px; padding:2px 4px; border:1px solid var(--bd); border-radius:4px; max-width:115px; color:var(--tx2); background:transparent;">
+                </div>
                 <label class="jfl">皮肤状态</label>
                 <div class="chips" id="sc-chips">
                     <div class="chip" data-val="稳定" data-cls="s-ok" onclick="toggleChip(this,'s')">✓ 稳定</div>
@@ -3079,15 +3082,18 @@
         };
         function quickLog(preset) {
             const p = QL_PRESETS[preset]; if (!p) return;
-            const t = today();
+            const di = document.getElementById('jrnl-date');
+            const t = di && di.value ? di.value : today();
             const existing = (lg(K.jrnl) || []).find(x => x.date === t);
             if (existing && (existing.note || (existing.status || []).length > 1 || existing.phase)) {
-                if (!confirm('今天已有详细记录，快速记录会覆盖。确认继续？')) return;
+                if (!confirm(`已有${t}的详细记录，快速记录会覆盖。确认继续？`)) return;
             }
             const e = (lg(K.jrnl) || []).filter(x => x.date !== t);
             e.unshift({ date: t, status: p.status, products: p.products, note: '', phase: '' });
+            e.sort((a,b) => b.date.localeCompare(a.date)); // keep sorted
             ls(K.jrnl, e.slice(0, 365));
             const m = document.getElementById('sv-msg'); m.classList.add('show'); setTimeout(() => m.classList.remove('show'), 2000);
+            if (di) { di.value = today(); loadJrnlForm(); }
             renderJrnl(); renderStats(); renderTn(); renderBarrierBadge();
         }
 
@@ -3098,22 +3104,48 @@
             if (g === 's') { if (selS.includes(val)) { selS = selS.filter(v => v !== val); el.className = 'chip'; } else { selS.push(val); el.className = 'chip ' + cls; } }
             else { if (selP.includes(val)) { selP = selP.filter(v => v !== val); el.className = 'chip'; } else { selP.push(val); el.className = 'chip ' + cls; } }
         }
+        function loadJrnlForm() {
+            const di = document.getElementById('jrnl-date');
+            if(!di) return;
+            const d = di.value || today();
+            const existing = (lg(K.jrnl) || []).find(x => x.date === d);
+            selS = []; selP = [];
+            document.querySelectorAll('#sc-chips .chip,#pc-chips .chip').forEach(c => c.className = 'chip');
+            if (existing) {
+                (existing.status || []).forEach(s => {
+                    const el = document.querySelector(`#sc-chips .chip[data-val="${s}"]`);
+                    if (el) { selS.push(s); el.className = 'chip ' + el.dataset.cls; }
+                });
+                (existing.products || []).forEach(p => {
+                    const el = document.querySelector(`#pc-chips .chip[data-val="${p}"]`);
+                    if (el) { selP.push(p); el.className = 'chip ' + el.dataset.cls; }
+                });
+                document.getElementById('jf-note').value = existing.note || '';
+                document.getElementById('hrt-ph').value = existing.phase || '';
+            } else {
+                document.getElementById('jf-note').value = '';
+            }
+            const t = document.getElementById('jf-title-text');
+            if(t) t.textContent = d === today() ? '📝 今日记录' : '📝 回溯/修改日志';
+        }
         function saveEntry() {
             const note = (document.getElementById('jf-note').value || '').trim();
             const phase = (document.getElementById('hrt-ph').value || '').trim();
-            const t = today();
+            const di = document.getElementById('jrnl-date');
+            const t = di && di.value ? di.value : today();
             const e = (lg(K.jrnl) || []).filter(x => x.date !== t);
             e.unshift({ date: t, status: [...selS], products: [...selP], note, phase });
+            e.sort((a,b) => b.date.localeCompare(a.date));
             ls(K.jrnl, e.slice(0, 365));
             const m = document.getElementById('sv-msg'); m.classList.add('show'); setTimeout(() => m.classList.remove('show'), 2000);
-            selS = []; selP = [];
-            document.querySelectorAll('#sc-chips .chip,#pc-chips .chip').forEach(c => c.className = 'chip');
-            document.getElementById('jf-note').value = '';
+            if (di) { di.value = today(); loadJrnlForm(); } // automatically jump back to today's view after saving past edit
             renderJrnl(); renderStats(); renderTn(); renderBarrierBadge(); // fix: cascade updates
         }
         function delEntry(date) { ls(K.jrnl, (lg(K.jrnl) || []).filter(e => e.date !== date)); renderJrnl(); renderStats(); renderBarrierBadge(); }
         function sCls(v) { if (['稳定', '好转'].includes(v)) return 'ok'; if (['出油', '干燥', '敏感'].includes(v)) return 'warn'; if (['泛红', '爆痘'].includes(v)) return 'bad'; return 'blue'; }
         function renderJrnl() {
+            const di = document.getElementById('jrnl-date');
+            if (di && !di.value) { di.value = today(); loadJrnlForm(); }
             updateCd();
             const e = lg(K.jrnl) || [];
             const cut = new Date(); cut.setDate(cut.getDate() - 14);
