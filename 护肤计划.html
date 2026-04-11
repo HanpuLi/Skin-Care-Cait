@@ -1843,6 +1843,14 @@
         .sched-tag { font-size:9px; font-family:var(--mono); padding:2px 6px; border-radius:10px; background:var(--sur2); color:var(--tx3); border:1px solid var(--bd) }
         .btn-cancel { padding:7px 16px; border:1px solid var(--bd2); border-radius:var(--rs); font-size:12px; font-family:var(--font); cursor:pointer; background:var(--sur2); color:var(--tx2) }
         .btn-cancel:hover { border-color:var(--tx3) }
+        .dp.dp-clickable { cursor: pointer; transition: border-color .15s, box-shadow .12s; }
+        .dp.dp-clickable:hover { border-color: var(--tx3); box-shadow: 0 0 0 2px var(--bd2); }
+        .dp.dp-clickable:active { transform: scale(.97); }
+        .day-detail-step { display:flex; align-items:flex-start; gap:8px; padding:7px 0; border-bottom:1px solid var(--bd); font-size:12px; }
+        .day-detail-step:last-child { border-bottom:none; }
+        .day-detail-num { min-width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:500; font-family:var(--mono); flex-shrink:0; background:var(--pu-bg); color:var(--pu); margin-top:1px; }
+        .day-detail-skip { display:flex; align-items:center; gap:8px; padding:5px 0; font-size:11px; color:var(--tx3); text-decoration:line-through; border-bottom:1px solid var(--bd); }
+        .day-detail-skip:last-child { border-bottom:none; }
     </style>
 
 </head>
@@ -1881,11 +1889,13 @@
             <div id="pao-alert-tn"></div>
             <div id="tn-meta-row" class="tn-meta"></div>
             <div id="sync-note-area"></div>
-            <p style="font-size:12px;color:var(--tx3);margin-bottom:.6rem">今天的情况（可手动覆盖）：</p>
-            <div class="tn-btns">
-                <button class="tn-btn" id="tn-sh" onclick="toggleTn('shower')">🚿 今天洗澡</button>
-                <button class="tn-btn" id="tn-sv" onclick="toggleTn('shave')">✂️ 今天刮胡</button>
-                <button class="tn-reset" onclick="resetTnToSchedule()">重置为排班</button>
+            <div style="margin-bottom:.75rem">
+                <div style="font-size:10px;font-family:var(--mono);color:var(--tx3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">今天的情况（可手动覆盖排班）</div>
+                <div class="tn-btns" style="margin-bottom:4px">
+                    <button class="tn-btn" id="tn-sh" onclick="toggleTn('shower')">🚿 今天洗澡</button>
+                    <button class="tn-btn" id="tn-sv" onclick="toggleTn('shave')">✂️ 今天刮胡</button>
+                </div>
+                <button class="tn-reset" onclick="resetTnToSchedule()">↺ 重置为排班默认值</button>
             </div>
             <div class="tn-plan" id="tn-plan"></div>
             <p style="font-size:11px;color:var(--tx3);font-family:var(--mono);margin-top:.75rem">点击步骤可打勾标记完成（跨切换持久保存）
@@ -1925,13 +1935,13 @@
             </div>
             <div class="section" style="margin-top:2rem">
                 <div class="sec-title">叠涂顺序口诀</div>
-                <div class="step"><div class="num pm">1</div><div class="sc"><div class="prod">稀薄到浓厚</div><div class="how">酸类 → 水/精华 → 面霜/乳液 → 油 → 防晒（早晨）</div></div></div>
+                <div class="step"><div class="num pm">1</div><div class="sc"><div class="prod">稀薄到浓厚（晚间）</div><div class="how">酸类 → 精华 → 面霜/乳液 → 油（早晨最后加防晒）</div></div></div>
                 <div class="step"><div class="num pm">2</div><div class="sc"><div class="prod">酸类后等待3分钟</div><div class="how">让皮肤pH稳定后再叠后续步骤</div></div></div>
                 <div class="step"><div class="num pm">3</div><div class="sc"><div class="prod">Cicaplast B5 最后封层</div><div class="how">大分子结构会阻碍后续成分渗透</div></div></div>
             </div>
             <div class="section">
                 <div class="sec-title">HRT 皮肤变化预警</div>
-                <p style="font-size:13px;color:var(--tx2);margin-bottom:12px;line-height:1.5">进入 E2 周期后，由于雌激素波动，前 3-6 个月可能会经历短暂的爆发期。如果突发连续长痘，遵循以下原则：<br>1. 立即将酸类降至 1 次/周甚至停用，仅在痘痘处点涂。<br>2. 暂停使用 精华油，避免滋养痤疮丙酸杆菌。<br>3. 基础夜间护肤缩减为 <b>洗面奶 → Skin Rocks FF 面霜 → Cicaplast B5点涂修护</b>。</p>
+                <p style="font-size:13px;color:var(--tx2);margin-bottom:12px;line-height:1.5">进入 E2 周期后，由于雌激素波动，前 3-6 个月可能会经历短暂的爆发期。如果突发连续长痘，遵循以下原则：<br>1. 立即将酸类降至 1 次/周甚至停用，仅在痘痘处点涂。<br>2. 暂停使用 精华油，避免滋养痤疮丙酸杆菌。<br>3. 基础夜间护肤缩减为 <b>洁面（洗澡夜用洗面奶，其余温水）→ Skin Rocks FF 面霜 → Cicaplast B5点涂修护</b>。</p>
             </div>
         </div>
 
@@ -1939,7 +1949,7 @@
 
         <div id="wkly" class="panel">
             <div class="wk-label" id="wk-label"></div>
-            <p style="font-size:12px;color:var(--tx3);margin-bottom:.75rem">选择模式后点击日期。今天以外框标注。排班会同步至"今晚"面板。</p>
+            <p style="font-size:12px;color:var(--tx3);margin-bottom:.75rem">选择模式后点击日期设置排班。点击「安排总览」中的格子查看当天详细护肤步骤。</p>
             <div class="tr">
                 <span class="tl">模式：</span>
                 <button class="tb on-shower" id="mode-shower" onclick="setMode('shower')">🚿 洗澡日</button>
@@ -1970,8 +1980,16 @@
             <div class="wks" id="wk-sum"></div>
             <div id="cf-alerts"></div>
             <div id="jrnl-alert-wk"></div>
-            <div class="sec-title" style="margin-bottom:8px">晚间安排总览</div>
+            <div class="sec-title" style="margin-bottom:8px">晚间安排总览 <span style="font-size:9px;font-weight:400;color:var(--tx3)">(点击格子查看详细步骤)</span></div>
             <div class="dpg" id="dp-grid"></div>
+            <!-- Day detail popup -->
+            <div id="day-detail" style="display:none;margin-top:1rem;border:1px solid var(--bd);border-radius:var(--r);background:var(--sur);overflow:hidden">
+                <div style="padding:10px 16px;border-bottom:1px solid var(--bd);background:var(--sur2);display:flex;justify-content:space-between;align-items:center">
+                    <div id="day-detail-title" style="font-size:13px;font-weight:500"></div>
+                    <button onclick="document.getElementById('day-detail').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--tx3);line-height:1">×</button>
+                </div>
+                <div id="day-detail-body" style="padding:12px 16px"></div>
+            </div>
         </div>
 
         <!-- ══ 日志 ══ -->
@@ -2105,10 +2123,10 @@
             <div class="section" style="margin-top:2rem">
                 <div class="sec-title">绝对禁止同晚叠用</div>
                 <div class="alert danger">
-                    <div class="at">酸类 × 视黄醇</div>任何酸类当晚，Lancaster 视黄醇小样禁止使用
+                    <div class="at">酸类 × 视黄醇</div>任何酸类当晚，视黄醇禁止使用
                 </div>
                 <div class="alert danger">
-                    <div class="at">多种酸类叠加</div>PC、Votary、Good Genes 任意两款不可同晚使用
+                    <div class="at">多种酸类叠加</div>任意两种去角质酸类（PC、Votary、Good Genes等）不可同晚使用
                 </div>
                 <div class="alert warn">
                     <div class="at">刮胡日 × 酸类/视黄醇</div>刮胡当晚全部活性成分跳过
@@ -2120,7 +2138,7 @@
                     <div class="num pm">①</div>
                     <div class="sc">
                         <div class="prod">稀薄到浓厚</div>
-                        <div class="how">酸类 → 精华 → 面霜 → 油 → 防晒（早晨）</div>
+                        <div class="how">酸类 → 精华 → 面霜 → 油（早晨出门前再加防晒）</div>
                     </div>
                 </div>
                 <div class="step">
@@ -2203,7 +2221,14 @@
         })();
 
         // ══ Dates ════════════════════════════════════════════════════
-        function today() { return new Date().toISOString().split('T')[0] }
+        // 凌晨0:00–2:59 仍归属"昨晚"（深夜护肤常在12点后）
+        function today() {
+            const d = new Date();
+            if (d.getHours() < 3) d.setDate(d.getDate() - 1);
+            return d.getFullYear() + '-' +
+                String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                String(d.getDate()).padStart(2, '0');
+        }
         function fmtD(d) { return d instanceof Date ? d.toISOString().split('T')[0] : d }
         function isoWeek(d = new Date()) {
             const t = new Date(d); t.setHours(0, 0, 0, 0); t.setDate(t.getDate() + 3 - (t.getDay() + 6) % 7);
@@ -2219,8 +2244,8 @@
         function mondayNWeeksAgo(n) { const d = new Date(); d.setDate(d.getDate() - n * 7); return monday(d); }
         // Sunday of week starting on a given Monday
         function sundayOf(mon) { const d = new Date(mon); d.setDate(d.getDate() + 6); return d; }
-        // 0=Mon…6=Sun
-        function todayWkIdx() { const d = new Date().getDay(); return d === 0 ? 6 : d - 1; }
+        // 0=Mon…6=Sun（凌晨3点前归属前一天）
+        function todayWkIdx() { const d = new Date(); if (d.getHours() < 3) d.setDate(d.getDate() - 1); const day = d.getDay(); return day === 0 ? 6 : day - 1; }
 
         // ══ Products ════════════════════════════════════════════════
         const DEFAULT_PD = [
@@ -2422,7 +2447,10 @@
         // Derived from last 7 journal entries. Range 0-100.
         // Returns null if no data. Also drives dynamic acid limit.
         function barrierScore() {
-            const entries = (lg(K.jrnl) || []).slice(0, 7);
+            // 按日期去重，取最近7个不同日期的记录（同一天多次记录只算一次）
+            const all = lg(K.jrnl) || [];
+            const seen = new Set();
+            const entries = all.filter(e => { if (seen.has(e.date)) return false; seen.add(e.date); return true; }).slice(0, 7);
             if (!entries.length) return null;
             let score = 60;
             entries.forEach(e => {
@@ -2612,7 +2640,7 @@
                 if (p.hidden || p.paoMonths <= 0) return;
                 const wo = weeksOpen(p.id);
                 if (wo === null) return;
-                const limitWeeks = p.paoMonths * 4;
+                const limitWeeks = Math.round(p.paoMonths * 4.345);
                 if (wo >= limitWeeks) alerts.push({ name: p.icon + ' ' + p.name, cls: 'danger', msg: `已过期（开封${wo}周，PAO ${p.paoMonths}个月）—建议更换` });
                 else if (wo >= limitWeeks - 2) alerts.push({ name: p.icon + ' ' + p.name, cls: 'warn', msg: `即将过期（开封${wo}周/${limitWeeks}周）` });
             });
@@ -2748,12 +2776,10 @@
             const pd = id => PD.find(p => p.id === id);
             const active = id => { const p = pd(id); return p && !p.hidden && isSchedActive(p, PS[id] || p.statuses[0]); };
             
-            let steps = [{ p: '微温水冲洗 30秒', h: '早晨尽量不干预角质层，无需洁面产品' }];
+            let steps = [{ p: '清水冲洗 30秒', h: '早晨轻柔冲洗，不用洁面产品，保留皮脂膜' }];
             let skips = [];
 
-            if (active('bioderma')) steps.push({ p: 'Bioderma 粉水 (仅限出油多)', h: '仅T区出油严重时可用，代替洗面奶稍微擦拭' });
-            if (active('sebagh')) steps.push({ p: pd('sebagh').name, h: '全脸3-4滴，轻柔按压' });
-            if (active('mzskin')) steps.push({ p: pd('mzskin').name, h: '无名指轻拍眼眶骨' });
+            if (active('bioderma')) steps.push({ p: 'Bioderma 粉水 (仅限出油多)', h: '仅T区出油严重时可用，棉片轻擦后需补水' });
 
             const hasSunscreen = active('sunscreen');
             if (hasSunscreen) {
@@ -2893,7 +2919,7 @@
                 if (p.shave && hasAcid) { p.conflicts.push(`${p.day}：酸类与刮胡冲突，已移出酸类`); p.items = p.items.filter(i => i.type !== 'acid'); }
                 if (hasAcid && p.items.some(i => i.type === 'retinol')) { p.conflicts.push(`${p.day}：视黄醇与酸类冲突，已移出视黄醇`); p.items = p.items.filter(i => i.type !== 'retinol'); }
                 if (p.shave && p.items.some(i => i.type === 'retinol')) { p.conflicts.push(`${p.day}：视黄醇与刮胡冲突，已移出视黄醇`); p.items = p.items.filter(i => i.type !== 'retinol'); }
-                if (p.items.some(i => i.type === 'mask') && p.items.some(i => i.type === 'acid')) { p.conflicts.push(`${p.day}：面膜与酸类同晚`); }
+                if (p.items.some(i => i.type === 'mask') && p.items.some(i => i.type === 'acid')) { p.conflicts.push(`${p.day}：面膜与酸类同晚，已移出面膜`); p.items = p.items.filter(i => i.type !== 'mask'); }
             });
 
             // === Backward compat props for rendering ===
@@ -2932,8 +2958,18 @@
     <div class="wr"><span class="wrl">刮胡日</span><span class="wrv">${plan.filter(p => p.shave).length} 天</span></div>
     <div class="wr"><span class="wrl">酸类上限</span><span class="wrv ${maxAcid < 2 ? 'warn' : ''}">${maxAcid} 次/周（屏障评分动态）</span></div>
     <div class="wr"><span class="wrl">去角质酸类</span><span class="wrv ${acidOk ? 'ok' : 'bad'}">${journalAcidCnt > 0 ? `已用${journalAcidCnt}次+计划${planAcidD}次，共${totalAcid}次` : `计划${planAcidD}次`}（上限${maxAcid}次）</span></div>
-    ${PS.clay === 'owned' ? `<div class="wr"><span class="wrl">IPSA 泥面膜</span><span class="wrv ${clayPlan ? 'ok' : ''}">${clayPlan ? '1次，已排入' : '未排入（产品状态：' + (PS.clay === 'owned' ? '正常' : '暂停') + '）'}</span></div>` : ''}
-    <div class="wr"><span class="wrl">Lancaster 视黄醇</span><span class="wrv">${plan.some(p => p.retinol && !p.shave && !p.acid) && maxAcid > 0 ? '1次，已排入' : '未排入'}</span></div>`;
+    ${(() => {
+        const maskProd = PD.find(p => !p.hidden && p.schedule && p.schedule.type === 'mask' && isSchedActive(p, PS[p.id] || p.statuses[0]));
+        if (!maskProd) return '';
+        const mp = PS[maskProd.id] || maskProd.statuses[0];
+        return `<div class="wr"><span class="wrl">${maskProd.name.split(' ').slice(0,2).join(' ')}</span><span class="wrv ${clayPlan ? 'ok' : ''}">${clayPlan ? '1次，已排入' : '未排入（产品状态：' + (maskProd.labels[mp] || mp) + '）'}</span></div>`;
+    })()}
+    ${(() => {
+        const retProd = PD.find(p => !p.hidden && p.schedule && p.schedule.type === 'retinol' && isSchedActive(p, PS[p.id] || p.statuses[0]));
+        if (!retProd) return '';
+        const hasRet = plan.some(p => p.retinol && !p.shave && !p.acid) && maxAcid > 0;
+        return `<div class="wr"><span class="wrl">${retProd.name.split(' ').slice(0,2).join(' ')}</span><span class="wrv">${hasRet ? '1次，已排入' : '未排入'}</span></div>`;
+    })()}`;
 
             const allCF = plan.flatMap(p => p.conflicts);
             document.getElementById('cf-alerts').innerHTML = allCF.length ? allCF.map(c => `<div class="cfb"><strong>⚠ 冲突</strong>${c}</div>`).join('') : '';
@@ -2942,7 +2978,7 @@
             if (jal) jal.innerHTML = rBO ? `<div class="alert warn" style="margin-bottom:1rem"><div class="at">⚡ 日志提示：近期爆痘</div>建议本周酸类减至1次，优先修护夜。</div>` : '';
 
             document.getElementById('dp-grid').innerHTML = plan.map((p, i) => {
-                const dc = 'dp' + (p.shower && p.shave ? ' is-both' : p.shower ? ' is-shower' : p.shave ? ' is-shave' : '') + (i === todayI ? ' is-today' : '');
+                const dc = 'dp' + (p.shower && p.shave ? ' is-both' : p.shower ? ' is-shower' : p.shave ? ' is-shave' : '') + (i === todayI ? ' is-today' : '') + ' dp-clickable';
                 let tags = '';
                 if (p.shower) tags += `<span class="dpt sh">🚿</span>`;
                 if (p.shave) tags += `<span class="dpt sv">✂️</span>`;
@@ -2952,11 +2988,84 @@
                 if (p.avene) tags += `<span class="dpt av">Avène</span>`;
                 if (!p.shave && !p.acid && !p.clay && !p.retinol) tags += `<span class="dpt re">修护</span>`;
                 if (p.conflicts.length) tags += `<span class="dpt cf">冲突</span>`;
-                return `<div class="${dc}"><div class="dpn">${p.day}</div>${tags}</div>`;
+                return `<div class="${dc}" onclick="showDayDetail(${i})" title="查看${p.day}护肤安排"><div class="dpn">${p.day}${i===todayI?' ·今':''}</div>${tags}</div>`;
             }).join('');
         }
 
-        // ══ Quick Log ═══════════════════════════════════════════════
+        // ══ Day Detail Panel (排班 → 点击日期格) ══════════════════
+        function showDayDetail(dayIdx) {
+            const plan = computePlan();
+            const p = plan[dayIdx];
+            const todayI = todayWkIdx();
+            const dd = document.getElementById('day-detail');
+            const dt = document.getElementById('day-detail-title');
+            const db = document.getElementById('day-detail-body');
+            if (!dd || !dt || !db) return;
+
+            // Build step list like renderTn but for any day
+            const pdo = id => PD.find(x => x.id === id);
+            const active = id => { const x = pdo(id); return x && !x.hidden && isSchedActive(x, PS[id] || x.statuses[0]); };
+            let steps = [], skips = [];
+
+            if (p.shave) {
+                steps.push({ p: '凉水冲洗（刮胡后）', h: '降温止红' });
+                if (active('avene')) steps.push({ p: pdo('avene').name, h: '泛红/刺痛时可选，10–15分钟' });
+                if (active('cicaplast')) steps.push({ p: pdo('cicaplast').name, h: '全脸薄涂，修护微创口' });
+                if (active('sebagh')) steps.push({ p: pdo('sebagh').name, h: '全脸3–4滴，轻拍至吸收' });
+                if (active('skinrocks')) steps.push({ p: pdo('skinrocks').name, h: '无香精封层' });
+                if (active('cicaplast')) steps.push({ p: 'Cicaplast B5 点涂', h: '痘痘处收尾' });
+                skips.push('所有酸类', '视黄醇', '泥面膜');
+            } else {
+                // Cleansing
+                if (p.shower && active('lancome')) steps.push({ p: pdo('lancome').name, h: '60秒按摩，T区多停留' });
+                else steps.push({ p: '温水冲洗' + (active('bioderma') ? ' / Bioderma 卸妆水' : ''), h: active('bioderma') ? '有防晒/彩妆时用卸妆水' : 'Bioderma 待购，暂用温水' });
+                // Active treatment
+                const acidItem = p.items.find(it => it.type === 'acid');
+                const maskItem = p.items.find(it => it.type === 'mask');
+                const retItem  = p.items.find(it => it.type === 'retinol');
+                if (acidItem) {
+                    const ap = pdo(acidItem.id); const aName = ap ? ap.name : acidItem.label;
+                    const aHint = (aName.includes('Votary') || aName.includes('乳酸')) ? '两颊主选；停留3–5分钟' : '额头+鼻翼+下颌，停留3–5分钟';
+                    steps.push({ p: aName, h: aHint });
+                    steps.push({ p: '等待3分钟', h: 'pH稳定后再叠' });
+                    skips.push('Dr Sebagh 精华（酸类夜跳过）', '视黄醇');
+                } else if (maskItem) {
+                    const mp = pdo(maskItem.id); if (mp) steps.push({ p: mp.name, h: '敷10–15分钟后冲洗' });
+                    skips.push('视黄醇（面膜夜不叠用）');
+                } else if (retItem) {
+                    const rp = pdo(retItem.id); if (rp) steps.push({ p: rp.name, h: '1次/周，薄涂全脸，避开眼周' });
+                    skips.push('酸类');
+                } else {
+                    if (active('sebagh')) steps.push({ p: pdo('sebagh').name, h: '全脸3–4滴，轻拍至吸收' });
+                    if (!p.shower && active('agentholi')) steps.push({ p: pdo('agentholi').name, h: '1–2滴，两颊和颈部' });
+                }
+                if (active('mzskin')) steps.push({ p: pdo('mzskin').name, h: '无名指轻拍眼眶骨' });
+                if (active('skinrocks')) steps.push({ p: pdo('skinrocks').name, h: acidItem ? '酸类夜首选，无香精' : '全脸封层' });
+                if (active('cicaplast')) steps.push({ p: 'Cicaplast B5 点涂', h: '活跃痘痘处、口罩线' });
+            }
+
+            // Night type label  
+            let nightType = '';
+            if (p.shave) nightType = '刮胡夜';
+            else if (p.shower && p.items.some(it => it.type === 'acid')) nightType = '洗澡夜 · 酸类夜';
+            else if (p.shower && p.items.some(it => it.type === 'mask')) nightType = '洗澡夜 · 泥膜夜';
+            else if (p.shower) nightType = '洗澡夜 · 修护夜';
+            else if (p.items.some(it => it.type === 'acid')) nightType = '非洗澡夜 · 酸类夜';
+            else if (p.items.some(it => it.type === 'retinol')) nightType = '视黄醇夜';
+            else nightType = '修护夜';
+
+            const isToday = dayIdx === todayI;
+            dt.innerHTML = `${p.day}${isToday ? ' <span style="font-size:10px;color:var(--tx3);font-weight:400">· 今天</span>' : ''} &nbsp;<span style="font-size:11px;font-weight:400;color:var(--tx3)">${nightType}</span>`;
+            db.innerHTML =
+                steps.map((s, i) => `<div class="day-detail-step"><div class="day-detail-num">${i+1}</div><div><div style="font-weight:500">${s.p}</div>${s.h ? `<div style="color:var(--tx2);font-size:11px;margin-top:2px">${s.h}</div>` : ''}</div></div>`).join('') +
+                (skips.length ? '<div style="margin-top:8px;font-size:10px;font-family:var(--mono);color:var(--tx3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">跳过</div>' +
+                    skips.map(s => `<div class="day-detail-skip"><span>✕</span>${s}</div>`).join('') : '') +
+                (p.conflicts.length ? '<div style="margin-top:8px;padding:6px 10px;background:var(--rd-bg);border-radius:var(--rs);font-size:11px;color:var(--rd)">' + p.conflicts.join('<br>') + '</div>' : '');
+
+            dd.style.display = 'block';
+            dd.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
         const QL_PRESETS = {
             'repair': { status: ['稳定'], products: ['修护夜'] },
             'shower-repair': { status: ['稳定'], products: ['修护夜'] },
@@ -3030,7 +3139,7 @@
             setTimeout(() => URL.revokeObjectURL(url), 1000);
         }
         function exportJSON() {
-            const data = {};
+            const data = { _meta: { version: 2, exported: new Date().toISOString(), app: '护肤计划' } };
             Object.entries(K).forEach(([, key]) => { const v = lg(key); if (v !== null) data[key] = v; });
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -3062,7 +3171,12 @@
             const elapsed = Math.floor((new Date() - new Date(sv)) / 86400000);
             const rem = Math.max(0, 28 - elapsed), prog = Math.min(100, Math.round(elapsed / 28 * 100));
             bar.style.width = prog + '%'; pct.textContent = prog + '%';
-            if (elapsed >= 28) { badge.textContent = '✓ 可评估'; badge.className = 'cdb done'; left.textContent = '已满4周，可评估引入 Good Genes'; }
+            if (elapsed >= 28) {
+                const ggProd = PD.find(p => p.id === 'goodGenes' && !p.hidden);
+                const evalTarget = ggProd ? ggProd.name : 'Good Genes';
+                badge.textContent = '✓ 可评估'; badge.className = 'cdb done';
+                left.textContent = `已满4周，可评估引入 ${evalTarget}`;
+            }
             else { badge.textContent = '还剩' + rem + '天'; badge.className = 'cdb'; left.textContent = '已过' + elapsed + '天 / 共28天'; }
         }
 
@@ -3240,14 +3354,23 @@
 
             const ab = document.getElementById('acid-bars');
             if (ab) {
+                // Per-product acid breakdown
+                const acidProds = PD.filter(p => !p.hidden && p.schedule && p.schedule.type === 'acid' && p.journalTag);
+                const maxA = maxAcidPerWeek() || 2;
                 ab.innerHTML = [0, 1, 2, 3].map(w => {
                     const wsMon = mondayNWeeksAgo(w);
-                    const cnt = acidCountInWeek(wsMon);
-                    const maxA = maxAcidPerWeek() || 2;
+                    const end = new Date(wsMon); end.setDate(end.getDate() + 6); end.setHours(23, 59, 59);
+                    const weekEntries = (lg(K.jrnl) || []).filter(x => { const d = new Date(x.date); return d >= wsMon && d <= end; });
+                    const cnt = weekEntries.filter(x => (x.products||[]).some(p => getAcidTags().includes(p))).length;
                     const lbl = w === 0 ? '本周' : w === 1 ? '上周' : `前${w + 1}周`;
                     const pct = Math.min(100, cnt / maxA * 100);
                     const col = cnt <= maxA ? 'var(--gr)' : cnt <= 3 ? 'var(--am)' : 'var(--rd)';
-                    return `<div class="br"><div class="brl">${lbl}</div><div class="brt"><div class="brf" style="width:${pct}%;background:${col}"></div></div><div class="brv">${cnt}次</div></div>`;
+                    // Per-product counts
+                    const prodCounts = acidProds.map(p => {
+                        const pc = weekEntries.filter(x => (x.products||[]).includes(p.journalTag)).length;
+                        return pc > 0 ? `<span style="font-size:10px;font-family:var(--mono);color:var(--tx3);margin-left:4px">${p.journalTag.replace('酸','').replace('Good Genes','GG')} ×${pc}</span>` : '';
+                    }).join('');
+                    return `<div class="br"><div class="brl">${lbl}</div><div class="brt"><div class="brf" style="width:${pct}%;background:${col}"></div></div><div class="brv">${cnt}次${prodCounts}</div></div>`;
                 }).join('');
             }
             const ht = document.getElementById('hrt-tl');
@@ -3320,7 +3443,7 @@
                 let changed = false;
                 Object.entries(doc.data()).forEach(([k, v]) => {
                     const localV = localStorage.getItem(k);
-                    const cloudV = typeof v === 'string' ? v : JSON.stringify(v);
+                    const cloudV = JSON.stringify(v); // always stringify so ls()/lg() JSON format is preserved
                     if (localV !== cloudV) {
                         try { localStorage.setItem(k, cloudV); changed = true; } catch {}
                     }
