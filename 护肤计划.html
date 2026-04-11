@@ -2446,12 +2446,8 @@
         // ══ Barrier Health Score ════════════════════════════════════
         // Derived from last 7 journal entries. Range 0-100.
         // Returns null if no data. Also drives dynamic acid limit.
-        function barrierScore() {
-            // 按日期去重，取最近7个不同日期的记录（同一天多次记录只算一次）
-            const all = lg(K.jrnl) || [];
-            const seen = new Set();
-            const entries = all.filter(e => { if (seen.has(e.date)) return false; seen.add(e.date); return true; }).slice(0, 7);
-            if (!entries.length) return null;
+        function calcScore(entries) {
+            if (!entries || !entries.length) return null;
             let score = 60;
             entries.forEach(e => {
                 const s = e.status || [];
@@ -2464,6 +2460,14 @@
                 if (s.includes('好转')) score += 12;
             });
             return Math.max(0, Math.min(100, Math.round(score)));
+        }
+
+        function barrierScore() {
+            // 按日期去重，取最近7个不同日期的记录（同一天多次记录只算一次）
+            const all = lg(K.jrnl) || [];
+            const seen = new Set();
+            const entries = all.filter(e => { if (seen.has(e.date)) return false; seen.add(e.date); return true; }).slice(0, 7);
+            return calcScore(entries);
         }
         function barrierLabel(s) {
             if (s >= 85) return { label: '屏障优秀', cls: 'great' };
@@ -3292,22 +3296,10 @@
                     const d = new Date(now); d.setDate(now.getDate() - i);
                     const ds = fmtD(d); days.push(ds);
                     
-                    const past = e.filter(x => x.date <= ds).slice(0, 7);
-                    if(!past.length) scores.push(null);
-                    else {
-                        let sc = 60;
-                        past.forEach(p => {
-                            const st = p.status || [];
-                            if (st.includes('爆痘')) sc -= 10;
-                            if (st.includes('泛红')) sc -= 7;
-                            if (st.includes('敏感')) sc -= 5;
-                            if (st.includes('干燥')) sc -= 3;
-                            if (st.includes('出油')) sc -= 2;
-                            if (st.includes('稳定')) sc += 8;
-                            if (st.includes('好转')) sc += 12;
-                        });
-                        scores.push(Math.max(0, Math.min(100, Math.round(sc))));
-                    }
+                    const seen = new Set();
+                    const past = e.filter(x => x.date <= ds && !seen.has(x.date) ? seen.add(x.date) : false).slice(0, 7);
+                    scores.push(calcScore(past));
+
                     const de = e.find(x => x.date === ds);
                     acids.push(de ? (de.products || []).some(p => acidTags.includes(p)) : false);
                 }
