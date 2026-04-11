@@ -1349,7 +1349,7 @@
             padding: 12px 0
         }
 
-        .jhdel {
+        .jhdel, .jhedit {
             background: none;
             border: none;
             cursor: pointer;
@@ -1361,6 +1361,53 @@
 
         .jhdel:hover {
             color: var(--rd)
+        }
+        .jhedit:hover {
+            color: var(--bl)
+        }
+
+        .tn-logged {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-family: var(--mono);
+            letter-spacing: .02em;
+            margin-bottom: 8px;
+        }
+        .tn-logged.done {
+            background: var(--gr-bg);
+            color: var(--gr);
+            border: 1px solid var(--gr-br);
+        }
+        .tn-logged.pending {
+            background: var(--am-bg);
+            color: var(--am);
+            border: 1px solid var(--am-br);
+        }
+
+        .acid-limit-line {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: var(--rd);
+            opacity: .35;
+            border-radius: 1px;
+        }
+        .acid-limit-line::after {
+            content: attr(data-label);
+            position: absolute;
+            right: 4px;
+            top: -1px;
+            font-size: 8px;
+            font-family: var(--mono);
+            color: var(--rd);
+            opacity: .7;
+            white-space: nowrap;
         }
 
         .expbtn {
@@ -1887,6 +1934,7 @@
             <div id="hrt-bnr"></div>
             <div id="barrier-limit-banner"></div>
             <div id="pao-alert-tn"></div>
+            <div id="tn-logged-badge"></div>
             <div id="tn-meta-row" class="tn-meta"></div>
             <div id="sync-note-area"></div>
             <div style="margin-bottom:.75rem">
@@ -2694,6 +2742,18 @@
                 meta.innerHTML = `<div class="tn-meta-item ${cls}">本周酸类 ${acidCnt}/${maxAcid} 次</div><div class="tn-meta-item">${dslaStr}</div>`;
             }
 
+            // Today log status badge
+            const logBadge = document.getElementById('tn-logged-badge');
+            if (logBadge) {
+                const todayEntry = (lg(K.jrnl) || []).find(x => x.date === today());
+                if (todayEntry && (todayEntry.status || []).length > 0) {
+                    const chips = (todayEntry.status || []).join(' · ');
+                    logBadge.innerHTML = `<div class="tn-logged done">✓ 已记录 — ${chips}</div>`;
+                } else {
+                    logBadge.innerHTML = `<div class="tn-logged pending">○ 今日未记录皮肤状态</div>`;
+                }
+            }
+
             // === Read today's schedule slot ===
             const plan = computePlan();
             const todaySlot = plan[todayWkIdx()];
@@ -3141,7 +3201,14 @@
             if (di) { di.value = today(); loadJrnlForm(); } // automatically jump back to today's view after saving past edit
             renderJrnl(); renderStats(); renderTn(); renderBarrierBadge(); // fix: cascade updates
         }
-        function delEntry(date) { ls(K.jrnl, (lg(K.jrnl) || []).filter(e => e.date !== date)); renderJrnl(); renderStats(); renderBarrierBadge(); }
+        function delEntry(date) { if (!confirm(`确定删除 ${date} 的记录？`)) return; ls(K.jrnl, (lg(K.jrnl) || []).filter(e => e.date !== date)); renderJrnl(); renderStats(); renderBarrierBadge(); }
+        function editEntry(date) {
+            const di = document.getElementById('jrnl-date');
+            if (di) { di.value = date; loadJrnlForm(); }
+            // Smooth scroll to form
+            const form = document.querySelector('.jfc');
+            if (form) form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
         function sCls(v) { if (['稳定', '好转'].includes(v)) return 'ok'; if (['出油', '干燥', '敏感'].includes(v)) return 'warn'; if (['泛红', '爆痘'].includes(v)) return 'bad'; return 'blue'; }
         function renderJrnl() {
             const di = document.getElementById('jrnl-date');
@@ -3158,7 +3225,7 @@
                 const chips = [...(x.status || []).map(s => `<span class="jhch ${sCls(s)}">${s}</span>`),
                 ...(x.products || []).map(p => `<span class="jhch blue">${p}</span>`)].join('');
                 return `<div class="jhe">
-      <div class="jhd">${x.date}${x.phase ? ` · ${x.phase}` : ''}<button class="jhdel" onclick="delEntry('${x.date}')">删除</button></div>
+      <div class="jhd">${x.date}${x.phase ? ` · ${x.phase}` : ''}<span><button class="jhedit" onclick="editEntry('${x.date}')">编辑</button> · <button class="jhdel" onclick="delEntry('${x.date}')">删除</button></span></div>
       <div class="jhc">${chips || '<span class="jhch">无标记</span>'}</div>
       ${x.note ? `<div class="jhn">${esc(x.note)}</div>` : ''}
     </div>`;
@@ -3264,7 +3331,8 @@
             if (bd) {
                 if (score === null) { bd.innerHTML = '<div style="font-size:12px;color:var(--tx3);padding:8px">暂无日志数据，开始记录后自动计算</div>'; }
                 else {
-                    const entries7 = (lg(K.jrnl) || []).slice(0, 7);
+                    const _seen7 = new Set();
+                    const entries7 = (lg(K.jrnl) || []).filter(x => { if (_seen7.has(x.date)) return false; _seen7.add(x.date); return true; }).slice(0, 7);
                     let breakdown = '<div style="font-size:11px;color:var(--tx2);margin-bottom:4px">基础分 60 + 最近7天日志调整：</div>';
                     const rules = ['爆痘 -10','泛红 -7','敏感 -5','干燥 -3','出油 -2','稳定 +8','好转 +12'];
                     const tags = ['爆痘','泛红','敏感','干燥','出油','稳定','好转'];
@@ -3391,14 +3459,15 @@
                     const weekEntries = (lg(K.jrnl) || []).filter(x => { const d = new Date(x.date); return d >= wsMon && d <= end; });
                     const cnt = weekEntries.filter(x => (x.products||[]).some(p => getAcidTags().includes(p))).length;
                     const lbl = w === 0 ? '本周' : w === 1 ? '上周' : `前${w + 1}周`;
-                    const pct = Math.min(100, cnt / maxA * 100);
+                    const limitPct = Math.min(100, maxA / Math.max(maxA, 4) * 100); // scale bar to show limit context
+                    const pct = Math.min(100, cnt / Math.max(maxA, 4) * 100);
                     const col = cnt <= maxA ? 'var(--gr)' : cnt <= 3 ? 'var(--am)' : 'var(--rd)';
                     // Per-product counts
                     const prodCounts = acidProds.map(p => {
                         const pc = weekEntries.filter(x => (x.products||[]).includes(p.journalTag)).length;
-                        return pc > 0 ? `<span style="font-size:10px;font-family:var(--mono);color:var(--tx3);margin-left:4px">${p.journalTag.replace('酸','').replace('Good Genes','GG')} ×${pc}</span>` : '';
+                        return pc > 0 ? `<span style="font-size:10px;font-family:var(--mono);color:var(--tx3);margin-left:4px">${p.journalTag.replace('酸','').replace('Good Genes','GG')}×${pc}</span>` : '';
                     }).join('');
-                    return `<div class="br"><div class="brl">${lbl}</div><div class="brt"><div class="brf" style="width:${pct}%;background:${col}"></div></div><div class="brv">${cnt}次${prodCounts}</div></div>`;
+                    return `<div class="br"><div class="brl">${lbl}</div><div class="brt" style="position:relative"><div class="brf" style="width:${pct}%;background:${col}"></div><div class="acid-limit-line" style="left:${limitPct}%" data-label="上限"></div></div><div class="brv">${cnt}次${prodCounts}</div></div>`;
                 }).join('');
             }
             const ht = document.getElementById('hrt-tl');
