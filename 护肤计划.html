@@ -3154,7 +3154,7 @@
         
         function sysAlert(msg) {
             const m = document.createElement('div');
-            m.className = 'modal-overlay';
+            m.className = 'modal-overlay open';
             m.style.zIndex = '9999';
             m.innerHTML = `<div style="background:var(--sur);padding:20px;border-radius:12px;width:300px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.3)">
                 <div style="font-size:14px;line-height:1.6;margin-bottom:20px;white-space:pre-wrap;color:var(--tx)">${msg.replace(/\\\\n/g, '\\n')}</div>
@@ -3164,7 +3164,7 @@
         }
         function sysConfirm(msg, onConfirm) {
             const m = document.createElement('div');
-            m.className = 'modal-overlay';
+            m.className = 'modal-overlay open';
             m.style.zIndex = '9999';
             m.innerHTML = `<div style="background:var(--sur);padding:20px;border-radius:12px;width:300px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.3)">
                 <div style="font-size:14px;line-height:1.6;margin-bottom:20px;white-space:pre-wrap;color:var(--tx)">${msg.replace(/\\\\n/g, '\\n')}</div>
@@ -3717,7 +3717,7 @@
         }
         function showImageModal(src) {
             const m = document.createElement('div');
-            m.className = 'modal-overlay';
+            m.className = 'modal-overlay open';
             m.innerHTML = `<div style="max-width:90vw;max-height:90vh;display:flex;justify-content:center;align-items:center;position:relative"><img src="${src}" style="max-width:100%;max-height:90vh;border-radius:8px"><div onclick="this.parentNode.parentNode.remove()" style="position:absolute;top:-15px;right:-15px;background:#000;color:#fff;width:30px;height:30px;border-radius:50%;text-align:center;line-height:30px;cursor:pointer;font-weight:bold;box-shadow:0 2px 8px rgba(0,0,0,.5);">✕</div></div>`;
             m.onclick = e => { if(e.target===m) m.remove(); };
             document.body.appendChild(m);
