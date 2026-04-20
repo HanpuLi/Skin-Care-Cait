@@ -591,8 +591,12 @@
         }
 
         .tn-step.done .tn-n::after {
-            content: ‘✓’
+            content: '‘✓’'
         }
+        .tmr-btn { font-size:11px; margin-top:6px; display:inline-block; padding:4px 10px; border-radius:6px; background:var(--sur2); color:var(--tx2); border:1px solid var(--bd); cursor:pointer; font-family:var(--mono); user-select:none; transition:all .2s ease; }
+        .tmr-btn:hover { background:var(--bd); }
+        .tmr-btn.on { background:var(--bl); color:#fff; border-color:var(--bl); animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: .75; } 100% { opacity: 1; } }
 
         .tn-prod {
             font-size: 13px;
@@ -2046,10 +2050,16 @@
             <div class="wk-label" id="wk-label"></div>
             <p style="font-size:12px;color:var(--tx3);margin-bottom:.75rem">过去7天 · 今天 · 未来7天。选择模式后点击日期设置排班，过去的日期已锁定不可更改。点击「安排总览」中的格子查看当天详细护肤步骤。</p>
             <div class="tr">
-                <span class="tl">模式：</span>
-                <button class="tb on-shower" id="mode-shower" onclick="setMode('shower')">🚿 洗澡日</button>
-                <button class="tb" id="mode-shave" onclick="setMode('shave')">✂️ 刮胡日</button>
-                <button class="tb" id="mode-clear" onclick="setMode('clear')">✕ 清除</button>
+                <div style="display:flex;align-items:center;">
+                    <span class="tl">模式：</span>
+                    <button class="tb on-shower" id="mode-shower" onclick="setMode('shower')">🚿 洗澡日</button>
+                    <button class="tb" id="mode-shave" onclick="setMode('shave')">✂️ 刮胡日</button>
+                    <button class="tb" id="mode-clear" onclick="setMode('clear')">✕ 清除</button>
+                </div>
+                <div style="display:flex;align-items:center;gap:4px;">
+                    <button type="button" class="tb" style="background:var(--sur2);color:var(--tx2)" onclick="savePreset()" title="保存今天及未来6天模式为模板">💾 保存为模版</button>
+                    <button type="button" class="tb" style="background:var(--sur2);color:var(--tx2)" onclick="applyPreset()" title="将模版循环填入未来7天">🔄 填入模版</button>
+                </div>
             </div>
             <div class="dtg" id="day-toggles"></div>
             <div class="leg-wrap">
@@ -2149,7 +2159,16 @@
                 <div style="margin-bottom:10px"><input class="hf" id="hrt-ph" placeholder="如：第3个月、稳定期"></div>
                 <label class="jfl">备注</label>
                 <textarea class="jfn" id="jf-note" rows="2" placeholder="今天有什么特别观察？"></textarea>
-                <div style="display:flex;align-items:center;gap:10px">
+                <div style="margin:8px 0;display:flex;align-items:center;gap:10px;">
+                    <label class="expbtn" style="cursor:pointer;padding:4px 8px;display:inline-block;font-size:11px;">
+                        📸 添加照片 <input type="file" id="jf-photo" accept="image/*" capture="environment" style="display:none" onchange="previewPhoto(this)">
+                    </label>
+                    <div id="photo-preview-container" style="display:none;position:relative;width:40px;height:40px;border-radius:4px;border:1px solid var(--bd);overflow:hidden;">
+                        <img id="photo-preview" style="width:100%;height:100%;object-fit:cover;" src="">
+                        <div onclick="removePhoto()" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.5);color:white;width:14px;height:14px;border-radius:50%;text-align:center;line-height:12px;cursor:pointer;font-size:9px;">✕</div>
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
                     <button class="bsv" onclick="saveEntry()">保存记录</button>
                     <span class="svm" id="sv-msg">✓ 已保存</span>
                 </div>
@@ -2302,6 +2321,41 @@
         // Single versioned keys — migrate old keys on load
         let _jrnlShowAll = false;
         function toggleJrnlHistory() { _jrnlShowAll = !_jrnlShowAll; renderJrnl(); }
+        // ══ IndexedDB (Photos) ══════════════════════════════════════
+        let _idb = null;
+        function initPhotoDB(cb) {
+            const req = indexedDB.open('SkincarePhotos', 1);
+            req.onupgradeneeded = e => {
+                let db = e.target.result;
+                if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos', { keyPath: 'date' });
+            };
+            req.onsuccess = e => { _idb = e.target.result; if(cb) cb(); };
+            req.onerror = () => console.warn('IndexedDB failed');
+        }
+        function savePhoto(date, dataUrl, cb) {
+            if (!_idb) return;
+            const tx = _idb.transaction('photos', 'readwrite');
+            tx.objectStore('photos').put({ date, dataUrl });
+            tx.oncomplete = () => { if(cb) cb(); schedulePush(); };
+        }
+        function getPhoto(date, cb) {
+            if (!_idb) { cb(null); return; }
+            const tx = _idb.transaction('photos', 'readonly');
+            const req = tx.objectStore('photos').get(date);
+            req.onsuccess = () => cb(req.result ? req.result.dataUrl : null);
+            req.onerror = () => cb(null);
+        }
+        function getAllPhotos(cb) {
+            if (!_idb) { cb({}); return; }
+            const tx = _idb.transaction('photos', 'readonly');
+            const req = tx.objectStore('photos').getAll();
+            req.onsuccess = () => {
+                const map = {};
+                (req.result||[]).forEach(r => map[r.date] = r.dataUrl);
+                cb(map);
+            };
+        }
+
         const K = {
             wk: 'sk_wk1',
             jrnl: 'sk_jrnl1',
@@ -2311,7 +2365,8 @@
             tn: 'sk_tn1',
             tnsteps: 'sk_tnsteps1',
             amsteps: 'sk_amsteps1',
-            prodDefs: 'sk_proddefs1'
+            prodDefs: 'sk_proddefs1',
+            preset: 'sk_preset1' // new for feature 6
         };
         // One-time migration from old keys
         (function migrate() {
@@ -2555,9 +2610,20 @@
                     else paoTag = `<span class="sched-tag">PAO: ${paoMonths}M</span>`;
                 }
                 const sch = def.schedule || {};
+                
+                // Get usage count from journal if it has a journalTag
+                let usageCountHtml = '';
+                if (wo !== null) {
+                    const trackingKey = def.journalTag || def.name;
+                    const jrnl = lg(K.jrnl) || [];
+                    const usageCount = jrnl.filter(e => (e.products || []).includes(trackingKey)).length;
+                    usageCountHtml = `<span class="sched-tag" style="background:var(--sur2);color:var(--tx2)">累计使用: ${usageCount}次</span>`;
+                }
+
                 const typeL = {acid:'酸类',retinol:'视黄醇',mask:'面膜',daily:'日常',none:'—'};
                 let schedTags = '';
                 if (sch.enableAutoSchedule) schedTags = `<div class="sched-info"><span class="sched-tag">${typeL[sch.type]||sch.type}</span>${sch.maxPerWeek?`<span class="sched-tag">${sch.maxPerWeek}次/周</span>`:''}${sch.minDaysBetween?`<span class="sched-tag">间隔≥${sch.minDaysBetween}天</span>`:''}${sch.preferShowerNight?`<span class="sched-tag">洗澡日优先</span>`:''}</div>`;
+                if (usageCountHtml) schedTags += `<div class="sched-info" style="margin-top:2px">${usageCountHtml}</div>`;
                 return `<div class="pc"><div class="pch" onclick="togglePCB('${def.id}')">
       <div class="pci">${def.icon}</div>
       <div class="pci2"><div class="pcn">${esc(def.name)}</div><div class="pcc">${esc(def.cat)}${wo!==null?` · 开封${wo}周`:''}</div><div class="sched-info" style="margin-top:4px">${paoTag}</div>${schedTags}</div>
@@ -2632,10 +2698,23 @@
         // Dynamic acid limit based on barrier score
         function maxAcidPerWeek() {
             const s = barrierScore();
-            if (s === null) return 2;
-            if (s < 45) return 0;  // repair mode: no acid
-            if (s < 65) return 1;  // caution: max 1
-            return 2;          // normal
+            let limit = 2;
+            if (s !== null) {
+                if (s < 45) limit = 0;  // repair mode: no acid
+                else if (s < 65) limit = 1;  // caution: max 1
+            }
+            
+            // Check HRT phases in past 5 days
+            const jrnl = lg(K.jrnl) || [];
+            const recent = jrnl.slice(0, 5);
+            const hrtFluctuation = recent.some(x => {
+                const ph = x.phase || '';
+                return ph.includes('波动') || ph.includes('调整') || ph.includes('加量') || ph.includes('减量') || ph.includes('出血');
+            });
+            
+            if (hrtFluctuation && limit > 0) limit -= 1; // force downgrade during HRT fluctuations
+            
+            return Math.max(0, limit);
         }
         function showBarrierBreakdown() {
             const bd = document.getElementById('barrier-breakdown');
@@ -2745,6 +2824,37 @@
             renderTn(); renderAm(); renderStats(); renderBarrierBadge();
             if(window.location.hash !== '#jrnl') renderJrnl(); 
         }
+        // ══ Timers ══════════════════════════════════════════════════
+        let _timers = {}; // id -> { iv, end, t }
+        function startTimer(e, id, seconds) {
+            e.stopPropagation();
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            if (_timers[id]) {
+                clearInterval(_timers[id].iv);
+                delete _timers[id];
+                btn.className = 'tmr-btn';
+                btn.innerHTML = `⏱ ${Math.floor(seconds/60)}:${(seconds%60).toString().padStart(2,'0')} 开始`;
+                return;
+            }
+            const end = Date.now() + seconds * 1000;
+            btn.className = 'tmr-btn on';
+            const f = () => {
+                const left = Math.ceil((end - Date.now()) / 1000);
+                if (left <= 0) {
+                    clearInterval(_timers[id].iv);
+                    delete _timers[id];
+                    btn.className = 'tmr-btn';
+                    btn.innerHTML = `✅ 计时结束`;
+                    try { navigator.vibrate([200, 100, 200]); } catch(err){}
+                } else {
+                    btn.innerHTML = `⏳ ${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}`;
+                }
+            };
+            f();
+            _timers[id] = { t: seconds, iv: setInterval(f, 1000), end };
+        }
+
         function toggleStep(el) {
             const prodName = el.dataset.prod;
             const panel = el.closest('#am-plan') ? 'am' : 'tn';
@@ -2875,14 +2985,14 @@
             if (shave) {
                 steps.push({ p: '凉水冲洗（刮胡后立即）', h: '降温止红' });
                 if (active('cicaplast')) steps.push({ p: pd('cicaplast').name, h: '全脸薄涂，修护微创口' });
-                if (active('avene')) steps.push({ p: pd('avene').name, h: '泛红/刺痛时使用（可选）10–15分钟' });
+                if (active('avene')) steps.push({ p: pd('avene').name, h: '泛红/刺痛时使用（可选）10–15分钟', t: 900 });
                 if (active('sebagh')) steps.push({ p: pd('sebagh').name, h: '全脸3–4滴，轻拍至吸收' });
                 if (active('skinrocks')) steps.push({ p: pd('skinrocks').name, h: '无香精封层' });
                 if (active('cicaplast')) steps.push({ p: 'Cicaplast B5 点涂', h: '痘痘处收尾' });
                 skips.push('所有酸类', '视黄醇', '泥面膜');
             } else {
                 // 1. Cleansing
-                if (shower && active('lancome')) steps.push({ p: pd('lancome').name, h: '60秒按摩，T区多停留' });
+                if (shower && active('lancome')) steps.push({ p: pd('lancome').name, h: '60秒按摩，T区多停留', t: 60 });
                 else steps.push({ p: '温水冲洗' + (active('bioderma') ? ' / Bioderma 卸妆水' : ''), h: active('bioderma') ? '有防晒/彩妆时使用卸妆水' : 'Bioderma 待购，暂用温水' });
 
                 // 2. Active treatment (from schedule only)
@@ -2890,10 +3000,10 @@
                     const ap = pd(schedAcid.id); const aName = ap ? ap.name : schedAcid.label;
                     const aHint = (aName.includes('Votary') || aName.includes('乳酸')) ? '两颊主选，保湿性强；停留3–5分钟' : '额头+鼻翼+下颌，停留3–5分钟，无需冲洗';
                     steps.push({ p: aName, h: aHint });
-                    steps.push({ p: '等待3分钟', h: 'pH稳定后再叠后续' });
+                    steps.push({ p: '等待3分钟', h: 'pH稳定后再叠后续', t: 180 });
                     skips.push('Dr Sebagh 精华（酸类夜跳过）', '视黄醇（酸类夜禁用）');
                 } else if (schedMask) {
-                    const mp = pd(schedMask.id); if (mp && active(mp.id)) { steps.push({ p: mp.name, h: '敷10–15分钟后冲洗干净' }); skips.push('视黄醇（面膜夜不叠用）'); }
+                    const mp = pd(schedMask.id); if (mp && active(mp.id)) { steps.push({ p: mp.name, h: '敷10–15分钟后冲洗干净', t: 900 }); skips.push('视黄醇（面膜夜不叠用）'); }
                 } else if (schedRet) {
                     const rp = pd(schedRet.id); if (rp && active(rp.id)) { steps.push({ p: rp.name, h: '1次/周，薄涂全脸，避开眼周' + (PS[rp.id] === 'active' ? '' : '（谨慎引入期）') }); skips.push('酸类（视黄醇夜不叠加）'); }
                 } else {
@@ -2923,17 +3033,36 @@
                 });
             }
             
-            const pl = document.getElementById('tn-plan'); if (!pl) return;
-            const stH = steps.map((s, i) => `<div class="tn-step${done.has(s.p) ? ' done' : ''}" data-prod="${s.p}" onclick="toggleStep(this)">
+            const getStepHtml = (s, i, doneSet, prefix) => {
+                let tb = '';
+                if (s.t) {
+                    const tid = `tmr_${prefix}_${i}`;
+                    tb = `<br><div id="${tid}" class="tmr-btn" onclick="startTimer(event, '${tid}', ${s.t})">⏱ ${Math.floor(s.t/60)}:${(s.t%60).toString().padStart(2,'0')} 开始</div>`;
+                }
+                return `<div class="tn-step${doneSet.has(s.p) ? ' done' : ''}" data-prod="${s.p}" onclick="toggleStep(this)">
     <div class="tn-n"><span class="tn-n-inner">${i + 1}</span></div>
-    <div><div class="tn-prod">${s.p}</div>${s.h ? `<div class="tn-how">${s.h}</div>` : ''}</div>
-  </div>`).join('');
+    <div><div class="tn-prod">${s.p}</div>${s.h ? `<div class="tn-how">${s.h}${tb}</div>` : ''}</div>
+  </div>`;
+            };
+
+            const pl = document.getElementById('tn-plan'); if (!pl) return;
+            const stH = steps.map((s, i) => getStepHtml(s, i, done, 'tn')).join('');
             const skH = skips.map(s => `<div class="tn-skip"><div class="tn-x">✕</div><div class="tn-sp">${s}</div></div>`).join('');
             pl.innerHTML = `<div class="tn-hdr"><div class="tn-hdr-t">${nightType}</div><div class="tn-hdr-s">${nightSub}</div></div>${stH}${skH}`;
 
             const recentBO = (lg(K.jrnl) || []).slice(0, 7).some(e => (e.status || []).includes('爆痘'));
+            const recentHrt = (lg(K.jrnl) || []).slice(0, 5).some(e => {
+                const ph = e.phase || '';
+                return ph.includes('波动') || ph.includes('调整') || ph.includes('加量') || ph.includes('减量') || ph.includes('出血');
+            });
+            
             const bnr = document.getElementById('hrt-bnr');
-            if (bnr) bnr.innerHTML = recentBO ? `<div class="alert warn" style="margin-bottom:.75rem"><div class="at">⚡ 近期日志显示爆痘</div>建议本周酸类降至1次（或暂停），优先修护</div>` : '';
+            if (bnr) {
+                let html = '';
+                if (recentHrt) html += `<div class="alert warn" style="margin-bottom:.75rem"><div class="at">🩸 HRT 评估：激素处于波动/调整期</div>排班引擎已自动调低本周酸类频率，增强维稳修护。</div>`;
+                if (recentBO) html += `<div class="alert warn" style="margin-bottom:.75rem"><div class="at">⚡ 近期日志显示爆痘</div>建议手动将本周酸类降至1次（或暂停），优先修护。</div>`;
+                bnr.innerHTML = html;
+            }
         }
 
         function renderAm() {
@@ -2954,12 +3083,21 @@
                 skips.push('⚠ 防晒待购入（用了酸类的次日无防晒 = 加深痘印！）');
             }
 
+            const getStepHtml = (s, i, doneSet, prefix) => {
+                let tb = '';
+                if (s.t) {
+                    const tid = `tmr_${prefix}_${i}`;
+                    tb = `<br><div id="${tid}" class="tmr-btn" onclick="startTimer(event, '${tid}', ${s.t})">⏱ ${Math.floor(s.t/60)}:${(s.t%60).toString().padStart(2,'0')} 开始</div>`;
+                }
+                return `<div class="tn-step${doneSet.has(s.p) ? ' done' : ''}" data-prod="${s.p}" onclick="toggleStep(this)">
+    <div class="tn-n"><span class="tn-n-inner">${i + 1}</span></div>
+    <div><div class="tn-prod">${s.p}</div>${s.h ? `<div class="tn-how">${s.h}${tb}</div>` : ''}</div>
+  </div>`;
+            };
+
             const done = loadDoneSteps('am');
             const pl = document.getElementById('am-plan'); if (!pl) return;
-            const stH = steps.map((s, i) => `<div class="tn-step${done.has(s.p) ? ' done' : ''}" data-prod="${s.p}" onclick="toggleStep(this)">
-    <div class="tn-n"><span class="tn-n-inner">${i + 1}</span></div>
-    <div><div class="tn-prod">${s.p}</div>${s.h ? `<div class="tn-how">${s.h}</div>` : ''}</div>
-  </div>`).join('');
+            const stH = steps.map((s, i) => getStepHtml(s, i, done, 'am')).join('');
             const skH = skips.map(s => `<div class="tn-skip"><div class="tn-x">✕</div><div class="tn-sp">${s}</div></div>`).join('');
             pl.innerHTML = `<div class="tn-hdr"><div class="tn-hdr-t">早晨保护</div><div class="tn-hdr-s">精简防晒 · 开启新的一天</div></div>${stH}${skH}`;
         }
@@ -2973,6 +3111,70 @@
             if (m === 'shower') document.getElementById('mode-shower').classList.add('on-shower');
             else if (m === 'shave') document.getElementById('mode-shave').classList.add('on-shave');
             else document.getElementById('mode-clear').classList.add('on-clear');
+        }
+
+        function savePreset() {
+            const t = today();
+            const start = new Date(t);
+            const preset = [];
+            for (let i = 0; i < 7; i++) {
+                const dStr = start.getFullYear() + '-' + String(start.getMonth() + 1).padStart(2, '0') + '-' + String(start.getDate()).padStart(2, '0');
+                const cur = getDayState(dStr);
+                preset.push({ shower: cur.shower, shave: cur.shave, dow: start.getDay() });
+                start.setDate(start.getDate() + 1);
+            }
+            ls(K.preset, preset);
+            sysAlert('已保存今天及未来6天的排班模式作为模版！\\n\\n之后的日期您可以直接点击「填入模版」快速覆盖。');
+        }
+        function applyPreset() {
+            const preset = lg(K.preset);
+            if (!preset || preset.length !== 7) return sysAlert('没有找到保存的模版记录，请先保存。');
+            sysConfirm('这将会使用模版覆盖「今天」以及「未来6天」的洗澡与刮胡排班，确定继续吗？', () => {
+                const t = today();
+                const start = new Date(t);
+                for (let i = 0; i < 7; i++) {
+                    const dStr = start.getFullYear() + '-' + String(start.getMonth() + 1).padStart(2, '0') + '-' + String(start.getDate()).padStart(2, '0');
+                    const dow = start.getDay();
+                    const p = preset.find(x => x.dow === dow) || { shower: false, shave: false };
+                    setDayState(dStr, p.shower, p.shave);
+                    start.setDate(start.getDate() + 1);
+                }
+                invalidatePlanCache();
+                renderWk();
+                // Sync today's tonight panel if applicable
+                const tn = lg(K.tn) || {};
+                if (!tn.manual) {
+                    const curT = getDayState(t);
+                    TN = { shower: curT.shower, shave: curT.shave, date: t, manual: false };
+                    ls(K.tn, TN);
+                    renderTn();
+                }
+            });
+        }
+        
+        function sysAlert(msg) {
+            const m = document.createElement('div');
+            m.className = 'modal-overlay';
+            m.style.zIndex = '9999';
+            m.innerHTML = `<div style="background:var(--sur);padding:20px;border-radius:12px;width:300px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.3)">
+                <div style="font-size:14px;line-height:1.6;margin-bottom:20px;white-space:pre-wrap;color:var(--tx)">${msg.replace(/\\\\n/g, '\\n')}</div>
+                <button class="bsv" onclick="this.parentNode.parentNode.remove()">确定</button>
+            </div>`;
+            document.body.appendChild(m);
+        }
+        function sysConfirm(msg, onConfirm) {
+            const m = document.createElement('div');
+            m.className = 'modal-overlay';
+            m.style.zIndex = '9999';
+            m.innerHTML = `<div style="background:var(--sur);padding:20px;border-radius:12px;width:300px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.3)">
+                <div style="font-size:14px;line-height:1.6;margin-bottom:20px;white-space:pre-wrap;color:var(--tx)">${msg.replace(/\\\\n/g, '\\n')}</div>
+                <div style="display:flex;gap:10px;">
+                    <button class="bsv" style="background:var(--sur2);color:var(--tx)" onclick="this.parentNode.parentNode.remove()">取消</button>
+                    <button class="bsv" id="sys-confirm-btn">确定继续</button>
+                </div>
+            </div>`;
+            document.body.appendChild(m);
+            document.getElementById('sys-confirm-btn').onclick = () => { m.remove(); onConfirm(); };
         }
 
         // toggleDay now accepts a date string — past dates are immutable
@@ -3119,6 +3321,7 @@
                         if (fd.shave && prod.schedule.avoidShaveDay) continue;
                         if (fd.items.some(it => it.type === 'retinol')) continue;
                         if (prod.schedule.avoidAcid && fd.items.some(it => it.type === 'acid')) continue;
+                        if (fd.items.some(it => it.type === 'mask')) continue; // Prevent retinol and mask on the same day
                         if (pass === 0 && fd.shower) continue; // prefer non-shower first
                         fd.items.push({ id: prod.id, type: 'retinol', label: prod.name }); placed++;
                     }
@@ -3134,6 +3337,7 @@
                 if (hasAcid && p.items.some(i => i.type === 'retinol')) { p.conflicts.push(`${dayLabel}：视黄醇与酸类冲突`); p.items = p.items.filter(i => i.type !== 'retinol'); }
                 if (p.shave && p.items.some(i => i.type === 'retinol')) { p.conflicts.push(`${dayLabel}：视黄醇与刮胡冲突`); p.items = p.items.filter(i => i.type !== 'retinol'); }
                 if (p.items.some(i => i.type === 'mask') && p.items.some(i => i.type === 'acid')) { p.conflicts.push(`${dayLabel}：面膜与酸类同晚`); p.items = p.items.filter(i => i.type !== 'mask'); }
+                if (p.items.some(i => i.type === 'mask') && p.items.some(i => i.type === 'retinol')) { p.conflicts.push(`${dayLabel}：面膜与视黄醇同晚`); p.items = p.items.filter(i => i.type !== 'retinol'); }
                 // Backward compat rendering props
                 const acidItem = p.items.find(i => i.type === 'acid');
                 p.acid = acidItem ? (PD.find(d => d.id === acidItem.id)?.journalTag || acidItem.label) : null;
@@ -3253,6 +3457,13 @@
         }
 
         // ══ Day Detail Panel ════════════════════════════════════════
+        function jumpToLog(d) {
+            document.getElementById('day-detail').style.display = 'none';
+            document.getElementById('jrnl-date').value = d;
+            show('jrnl', document.getElementById('tab-jrnl'));
+            loadJrnlForm();
+            document.getElementById('jrnl-date').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
         function showDayDetail(dateStr) {
             const plan = computePlanRolling();
             const p = plan.find(d => d.date === dateStr);
@@ -3268,14 +3479,14 @@
 
             if (p.shave) {
                 steps.push({ p: '凉水冲洗（刮胡后）', h: '降温止红' });
-                if (active('avene')) steps.push({ p: pdo('avene').name, h: '泛红/刺痛时可选，10–15分钟' });
+                if (active('avene')) steps.push({ p: pdo('avene').name, h: '泛红/刺痛时可选，10–15分钟', t: 900 });
                 if (active('cicaplast')) steps.push({ p: pdo('cicaplast').name, h: '全脸薄涂，修护微创口' });
                 if (active('sebagh')) steps.push({ p: pdo('sebagh').name, h: '全脸3–4滴，轻拍至吸收' });
                 if (active('skinrocks')) steps.push({ p: pdo('skinrocks').name, h: '无香精封层' });
                 if (active('cicaplast')) steps.push({ p: 'Cicaplast B5 点涂', h: '痘痘处收尾' });
                 skips.push('所有酸类', '视黄醇', '泥面膜');
             } else {
-                if (p.shower && active('lancome')) steps.push({ p: pdo('lancome').name, h: '60秒按摩，T区多停留' });
+                if (p.shower && active('lancome')) steps.push({ p: pdo('lancome').name, h: '60秒按摩，T区多停留', t: 60 });
                 else steps.push({ p: '温水冲洗' + (active('bioderma') ? ' / Bioderma 卸妆水' : ''), h: active('bioderma') ? '有防晒/彩妆时用卸妆水' : 'Bioderma 待购，暂用温水' });
                 const acidItem = p.items.find(it => it.type === 'acid');
                 const maskItem = p.items.find(it => it.type === 'mask');
@@ -3285,11 +3496,11 @@
                     const aName = ap ? ap.name : acidItem.label;
                     const aHint = (aName.includes('Votary') || aName.includes('乳酸')) ? '两颊主选；停留3–5分钟' : '额头+鼻翼+下颌，停留3–5分钟';
                     steps.push({ p: aName, h: aHint });
-                    steps.push({ p: '等待3分钟', h: 'pH稳定后再叠' });
+                    steps.push({ p: '等待3分钟', h: 'pH稳定后再叠', t: 180 });
                     skips.push('Dr Sebagh 精华（酸类夜跳过）', '视黄醇');
                 } else if (maskItem) {
                     const mp = maskItem.id ? pdo(maskItem.id) : null;
-                    if (mp) steps.push({ p: mp.name, h: '敷10–15分钟后冲洗' });
+                    if (mp) steps.push({ p: mp.name, h: '敷10–15分钟后冲洗', t: 900 });
                     skips.push('视黄醇（面膜夜不叠用）');
                 } else if (retItem) {
                     const rp = retItem.id ? pdo(retItem.id) : null;
@@ -3330,12 +3541,22 @@
                         ${jEntry.note ? `<div>备注：${esc(jEntry.note)}</div>` : ''}
                     </div>`;
                 } else {
-                    histNote = `<div style="margin-bottom:10px;padding:8px 10px;background:var(--sur2);border-radius:var(--rs);font-size:11px;color:var(--tx3)">该天无日志记录</div>`;
+                    histNote = `<div style="margin-bottom:10px;padding:8px 10px;background:var(--sur2);border-radius:var(--rs);font-size:11px;color:var(--tx3);display:flex;justify-content:space-between;align-items:center;">
+                        <span>该天无日志记录</span>
+                        <button onclick="jumpToLog('${dateStr}')" style="background:var(--bl);color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer">✏️ 补填日志</button>
+                    </div>`;
                 }
             }
 
             db.innerHTML = histNote +
-                steps.map((s, i) => `<div class="day-detail-step"><div class="day-detail-num">${i+1}</div><div><div style="font-weight:500">${s.p}</div>${s.h ? `<div style="color:var(--tx2);font-size:11px;margin-top:2px">${s.h}</div>` : ''}</div></div>`).join('') +
+                steps.map((s, i) => {
+                    let tb = '';
+                    if (s.t && !p.isPast) {
+                        const tid = `tmr_detail_${i}`;
+                        tb = `<br><div id="${tid}" class="tmr-btn" onclick="startTimer(event, '${tid}', ${s.t})">⏱ ${Math.floor(s.t/60)}:${(s.t%60).toString().padStart(2,'0')} 开始</div>`;
+                    }
+                    return `<div class="day-detail-step"><div class="day-detail-num">${i+1}</div><div><div style="font-weight:500">${s.p}</div>${s.h ? `<div style="color:var(--tx2);font-size:11px;margin-top:2px">${s.h}${tb}</div>` : ''}</div></div>`;
+                }).join('') +
                 (skips.length ? '<div style="margin-top:8px;font-size:10px;font-family:var(--mono);color:var(--tx3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">跳过</div>' +
                     skips.map(s => `<div class="day-detail-skip"><span>✕</span>${s}</div>`).join('') : '') +
                 (p.conflicts.length ? '<div style="margin-top:8px;padding:6px 10px;background:var(--rd-bg);border-radius:var(--rs);font-size:11px;color:var(--rd)">' + p.conflicts.join('<br>') + '</div>' : '');
@@ -3375,6 +3596,34 @@
             if (g === 's') { if (selS.includes(val)) { selS = selS.filter(v => v !== val); el.className = 'chip'; } else { selS.push(val); el.className = 'chip ' + cls; } }
             else { if (selP.includes(val)) { selP = selP.filter(v => v !== val); el.className = 'chip'; } else { selP.push(val); el.className = 'chip ' + cls; } }
         }
+
+        let _photoData = null;
+        function previewPhoto(input) {
+            if(!input.files||!input.files[0]) return;
+            const r = new FileReader();
+            r.onload = e => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let w = img.width, h = img.height;
+                    const max = 600;
+                    if(w>max||h>max){ if(w>h){ h*=max/w;w=max; } else { w*=max/h;h=max; } }
+                    canvas.width=w; canvas.height=h;
+                    canvas.getContext('2d').drawImage(img,0,0,w,h);
+                    _photoData = canvas.toDataURL('image/jpeg', 0.85);
+                    document.getElementById('photo-preview').src = _photoData;
+                    document.getElementById('photo-preview-container').style.display='block';
+                };
+                img.src = e.target.result;
+            };
+            r.readAsDataURL(input.files[0]);
+        }
+        function removePhoto() { 
+            _photoData = null; 
+            document.getElementById('photo-preview-container').style.display='none'; 
+            document.getElementById('jf-photo').value=''; 
+        }
+
         function loadJrnlForm() {
             const di = document.getElementById('jrnl-date');
             if(!di) return;
@@ -3396,6 +3645,18 @@
             } else {
                 document.getElementById('jf-note').value = '';
             }
+            
+            _photoData = null;
+            document.getElementById('photo-preview-container').style.display='none';
+            document.getElementById('jf-photo').value='';
+            getPhoto(d, src => {
+                if(src && document.getElementById('jrnl-date').value === d) {
+                    _photoData = src;
+                    document.getElementById('photo-preview').src = src;
+                    document.getElementById('photo-preview-container').style.display='block';
+                }
+            });
+
             const t = document.getElementById('jf-title-text');
             if(t) t.textContent = d === today() ? '📝 今日记录' : '📝 回溯/修改日志';
         }
@@ -3408,6 +3669,14 @@
             e.unshift({ date: t, status: [...selS], products: [...selP], note, phase });
             e.sort((a,b) => b.date.localeCompare(a.date));
             ls(K.jrnl, e.slice(0, 365));
+
+            if (_photoData) {
+                savePhoto(t, _photoData);
+            } else if (_idb) {
+                const tx = _idb.transaction('photos', 'readwrite');
+                tx.objectStore('photos').delete(t);
+            }
+
             const m = document.getElementById('sv-msg'); m.classList.add('show'); setTimeout(() => m.classList.remove('show'), 2000);
             if (di) { di.value = today(); loadJrnlForm(); } // automatically jump back to today's view after saving past edit
             renderJrnl(); renderStats(); renderTn(); renderBarrierBadge(); // fix: cascade updates
@@ -3425,22 +3694,33 @@
             const di = document.getElementById('jrnl-date');
             if (di && !di.value) { di.value = today(); loadJrnlForm(); }
             updateCd();
-            const e = lg(K.jrnl) || [];
-            const cut = new Date(); cut.setDate(cut.getDate() - 14);
-            const entries = _jrnlShowAll ? e : e.filter(x => new Date(x.date) >= cut);
-            const showMoreBtn = document.getElementById('jrnl-show-more');
-            if (showMoreBtn) showMoreBtn.textContent = _jrnlShowAll ? '只看近14天' : `显示全部 (${e.length}条)`;
-            const list = document.getElementById('jh-list'); if (!list) return;
-            if (!entries.length) { list.innerHTML = '<div class="jhem">暂无记录</div>'; return; }
-            list.innerHTML = entries.map(x => {
-                const chips = [...(x.status || []).map(s => `<span class="jhch ${sCls(s)}">${s}</span>`),
-                ...(x.products || []).map(p => `<span class="jhch blue">${p}</span>`)].join('');
-                return `<div class="jhe">
-      <div class="jhd">${x.date}${x.phase ? ` · ${x.phase}` : ''}<span><button class="jhedit" onclick="editEntry('${x.date}')">编辑</button> · <button class="jhdel" onclick="delEntry('${x.date}')">删除</button></span></div>
-      <div class="jhc">${chips || '<span class="jhch">无标记</span>'}</div>
-      ${x.note ? `<div class="jhn">${esc(x.note)}</div>` : ''}
-    </div>`;
-            }).join('');
+            getAllPhotos(photos => {
+                const e = lg(K.jrnl) || [];
+                const cut = new Date(); cut.setDate(cut.getDate() - 14);
+                const entries = _jrnlShowAll ? e : e.filter(x => new Date(x.date) >= cut);
+                const showMoreBtn = document.getElementById('jrnl-show-more');
+                if (showMoreBtn) showMoreBtn.textContent = _jrnlShowAll ? '只看近14天' : `显示全部 (${e.length}条)`;
+                const list = document.getElementById('jh-list'); if (!list) return;
+                if (!entries.length) { list.innerHTML = '<div class="jhem">暂无记录</div>'; return; }
+                list.innerHTML = entries.map(x => {
+                    const chips = [...(x.status || []).map(s => `<span class="jhch ${sCls(s)}">${s}</span>`),
+                    ...(x.products || []).map(p => `<span class="jhch blue">${p}</span>`)].join('');
+                    const photoHtml = photos[x.date] ? `<div style="margin-top:6px"><img src="${photos[x.date]}" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--bd);cursor:pointer;" onclick="showImageModal('${photos[x.date]}')"></div>` : '';
+                    return `<div class="jhe">
+          <div class="jhd">${x.date}${x.phase ? ` · ${x.phase}` : ''}<span><button class="jhedit" onclick="editEntry('${x.date}')">编辑</button> · <button class="jhdel" onclick="delEntry('${x.date}')">删除</button></span></div>
+          <div class="jhc">${chips || '<span class="jhch">无标记</span>'}</div>
+          ${x.note ? `<div class="jhn">${esc(x.note)}</div>` : ''}
+          ${photoHtml}
+        </div>`;
+                }).join('');
+            });
+        }
+        function showImageModal(src) {
+            const m = document.createElement('div');
+            m.className = 'modal-overlay';
+            m.innerHTML = `<div style="max-width:90vw;max-height:90vh;display:flex;justify-content:center;align-items:center;position:relative"><img src="${src}" style="max-width:100%;max-height:90vh;border-radius:8px"><div onclick="this.parentNode.parentNode.remove()" style="position:absolute;top:-15px;right:-15px;background:#000;color:#fff;width:30px;height:30px;border-radius:50%;text-align:center;line-height:30px;cursor:pointer;font-weight:bold;box-shadow:0 2px 8px rgba(0,0,0,.5);">✕</div></div>`;
+            m.onclick = e => { if(e.target===m) m.remove(); };
+            document.body.appendChild(m);
         }
 
         function exportCSV() {
@@ -3520,6 +3800,37 @@
                 return d >= weekStartMon && d <= end && (x.products || []).some(p => getAcidTags().includes(p));
             }).length;
         }
+        function generateWeeklyReport() {
+            const e = lg(K.jrnl) || [], now = new Date();
+            const d14 = new Date(now); d14.setDate(now.getDate() - 13);
+            const r14 = e.filter(x => new Date(x.date) >= d14);
+            const total = r14.length;
+            if(!total) return alert('过去14天无数据');
+            
+            const bo = r14.filter(x => (x.status || []).includes('爆痘')).length;
+            const stable = r14.filter(x => (x.status || []).includes('稳定') || (x.status || []).includes('好转')).length;
+            const acidDays = r14.filter(x => (x.products || []).find(p => p.includes('酸') || p.includes('Good Genes'))).length;
+            const hrts = [...new Set(r14.map(x => x.phase).filter(Boolean))];
+            const noteList = r14.map(x => x.note ? `${x.date}: ${x.note}` : '').filter(Boolean).join('\n  ');
+
+            const report = `📅 【最近14天护肤复盘】
+📊 数据摘要：
+- 日志覆盖：${total}天
+- 稳定/好转：${stable}天 (${Math.round(stable/total*100)}%)
+- 爆痘预警：${bo}天
+- 酸类频率：使用了${acidDays}天
+
+${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
+📝 特别备注：
+  ${noteList || '无'}
+
+🌟 系统建议：${barrierScore() < 60 ? '状态波动，建议精简并注重修护。' : '状态相对平稳，继续保持节奏。'}`;
+            
+            sysConfirm("已生成复盘报告，是否复制到剪贴板？\\n\\n" + report, () => {
+                navigator.clipboard.writeText(report).then(() => sysAlert('✓ 已成功复制复盘报告到剪贴板！')).catch(() => sysAlert('复制失败，可能是浏览器限制剪贴板API访问权限'));
+            });
+        }
+
         function renderStats() {
             const e = lg(K.jrnl) || [], now = new Date();
             const d14 = new Date(now); d14.setDate(now.getDate() - 13);
@@ -3530,12 +3841,19 @@
             const streak = logStreak();
             const score = barrierScore();
             const sg = document.getElementById('stat-grid');
-            if (sg) sg.innerHTML = `
+            if (sg) {
+                sg.innerHTML = `
+    <div class="sc2" style="grid-column: 1 / -1; display:flex; justify-content:space-between; align-items:center; cursor:pointer; background:var(--bl); color:#fff; border:none;" onclick="generateWeeklyReport()">
+        <div style="font-weight:500; font-size:14px;">📋 一键生成复盘报告</div>
+        <div style="font-size:11px; opacity:0.9;">分析近14天数据 →</div>
+    </div>`;
+                sg.insertAdjacentHTML('beforeend', `
     <div class="sc2"><div class="sn ${stable > total * .6 ? 'ok' : 'warn'}">${total ? Math.round(stable / total * 100) : '-'}%</div><div class="sl">14天稳定率</div></div>
     <div class="sc2"><div class="sn ${bo === 0 ? 'ok' : bo <= 2 ? 'warn' : 'bad'}">${bo}</div><div class="sl">爆痘天数</div></div>
     <div class="sc2"><div class="sn ${acids <= 8 ? 'ok' : 'warn'}">${acids}</div><div class="sl">酸类/4周</div></div>
     <div class="sc2"><div class="sn ${streak >= 7 ? 'ok' : streak >= 3 ? 'warn' : 'bad'}">${streak}</div><div class="sl">连续记录天</div></div>
-    <div class="sc2" onclick="showBarrierBreakdown()" style="cursor:pointer"><div class="sn ${score === null ? '' : score >= 65 ? 'ok' : score >= 45 ? 'warn' : 'bad'}">${score === null ? '—' : score}</div><div class="sl">屏障健康分 ⓘ</div></div>`;
+    <div class="sc2" onclick="showBarrierBreakdown()" style="cursor:pointer"><div class="sn ${score === null ? '' : score >= 65 ? 'ok' : score >= 45 ? 'warn' : 'bad'}">${score === null ? '—' : score}</div><div class="sl">屏障健康分 ⓘ</div></div>`);
+            }
 
             // Barrier score breakdown panel
             const bd = document.getElementById('barrier-breakdown');
@@ -3738,6 +4056,9 @@
         function renderAll() {
             renderBarrierBadge();
             PD = loadPD(); PS = lg(K.prods) || PS;
+            initPhotoDB(() => {
+                if (document.getElementById('jrnl').classList.contains('active')) renderJrnl();
+            });
             renderProds(); updateProdUI(); renderWk(); renderTn(); renderAm(); renderPaoAlerts();
         }
 
