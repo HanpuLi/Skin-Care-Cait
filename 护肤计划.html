@@ -36,60 +36,66 @@
     </script>
     <style>
         :root {
-            --bg: #fafaf9;
-            --sur: #fff;
-            --sur2: #f5f4f2;
-            --bd: #e8e6e1;
-            --bd2: #d4d0c8;
-            --tx: #1c1a17;
-            --tx2: #6b6560;
-            --tx3: #9e9892;
-            --bl: #2563c7;
-            --bl-bg: #ebf0fb;
-            --bl-br: #9bb5ef;
-            --gr: #1a7a55;
-            --gr-bg: #e6f4ee;
-            --gr-br: #7fbfa3;
-            --am: #b45309;
-            --am-bg: #fef3cd;
-            --am-br: #e9c46a;
-            --rd: #c0392b;
-            --rd-bg: #fdecea;
-            --rd-br: #e8a09a;
-            --pu: #5b47d6;
-            --pu-bg: #eeecfd;
-            --pu-br: #b8b0f0;
-            --r: 10px;
-            --rs: 6px;
-            --font: 'DM Sans', -apple-system, sans-serif;
+            /* Claude aesthetic: warm paper, softer contrast, earthy accents */
+            --bg: #f9f8f6;
+            --sur: #ffffff;
+            --sur2: #f2f0e9;
+            --bd: #e6e4dc;
+            --bd2: #d6d3c9;
+            --tx: #2d2b27;
+            --tx2: #6b675e;
+            --tx3: #9e998f;
+            
+            /* Softer, earthy accent colors */
+            --bl: #4b6b8a;
+            --bl-bg: #eef2f6;
+            --bl-br: #b5c7d8;
+            --gr: #427a5d;
+            --gr-bg: #eaf3ee;
+            --gr-br: #a5cbb7;
+            --am: #a6652c;
+            --am-bg: #f8f1e9;
+            --am-br: #e2c1a3;
+            --rd: #b84b42;
+            --rd-bg: #f9eaea;
+            --rd-br: #e0a9a4;
+            --pu: #6b5c9c;
+            --pu-bg: #f1f0f6;
+            --pu-br: #c1b9d6;
+            
+            --r: 12px;
+            --rs: 8px;
+            --font: 'DM Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+            --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
             --mono: 'DM Mono', monospace;
         }
 
         @media(prefers-color-scheme:dark) {
             :root {
-                --bg: #141210;
-                --sur: #1e1c19;
-                --sur2: #272420;
-                --bd: #2e2b26;
-                --bd2: #3d3930;
-                --tx: #f0ede8;
-                --tx2: #9e9892;
-                --tx3: #635f58;
-                --bl: #6b9ef5;
-                --bl-bg: #1a2540;
-                --bl-br: #2d4070;
-                --gr: #4dbb8a;
-                --gr-bg: #142a20;
-                --gr-br: #1e4535;
-                --am: #f0a942;
-                --am-bg: #2a1f08;
-                --am-br: #4a3510;
-                --rd: #f07070;
-                --rd-bg: #2a1212;
-                --rd-br: #4a2020;
-                --pu: #9b8ef5;
-                --pu-bg: #1e1840;
-                --pu-br: #352d60;
+                --bg: #1c1a18;
+                --sur: #252320;
+                --sur2: #2e2a27;
+                --bd: #3b3732;
+                --bd2: #4f4943;
+                --tx: #e6e3dd;
+                --tx2: #a39d94;
+                --tx3: #757069;
+                
+                --bl: #7b9cbf;
+                --bl-bg: #1e2a36;
+                --bl-br: #3a506b;
+                --gr: #6ba88a;
+                --gr-bg: #192e23;
+                --gr-br: #2c523e;
+                --am: #d1945a;
+                --am-bg: #362210;
+                --am-br: #664121;
+                --rd: #d97770;
+                --rd-bg: #3d1b19;
+                --rd-br: #6b3330;
+                --pu: #9689bf;
+                --pu-bg: #272138;
+                --pu-br: #4f4470;
             }
         }
 
@@ -122,16 +128,19 @@
         }
 
         .header h1 {
-            font-size: 15px;
+            font-size: 18px;
             font-weight: 500;
-            letter-spacing: -.01em
+            font-family: var(--font-serif);
+            letter-spacing: .02em;
+            color: var(--tx)
         }
 
         .header .sub {
             font-size: 11px;
             color: var(--tx3);
-            font-family: var(--mono);
-            margin-top: 2px
+            font-family: var(--font);
+            margin-top: 2px;
+            letter-spacing: .01em;
         }
 
         .barrier-badge {
@@ -143,15 +152,17 @@
         }
 
         .barrier-num {
-            font-size: 22px;
-            font-weight: 500;
-            font-family: var(--mono);
+            font-size: 24px;
+            font-weight: 400;
+            font-family: var(--font-serif);
             line-height: 1
         }
 
         .barrier-lbl {
             font-size: 10px;
-            font-family: var(--mono);
+            font-family: var(--font);
+            letter-spacing: .03em;
+            text-transform: uppercase;
             color: var(--tx3)
         }
 
@@ -193,8 +204,8 @@
             padding: 6px 13px 8px;
             border: none;
             border-bottom: 2px solid transparent;
-            font-size: 13px;
-            font-family: var(--font);
+            font-size: 14px;
+            font-family: var(--font-serif);
             cursor: pointer;
             background: transparent;
             color: var(--tx3);
@@ -384,7 +395,9 @@
             margin-bottom: 1rem;
             font-size: 13px;
             line-height: 1.6;
-            background: var(--sur)
+            background: var(--sur);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.04);
+            transition: box-shadow 0.2s ease;
         }
 
         .alert.warn {
@@ -497,7 +510,9 @@
             border: 1px solid var(--bd);
             border-radius: var(--r);
             background: var(--sur);
-            overflow: hidden
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.04);
+            transition: box-shadow 0.2s ease;
         }
 
         .tn-hdr {
@@ -717,19 +732,16 @@
         }
 
         .dtg {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
+            display: flex;
             gap: 5px;
-            margin-bottom: 1rem
+            margin-bottom: 1rem;
+            overflow-x: auto;
+            padding-bottom: 4px;
+            scrollbar-width: none
         }
-
-        @media(max-width:480px) {
-            .dtg {
-                grid-template-columns: repeat(4, 1fr)
-            }
-        }
-
+        .dtg::-webkit-scrollbar { display: none }
         .dbw {
+            flex: 0 0 52px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -794,7 +806,25 @@
         }
 
         .db.today-ring {
-            box-shadow: 0 0 0 2px var(--tx3)
+            box-shadow: 0 0 0 2px var(--tx);
+            border-color: var(--tx)
+        }
+
+        /* Past days: historical record — visible but not interactive */
+        .db.past {
+            opacity: 0.62;
+            cursor: default;
+            pointer-events: none;
+            border-style: dashed
+        }
+        /* Keep colored state visible for past shower/shave days */
+        .db.past.shower, .db.past.shave, .db.past.both {
+            opacity: 0.55
+        }
+
+        /* Future days: slightly muted until toggled */
+        .db.future-empty {
+            border-style: dashed
         }
 
         .leg-wrap {
@@ -865,19 +895,16 @@
         }
 
         .dpg {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
+            display: flex;
             gap: 4px;
-            margin-bottom: 1rem
+            margin-bottom: 1rem;
+            overflow-x: auto;
+            padding-bottom: 4px;
+            scrollbar-width: none
         }
-
-        @media(max-width:540px) {
-            .dpg {
-                grid-template-columns: repeat(4, 1fr)
-            }
-        }
-
+        .dpg::-webkit-scrollbar { display: none }
         .dp {
+            flex: 0 0 68px;
             border: 1px solid var(--bd);
             border-radius: var(--rs);
             padding: 6px 5px;
@@ -959,7 +986,18 @@
         }
 
         .dp.is-today {
-            border-width: 2px
+            border-width: 2px;
+            border-color: var(--tx)
+        }
+
+        /* Past plan cells: historical, show but dimmer */
+        .dp.is-past {
+            opacity: 0.6
+        }
+
+        /* Divider between past and future in dp-grid */
+        .dp.is-today-divider {
+            border-left: 2px solid var(--tx3)
         }
 
         .cfb {
@@ -1280,12 +1318,14 @@
         }
 
         .jhe {
-            padding: 10px 12px;
+            padding: 12px 14px;
             border: 1px solid var(--bd);
-            border-radius: var(--rs);
-            margin-bottom: 6px;
+            border-radius: var(--r);
+            margin-bottom: 8px;
             background: var(--sur);
-            font-size: 12px
+            font-size: 13px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.04);
+            transition: box-shadow 0.2s ease;
         }
 
         .jhd {
@@ -1443,16 +1483,22 @@
         .sc2 {
             border: 1px solid var(--bd);
             border-radius: var(--r);
-            padding: 12px 14px;
-            background: var(--sur)
+            padding: 16px 14px;
+            background: var(--sur);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.04);
+            transition: box-shadow 0.2s ease, transform 0.2s ease;
+        }
+        .sc2:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.04), 0 2px 4px rgba(0,0,0,0.03);
+            transform: translateY(-1px);
         }
 
         .sn {
-            font-size: 22px;
-            font-weight: 500;
-            font-family: var(--mono);
+            font-size: 24px;
+            font-weight: 400;
+            font-family: var(--font-serif);
             line-height: 1;
-            margin-bottom: 4px
+            margin-bottom: 6px
         }
 
         .sn.ok {
@@ -1468,9 +1514,10 @@
         }
 
         .sl {
-            font-size: 10px;
+            font-size: 11px;
             color: var(--tx3);
-            font-family: var(--mono)
+            font-family: var(--font);
+            letter-spacing: .01em;
         }
 
         .hg {
@@ -1997,7 +2044,7 @@
 
         <div id="wkly" class="panel">
             <div class="wk-label" id="wk-label"></div>
-            <p style="font-size:12px;color:var(--tx3);margin-bottom:.75rem">选择模式后点击日期设置排班。点击「安排总览」中的格子查看当天详细护肤步骤。</p>
+            <p style="font-size:12px;color:var(--tx3);margin-bottom:.75rem">过去7天 · 今天 · 未来7天。选择模式后点击日期设置排班，过去的日期已锁定不可更改。点击「安排总览」中的格子查看当天详细护肤步骤。</p>
             <div class="tr">
                 <span class="tl">模式：</span>
                 <button class="tb on-shower" id="mode-shower" onclick="setMode('shower')">🚿 洗澡日</button>
@@ -2022,7 +2069,10 @@
                     <div class="ld" style="background:var(--rd-bg);border:1px solid var(--rd-br)"></div>视黄醇
                 </div>
                 <div class="leg">
-                    <div class="ld" style="border:2px solid var(--tx3)"></div>今天
+                    <div class="ld" style="border:2px solid var(--tx)"></div>今天
+                </div>
+                <div class="leg">
+                    <div class="ld" style="border:1px dashed var(--bd);opacity:.6"></div>已过去
                 </div>
             </div>
             <div class="wks" id="wk-sum"></div>
@@ -2295,8 +2345,61 @@
         function mondayNWeeksAgo(n) { const d = new Date(); d.setDate(d.getDate() - n * 7); return monday(d); }
         // Sunday of week starting on a given Monday
         function sundayOf(mon) { const d = new Date(mon); d.setDate(d.getDate() + 6); return d; }
-        // 0=Mon…6=Sun（凌晨3点前归属前一天）
-        function todayWkIdx() { const d = new Date(); if (d.getHours() < 3) d.setDate(d.getDate() - 1); const day = d.getDay(); return day === 0 ? 6 : day - 1; }
+
+
+        // ══ Rolling-window helpers ═══════════════════════════════════
+        // Date string for today offset by n days (respects late-night rule)
+        function offsetDate(n) {
+            const d = new Date();
+            if (d.getHours() < 3) d.setDate(d.getDate() - 1);
+            d.setDate(d.getDate() + n);
+            return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+        }
+        // Day-of-week index (0=Mon…6=Sun) for any date string
+        function wkIdxForDate(dateStr) { const day = new Date(dateStr + 'T12:00:00').getDay(); return day === 0 ? 6 : day - 1; }
+        // Read {shower, shave} for any date from K.wk
+        function getDayState(dateStr) {
+            const all = lg(K.wk) || {};
+            const wk = isoWeek(new Date(dateStr + 'T12:00:00'));
+            const d = all[wk] || { shower: Array(7).fill(false), shave: Array(7).fill(false) };
+            const idx = wkIdxForDate(dateStr);
+            return { shower: !!d.shower[idx], shave: !!d.shave[idx] };
+        }
+        // Write {shower, shave} for a date — ONLY TODAY OR FUTURE
+        function setDayState(dateStr, shower, shave) {
+            if (dateStr < today()) return; // immutable past
+            const all = lg(K.wk) || {};
+            const wk = isoWeek(new Date(dateStr + 'T12:00:00'));
+            if (!all[wk]) all[wk] = { shower: Array(7).fill(false), shave: Array(7).fill(false) };
+            const idx = wkIdxForDate(dateStr);
+            all[wk].shower[idx] = shower;
+            all[wk].shave[idx] = shave;
+            const keys = Object.keys(all).sort();
+            while (keys.length > 12) { delete all[keys.shift()]; }
+            ls(K.wk, all);
+        }
+        // Build the 15-day rolling window: past 7 + today + future 7
+        function getRollingDays() {
+            const t = today();
+            const dayNames = ['周日','周一','周二','周三','周四','周五','周六'];
+            return Array.from({ length: 15 }, (_, i) => {
+                const offset = i - 7;
+                const dateStr = offsetDate(offset);
+                const state = getDayState(dateStr);
+                const d = new Date(dateStr + 'T12:00:00');
+                return {
+                    date: dateStr,
+                    dayName: dayNames[d.getDay()],
+                    shortDate: String(d.getMonth()+1) + '/' + String(d.getDate()),
+                    isPast: dateStr < t,
+                    isToday: dateStr === t,
+                    isFuture: dateStr > t,
+                    shower: state.shower,
+                    shave: state.shave,
+                    items: [], conflicts: []
+                };
+            });
+        }
 
         // ══ Products ════════════════════════════════════════════════
         const DEFAULT_PD = [
@@ -2573,18 +2676,12 @@
         }
 
         // ══ Tonight ═════════════════════════════════════════════════
-        function loadWkForDate(date = today()) {
-            const all = lg(K.wk) || {};
-            const wk = isoWeek(new Date(date));
-            return all[wk] || { shower: Array(7).fill(false), shave: Array(7).fill(false) };
-        }
         function initTN() {
             let tn = lg(K.tn) || { shower: false, shave: false, date: '', manual: false };
             const t = today();
             if (tn.date !== t) {
-                const wk = loadWkForDate(t);
-                const idx = todayWkIdx();
-                tn = { shower: wk.shower[idx], shave: wk.shave[idx], date: t, manual: false };
+                const st = getDayState(t);
+                tn = { shower: st.shower, shave: st.shave, date: t, manual: false };
                 ls(K.tn, tn);
                 // New day: clear step completion
                 ls(K.tnsteps, { date: t, done: [] });
@@ -2595,8 +2692,8 @@
 
         function toggleTn(k) { TN[k] = !TN[k]; TN.date = today(); TN.manual = true; ls(K.tn, TN); renderTn(); renderAm(); }
         function resetTnToSchedule() {
-            const wk = loadWkForDate(); const idx = todayWkIdx();
-            TN = { shower: wk.shower[idx], shave: wk.shave[idx], date: today(), manual: false };
+            const st = getDayState(today());
+            TN = { shower: st.shower, shave: st.shave, date: today(), manual: false };
             ls(K.tn, TN); renderTn(); renderAm();
         }
 
@@ -2715,9 +2812,9 @@
             // Sync note
             const sna = document.getElementById('sync-note-area');
             if (sna) {
-                const wk = loadWkForDate(), idx = todayWkIdx();
+                const st = getDayState(today());
                 if (manual) sna.innerHTML = `<div class="sync-note"><div class="sync-dot manual"></div>已手动覆盖排班</div>`;
-                else if (wk.shower[idx] || wk.shave[idx]) sna.innerHTML = `<div class="sync-note"><div class="sync-dot"></div>已从本周排班同步</div>`;
+                else if (st.shower || st.shave) sna.innerHTML = `<div class="sync-note"><div class="sync-dot"></div>已从排班同步</div>`;
                 else sna.innerHTML = '';
             }
 
@@ -2755,8 +2852,8 @@
             }
 
             // === Read today's schedule slot ===
-            const plan = computePlan();
-            const todaySlot = plan[todayWkIdx()];
+            const plan = computePlanRolling();
+            const todaySlot = plan.find(d => d.date === today()) || { items: [], conflicts: [] };
             const schedAcid = todaySlot.items.find(it => it.type === 'acid');
             const schedMask = todaySlot.items.find(it => it.type === 'mask');
             const schedRet  = todaySlot.items.find(it => it.type === 'retinol');
@@ -2867,21 +2964,9 @@
             pl.innerHTML = `<div class="tn-hdr"><div class="tn-hdr-t">早晨保护</div><div class="tn-hdr-s">精简防晒 · 开启新的一天</div></div>${stH}${skH}`;
         }
 
-        // ══ Weekly (history: keeps 8 weeks) ════════════════════════
-        const DAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+        // ══ Rolling Schedule Engine ══════════════════════════════════
         let mode = 'shower';
-        // WK is the current week's data { shower:[], shave:[] }
-        function loadWk() { return loadWkForDate(); }
-        let WK = loadWk();
-        function saveWk() {
-            const all = lg(K.wk) || {};
-            const cur = isoWeek();
-            all[cur] = WK;
-            // Trim to 8 most recent weeks
-            const keys = Object.keys(all).sort();
-            while (keys.length > 8) { delete all[keys.shift()]; }
-            ls(K.wk, all);
-        }
+
         function setMode(m) {
             mode = m;
             document.querySelectorAll('.tb').forEach(b => b.className = 'tb');
@@ -2889,108 +2974,167 @@
             else if (m === 'shave') document.getElementById('mode-shave').classList.add('on-shave');
             else document.getElementById('mode-clear').classList.add('on-clear');
         }
-        function toggleDay(i) {
-            if (mode === 'shower') WK.shower[i] = !WK.shower[i];
-            else if (mode === 'shave') WK.shave[i] = !WK.shave[i];
-            else { WK.shower[i] = false; WK.shave[i] = false; }
-            saveWk();
-            // Re-sync tonight if not manually overridden
-            const tn = lg(K.tn) || {};
-            if (!tn.manual && i === todayWkIdx()) {
-                TN = { shower: WK.shower[i], shave: WK.shave[i], date: today(), manual: false };
-                ls(K.tn, TN);
-                renderTn(); // fix: update tonight panel immediately
+
+        // toggleDay now accepts a date string — past dates are immutable
+        function toggleDay(dateStr) {
+            const t = today();
+            if (dateStr < t) return; // locked — past is history
+            const cur = getDayState(dateStr);
+            let sh = cur.shower, sv = cur.shave;
+            if (mode === 'shower') sh = !sh;
+            else if (mode === 'shave') sv = !sv;
+            else { sh = false; sv = false; }
+            setDayState(dateStr, sh, sv);
+            invalidatePlanCache();
+            // Sync tonight panel if toggling today and not manually overridden
+            if (dateStr === t) {
+                const tn = lg(K.tn) || {};
+                if (!tn.manual) {
+                    TN = { shower: sh, shave: sv, date: t, manual: false };
+                    ls(K.tn, TN);
+                    renderTn();
+                }
             }
             renderWk();
         }
 
-        function computePlan() {
+        // computePlanRolling: builds plan for a 15-day rolling window.
+        // Cached per render cycle to avoid recomputing 3× (renderTn + renderWk + showDayDetail).
+        let _planCache = null, _planCacheKey = '';
+        function invalidatePlanCache() { _planCache = null; _planCacheKey = ''; }
+        function computePlanRolling() {
+            // Simple cache: key = today + wk data hash + jrnl length
+            const ckey = today() + '|' + JSON.stringify(lg(K.wk) || {}).length + '|' + ((lg(K.jrnl) || []).length);
+            if (_planCache && _planCacheKey === ckey) return _planCache;
+
+            const days = getRollingDays();
+            const t = today();
+
+            // --- Seed past days with journal data (what actually happened) ---
+            const jrnl = lg(K.jrnl) || [];
+            const acidTags = getAcidTags();
+            const retinolTags = PD.filter(p => !p.hidden && p.schedule && p.schedule.type === 'retinol').map(p => p.journalTag || p.name);
+            const maskTags   = PD.filter(p => !p.hidden && p.schedule && p.schedule.type === 'mask').map(p => p.journalTag || p.name);
+
+            days.forEach(day => {
+                if (day.isPast) {
+                    const entry = jrnl.find(e => e.date === day.date);
+                    if (entry) {
+                        const prods = entry.products || [];
+                        prods.forEach(tag => {
+                            if (acidTags.includes(tag))    day.items.push({ id: null, type: 'acid', label: tag });
+                            if (retinolTags.includes(tag)) day.items.push({ id: null, type: 'retinol', label: tag });
+                            if (maskTags.includes(tag))    day.items.push({ id: null, type: 'mask', label: tag });
+                        });
+                    }
+                    // Derive acid/clay/retinol props for rendering
+                    const ai = day.items.find(it => it.type === 'acid');
+                    day.acid = ai ? ai.label : null;
+                    day.acidLabel = ai ? ai.label : null;
+                    day.clay = day.items.some(it => it.type === 'mask');
+                    day.retinol = day.items.some(it => it.type === 'retinol');
+                    day.avene = false;
+                }
+            });
+
+            // --- Auto-schedule today + future days ---
+            const futureDays = days.filter(d => !d.isPast); // today + next 7
+
+            // Context from history: acids used in the past 7 days (for spacing/count)
             const maxAcid = maxAcidPerWeek();
+            // Count acids already used THIS calendar week (from journal)
             const journalAcidCnt = acidCountThisWeek();
             const la = lastAcidUsed();
+            // Last acid date for spacing calculation across the rolling window
+            const lastAcidDate = (() => {
+                const e = lastAcidEntry();
+                return e ? e.date : null;
+            })();
 
-            let plan = DAYS.map((d, i) => ({ day: d, idx: i, shower: WK.shower[i], shave: WK.shave[i], items: [], conflicts: [] }));
-
-            // Gather schedulable products by type
-            const schedulable = PD.filter(p => !p.hidden && p.schedule && p.schedule.enableAutoSchedule && ['acid','mask','retinol'].includes(p.schedule.type) && isSchedActive(p, PS[p.id] || p.statuses[0]));
-            const acids = schedulable.filter(p => p.schedule.type === 'acid');
-            const masks = schedulable.filter(p => p.schedule.type === 'mask');
+            const schedulable = PD.filter(p => !p.hidden && p.schedule && p.schedule.enableAutoSchedule &&
+                ['acid','mask','retinol'].includes(p.schedule.type) && isSchedActive(p, PS[p.id] || p.statuses[0]));
+            const acids    = schedulable.filter(p => p.schedule.type === 'acid');
+            const masks    = schedulable.filter(p => p.schedule.type === 'mask');
             const retinols = schedulable.filter(p => p.schedule.type === 'retinol');
 
-            // === Phase 1: Acids with spacing ===
+            // === Phase 1: Acids ===
+            // How many acid slots remain in current week after journal usage?
             const acidSlotsLeft = Math.max(0, maxAcid - journalAcidCnt);
             let acidSlots = [];
-            // Rotate starting acid based on last used
             let acidOrder = [...acids];
             if (la) {
                 const li = acidOrder.findIndex(a => (a.journalTag||a.name) === la);
                 if (li > 0) acidOrder = [...acidOrder.slice(li), ...acidOrder.slice(0, li)];
-                // Start from next after last used
                 if (acidOrder.length > 1) acidOrder.push(acidOrder.shift());
             }
             acidOrder.forEach(a => { for (let n = 0; n < (a.schedule.maxPerWeek || 1); n++) acidSlots.push(a); });
             acidSlots = acidSlots.slice(0, acidSlotsLeft);
 
-            const assignedAcidDays = [];
+            const assignedAcidDates = [];
             for (const prod of acidSlots) {
-                let bestDay = -1, bestScore = -Infinity;
-                for (let i = 0; i < 7; i++) {
-                    if (plan[i].shave && prod.schedule.avoidShaveDay) continue;
-                    if (plan[i].items.some(it => it.type === 'acid')) continue;
-                    // Check spacing (circular week distance)
-                    let minDist = 7;
-                    for (const ai of assignedAcidDays) {
-                        const dist = Math.min(Math.abs(i - ai), 7 - Math.abs(i - ai));
+                let bestIdx = -1, bestScore = -Infinity;
+                for (let i = 0; i < futureDays.length; i++) {
+                    const fd = futureDays[i];
+                    if (fd.shave && prod.schedule.avoidShaveDay) continue;
+                    if (fd.items.some(it => it.type === 'acid')) continue;
+                    // Spacing: days since last actual acid use OR last assigned future acid
+                    const allAcidDates = lastAcidDate ? [lastAcidDate, ...assignedAcidDates] : [...assignedAcidDates];
+                    let minDist = 999;
+                    for (const d of allAcidDates) {
+                        const dist = Math.abs(Math.round((new Date(fd.date) - new Date(d)) / 86400000));
                         minDist = Math.min(minDist, dist);
                     }
-                    if (assignedAcidDays.length > 0 && minDist < (prod.schedule.minDaysBetween || 2)) continue;
+                    if (allAcidDates.length > 0 && minDist < (prod.schedule.minDaysBetween || 2)) continue;
                     let score = minDist * 10;
-                    if (plan[i].shower && prod.schedule.preferShowerNight) score += 5;
-                    if (score > bestScore) { bestScore = score; bestDay = i; }
+                    if (fd.shower && prod.schedule.preferShowerNight) score += 5;
+                    if (score > bestScore) { bestScore = score; bestIdx = i; }
                 }
-                if (bestDay >= 0) { plan[bestDay].items.push({ id: prod.id, type: 'acid', label: prod.name }); assignedAcidDays.push(bestDay); }
+                if (bestIdx >= 0) {
+                    futureDays[bestIdx].items.push({ id: prod.id, type: 'acid', label: prod.name });
+                    assignedAcidDates.push(futureDays[bestIdx].date);
+                }
             }
 
-            // === Phase 2: Masks (multi-pass: shower+no acid → any+no acid → any) ===
+            // === Phase 2: Masks ===
             masks.forEach(prod => {
                 let placed = 0;
                 for (let pass = 0; pass < 3 && placed < (prod.schedule.maxPerWeek || 1); pass++) {
-                    for (let i = 0; i < 7 && placed < (prod.schedule.maxPerWeek || 1); i++) {
-                        if (plan[i].shave && prod.schedule.avoidShaveDay) continue;
-                        if (plan[i].items.some(it => it.type === 'mask')) continue;
-                        if (prod.schedule.avoidAcid && plan[i].items.some(it => it.type === 'acid') && pass < 2) continue;
-                        if (prod.schedule.preferShowerNight && !plan[i].shower && pass === 0) continue;
-                        plan[i].items.push({ id: prod.id, type: 'mask', label: prod.name }); placed++;
+                    for (let i = 0; i < futureDays.length && placed < (prod.schedule.maxPerWeek || 1); i++) {
+                        const fd = futureDays[i];
+                        if (fd.shave && prod.schedule.avoidShaveDay) continue;
+                        if (fd.items.some(it => it.type === 'mask')) continue;
+                        if (prod.schedule.avoidAcid && fd.items.some(it => it.type === 'acid') && pass < 2) continue;
+                        if (prod.schedule.preferShowerNight && !fd.shower && pass === 0) continue;
+                        fd.items.push({ id: prod.id, type: 'mask', label: prod.name }); placed++;
                     }
                 }
             });
 
-            // === Phase 3: Retinol (prefer non-shower, avoid acid & shave) ===
+            // === Phase 3: Retinol ===
             retinols.forEach(prod => {
                 let placed = 0;
                 for (let pass = 0; pass < 2 && placed < (prod.schedule.maxPerWeek || 1); pass++) {
-                    for (let i = 0; i < 7 && placed < (prod.schedule.maxPerWeek || 1); i++) {
-                        if (plan[i].shave && prod.schedule.avoidShaveDay) continue;
-                        if (plan[i].items.some(it => it.type === 'retinol')) continue;
-                        if (prod.schedule.avoidAcid && plan[i].items.some(it => it.type === 'acid')) continue;
-                        if (pass === 0 && plan[i].shower) continue; // prefer non-shower first
-                        plan[i].items.push({ id: prod.id, type: 'retinol', label: prod.name }); placed++;
+                    for (let i = 0; i < futureDays.length && placed < (prod.schedule.maxPerWeek || 1); i++) {
+                        const fd = futureDays[i];
+                        if (fd.shave && prod.schedule.avoidShaveDay) continue;
+                        if (fd.items.some(it => it.type === 'retinol')) continue;
+                        if (prod.schedule.avoidAcid && fd.items.some(it => it.type === 'acid')) continue;
+                        if (pass === 0 && fd.shower) continue; // prefer non-shower first
+                        fd.items.push({ id: prod.id, type: 'retinol', label: prod.name }); placed++;
                     }
                 }
             });
 
-            // === Phase 4: Conflict auto-fix & shave mark ===
-            plan.forEach(p => {
+            // === Phase 4: Conflicts + shave support (future only) ===
+            futureDays.forEach(p => {
                 if (p.shave) p.items.push({ id: 'avene', type: 'support', label: 'Avène' });
                 const hasAcid = p.items.some(i => i.type === 'acid');
-                if (p.shave && hasAcid) { p.conflicts.push(`${p.day}：酸类与刮胡冲突，已移出酸类`); p.items = p.items.filter(i => i.type !== 'acid'); }
-                if (hasAcid && p.items.some(i => i.type === 'retinol')) { p.conflicts.push(`${p.day}：视黄醇与酸类冲突，已移出视黄醇`); p.items = p.items.filter(i => i.type !== 'retinol'); }
-                if (p.shave && p.items.some(i => i.type === 'retinol')) { p.conflicts.push(`${p.day}：视黄醇与刮胡冲突，已移出视黄醇`); p.items = p.items.filter(i => i.type !== 'retinol'); }
-                if (p.items.some(i => i.type === 'mask') && p.items.some(i => i.type === 'acid')) { p.conflicts.push(`${p.day}：面膜与酸类同晚，已移出面膜`); p.items = p.items.filter(i => i.type !== 'mask'); }
-            });
-
-            // === Backward compat props for rendering ===
-            plan.forEach(p => {
+                const dayLabel = p.dayName + ' ' + p.shortDate;
+                if (p.shave && hasAcid) { p.conflicts.push(`${dayLabel}：酸类与刮胡冲突`); p.items = p.items.filter(i => i.type !== 'acid'); }
+                if (hasAcid && p.items.some(i => i.type === 'retinol')) { p.conflicts.push(`${dayLabel}：视黄醇与酸类冲突`); p.items = p.items.filter(i => i.type !== 'retinol'); }
+                if (p.shave && p.items.some(i => i.type === 'retinol')) { p.conflicts.push(`${dayLabel}：视黄醇与刮胡冲突`); p.items = p.items.filter(i => i.type !== 'retinol'); }
+                if (p.items.some(i => i.type === 'mask') && p.items.some(i => i.type === 'acid')) { p.conflicts.push(`${dayLabel}：面膜与酸类同晚`); p.items = p.items.filter(i => i.type !== 'mask'); }
+                // Backward compat rendering props
                 const acidItem = p.items.find(i => i.type === 'acid');
                 p.acid = acidItem ? (PD.find(d => d.id === acidItem.id)?.journalTag || acidItem.label) : null;
                 p.acidLabel = acidItem ? acidItem.label : null;
@@ -2999,77 +3143,125 @@
                 p.avene = p.items.some(i => i.type === 'support');
             });
 
-            return plan;
+            _planCache = days; _planCacheKey = ckey;
+            return days;
         }
 
         function renderWk() {
-            const wl = document.getElementById('wk-label'); if (wl) wl.textContent = '本周：' + isoWeek();
-            const todayI = todayWkIdx();
-            document.getElementById('day-toggles').innerHTML = DAYS.map((d, i) => {
-                const both = WK.shower[i] && WK.shave[i];
-                const cls = 'db' + (both ? ' both' : WK.shower[i] ? ' shower' : WK.shave[i] ? ' shave' : '') + (i === todayI ? ' today-ring' : '');
-                const icon = both ? '🚿✂️' : WK.shower[i] ? '🚿' : WK.shave[i] ? '✂️' : '—';
-                const lbl = both ? '洗+刮' : WK.shower[i] ? '洗澡' : WK.shave[i] ? '刮胡' : '';
-                return `<div class="dbw"><div class="dn">${d}${i === todayI ? '·今' : ''}</div><button class="${cls}" onclick="toggleDay(${i})"><span class="bi">${icon}</span>${lbl ? `<span class="bl2">${lbl}</span>` : ''}</button></div>`;
+            const wl = document.getElementById('wk-label');
+            if (wl) wl.textContent = '过去7天 · 今天 · 未来7天';
+            const plan = computePlanRolling();
+            const t = today();
+
+            // ── Toggle buttons (top row) ──
+            document.getElementById('day-toggles').innerHTML = plan.map(day => {
+                const both = day.shower && day.shave;
+                let cls = 'db';
+                if (day.isPast) {
+                    cls += ' past' + (both ? ' both' : day.shower ? ' shower' : day.shave ? ' shave' : '');
+                } else {
+                    cls += (both ? ' both' : day.shower ? ' shower' : day.shave ? ' shave' : (day.isFuture ? ' future-empty' : ''));
+                    if (day.isToday) cls += ' today-ring';
+                }
+                const icon = both ? '🚿✂️' : day.shower ? '🚿' : day.shave ? '✂️' : '·';
+                const lbl  = both ? '洗+刮' : day.shower ? '已洗澡' : day.shave ? '已刮胡' : '无记录';
+                const label = `<div class="dn">${day.dayName}${day.isToday ? '·今' : ''}<br><span style="font-size:9px">${day.shortDate}</span></div>`;
+                if (day.isPast) {
+                    // Past: non-interactive div showing stored history
+                    return `<div class="dbw">${label}<div class="${cls}" title="${day.shortDate} 历史排班（不可更改）"><span class="bi">${icon}</span><span class="bl2">${lbl}</span></div></div>`;
+                }
+                const futureIcon = both ? '🚿✂️' : day.shower ? '🚿' : day.shave ? '✂️' : '—';
+                const futureLbl  = both ? '洗+刮' : day.shower ? '洗澡' : day.shave ? '刮胡' : '';
+                return `<div class="dbw">${label}<button class="${cls}" onclick="toggleDay('${day.date}')"><span class="bi">${futureIcon}</span>${futureLbl ? `<span class="bl2">${futureLbl}</span>` : ''}</button></div>`;
             }).join('');
 
-            const plan = computePlan();
+            // ── Summary stats (future 7 days) ──
+            const futurePlan = plan.filter(d => !d.isPast);
             const maxAcid = maxAcidPerWeek();
             const journalAcidCnt = acidCountThisWeek();
-            const planAcidD = plan.filter(p => p.acid).length;
+            const planAcidD = futurePlan.filter(p => p.acid).length;
             const totalAcid = planAcidD + journalAcidCnt;
             const acidOk = totalAcid <= maxAcid;
-            const clayPlan = plan.filter(p => p.clay).length;
+            const clayPlan = futurePlan.filter(p => p.clay).length;
             document.getElementById('wk-sum').innerHTML = `
-    <div class="wr"><span class="wrl">洗澡日</span><span class="wrv">${plan.filter(p => p.shower).length} 天</span></div>
-    <div class="wr"><span class="wrl">刮胡日</span><span class="wrv">${plan.filter(p => p.shave).length} 天</span></div>
+    <div class="wr"><span class="wrl">今后7天 · 洗澡</span><span class="wrv">${futurePlan.filter(p => p.shower).length} 天</span></div>
+    <div class="wr"><span class="wrl">今后7天 · 刮胡</span><span class="wrv">${futurePlan.filter(p => p.shave).length} 天</span></div>
     <div class="wr"><span class="wrl">酸类上限</span><span class="wrv ${maxAcid < 2 ? 'warn' : ''}">${maxAcid} 次/周（屏障评分动态）</span></div>
     <div class="wr"><span class="wrl">去角质酸类</span><span class="wrv ${acidOk ? 'ok' : 'bad'}">${journalAcidCnt > 0 ? `已用${journalAcidCnt}次+计划${planAcidD}次，共${totalAcid}次` : `计划${planAcidD}次`}（上限${maxAcid}次）</span></div>
     ${(() => {
         const maskProd = PD.find(p => !p.hidden && p.schedule && p.schedule.type === 'mask' && isSchedActive(p, PS[p.id] || p.statuses[0]));
         if (!maskProd) return '';
         const mp = PS[maskProd.id] || maskProd.statuses[0];
-        return `<div class="wr"><span class="wrl">${maskProd.name.split(' ').slice(0,2).join(' ')}</span><span class="wrv ${clayPlan ? 'ok' : ''}">${clayPlan ? '1次，已排入' : '未排入（产品状态：' + (maskProd.labels[mp] || mp) + '）'}</span></div>`;
+        return `<div class="wr"><span class="wrl">${maskProd.name.split(' ').slice(0,2).join(' ')}</span><span class="wrv ${clayPlan ? 'ok' : ''}">${clayPlan ? '1次，已排入' : '未排入（' + (maskProd.labels[mp] || mp) + '）'}</span></div>`;
     })()}
     ${(() => {
         const retProd = PD.find(p => !p.hidden && p.schedule && p.schedule.type === 'retinol' && isSchedActive(p, PS[p.id] || p.statuses[0]));
         if (!retProd) return '';
-        const hasRet = plan.some(p => p.retinol && !p.shave && !p.acid) && maxAcid > 0;
+        const hasRet = futurePlan.some(p => p.retinol && !p.shave && !p.acid) && maxAcid > 0;
         return `<div class="wr"><span class="wrl">${retProd.name.split(' ').slice(0,2).join(' ')}</span><span class="wrv">${hasRet ? '1次，已排入' : '未排入'}</span></div>`;
     })()}`;
 
-            const allCF = plan.flatMap(p => p.conflicts);
+            // Conflict alerts (future only)
+            const allCF = futurePlan.flatMap(p => p.conflicts);
             document.getElementById('cf-alerts').innerHTML = allCF.length ? allCF.map(c => `<div class="cfb"><strong>⚠ 冲突</strong>${c}</div>`).join('') : '';
             const rBO = (lg(K.jrnl) || []).slice(0, 7).some(e => (e.status || []).includes('爆痘'));
             const jal = document.getElementById('jrnl-alert-wk');
             if (jal) jal.innerHTML = rBO ? `<div class="alert warn" style="margin-bottom:1rem"><div class="at">⚡ 日志提示：近期爆痘</div>建议本周酸类减至1次，优先修护夜。</div>` : '';
 
-            document.getElementById('dp-grid').innerHTML = plan.map((p, i) => {
-                const dc = 'dp' + (p.shower && p.shave ? ' is-both' : p.shower ? ' is-shower' : p.shave ? ' is-shave' : '') + (i === todayI ? ' is-today' : '') + ' dp-clickable';
+            // ── Day plan grid (all 15 days) ──
+            document.getElementById('dp-grid').innerHTML = plan.map(day => {
+                const p = day;
+                const isPast = day.isPast;
+                const dc = 'dp' +
+                    (p.shower && p.shave ? ' is-both' : p.shower ? ' is-shower' : p.shave ? ' is-shave' : '') +
+                    (day.isToday ? ' is-today' : '') +
+                    (isPast ? ' is-past' : '') +
+                    ' dp-clickable';
                 let tags = '';
                 if (p.shower) tags += `<span class="dpt sh">🚿</span>`;
-                if (p.shave) tags += `<span class="dpt sv">✂️</span>`;
-                if (p.acid) tags += `<span class="dpt ac">${p.acidLabel.split(' ')[0]}</span>`;
-                if (p.clay) tags += `<span class="dpt mk">泥膜</span>`;
+                if (p.shave)  tags += `<span class="dpt sv">✂️</span>`;
+                if (p.acid)   tags += `<span class="dpt ac">${(p.acidLabel || p.acid).split(' ')[0]}</span>`;
+                if (p.clay)   tags += `<span class="dpt mk">泥膜</span>`;
                 if (p.retinol && !p.shave && !p.acid) tags += `<span class="dpt rt">视黄醇</span>`;
-                if (p.avene) tags += `<span class="dpt av">Avène</span>`;
-                if (!p.shave && !p.acid && !p.clay && !p.retinol) tags += `<span class="dpt re">修护</span>`;
+                if (p.avene)  tags += `<span class="dpt av">Avène</span>`;
+                if (!p.shave && !p.acid && !p.clay && !p.retinol) {
+                    if (isPast) {
+                        // Has shower/shave stored → show "已过"; nothing stored → "无记录"
+                        tags += `<span class="dpt re" style="opacity:.7">${(p.shower || p.shave) ? '已过' : '无记录'}</span>`;
+                    } else {
+                        tags += `<span class="dpt re">修护</span>`;
+                    }
+                }
                 if (p.conflicts.length) tags += `<span class="dpt cf">冲突</span>`;
-                return `<div class="${dc}" onclick="showDayDetail(${i})" title="查看${p.day}护肤安排"><div class="dpn">${p.day}${i===todayI?' ·今':''}</div>${tags}</div>`;
+                const dateLabel = day.dayName + (day.isToday ? ' ·今' : '');
+                return `<div class="${dc}" onclick="showDayDetail('${day.date}')" title="查看${day.dayName}(${day.shortDate})护肤安排"><div class="dpn">${dateLabel}<br><span style="font-size:8px;opacity:.7">${day.shortDate}</span></div>${tags}</div>`;
             }).join('');
+
+            // Scroll today into view in day-toggles
+            setTimeout(() => {
+                const tg = document.getElementById('day-toggles');
+                const dpg = document.getElementById('dp-grid');
+                if (tg) {
+                    const todayBtn = tg.querySelector('.today-ring');
+                    if (todayBtn) todayBtn.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
+                }
+                if (dpg) {
+                    const todayCell = dpg.querySelector('.is-today');
+                    if (todayCell) todayCell.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
+                }
+            }, 60);
         }
 
-        // ══ Day Detail Panel (排班 → 点击日期格) ══════════════════
-        function showDayDetail(dayIdx) {
-            const plan = computePlan();
-            const p = plan[dayIdx];
-            const todayI = todayWkIdx();
+        // ══ Day Detail Panel ════════════════════════════════════════
+        function showDayDetail(dateStr) {
+            const plan = computePlanRolling();
+            const p = plan.find(d => d.date === dateStr);
+            if (!p) return;
             const dd = document.getElementById('day-detail');
             const dt = document.getElementById('day-detail-title');
             const db = document.getElementById('day-detail-body');
             if (!dd || !dt || !db) return;
 
-            // Build step list like renderTn but for any day
             const pdo = id => PD.find(x => x.id === id);
             const active = id => { const x = pdo(id); return x && !x.hidden && isSchedActive(x, PS[id] || x.statuses[0]); };
             let steps = [], skips = [];
@@ -3083,24 +3275,25 @@
                 if (active('cicaplast')) steps.push({ p: 'Cicaplast B5 点涂', h: '痘痘处收尾' });
                 skips.push('所有酸类', '视黄醇', '泥面膜');
             } else {
-                // Cleansing
                 if (p.shower && active('lancome')) steps.push({ p: pdo('lancome').name, h: '60秒按摩，T区多停留' });
                 else steps.push({ p: '温水冲洗' + (active('bioderma') ? ' / Bioderma 卸妆水' : ''), h: active('bioderma') ? '有防晒/彩妆时用卸妆水' : 'Bioderma 待购，暂用温水' });
-                // Active treatment
                 const acidItem = p.items.find(it => it.type === 'acid');
                 const maskItem = p.items.find(it => it.type === 'mask');
                 const retItem  = p.items.find(it => it.type === 'retinol');
                 if (acidItem) {
-                    const ap = pdo(acidItem.id); const aName = ap ? ap.name : acidItem.label;
+                    const ap = acidItem.id ? pdo(acidItem.id) : null;
+                    const aName = ap ? ap.name : acidItem.label;
                     const aHint = (aName.includes('Votary') || aName.includes('乳酸')) ? '两颊主选；停留3–5分钟' : '额头+鼻翼+下颌，停留3–5分钟';
                     steps.push({ p: aName, h: aHint });
                     steps.push({ p: '等待3分钟', h: 'pH稳定后再叠' });
                     skips.push('Dr Sebagh 精华（酸类夜跳过）', '视黄醇');
                 } else if (maskItem) {
-                    const mp = pdo(maskItem.id); if (mp) steps.push({ p: mp.name, h: '敷10–15分钟后冲洗' });
+                    const mp = maskItem.id ? pdo(maskItem.id) : null;
+                    if (mp) steps.push({ p: mp.name, h: '敷10–15分钟后冲洗' });
                     skips.push('视黄醇（面膜夜不叠用）');
                 } else if (retItem) {
-                    const rp = pdo(retItem.id); if (rp) steps.push({ p: rp.name, h: '1次/周，薄涂全脸，避开眼周' });
+                    const rp = retItem.id ? pdo(retItem.id) : null;
+                    if (rp) steps.push({ p: rp.name, h: '1次/周，薄涂全脸，避开眼周' });
                     skips.push('酸类');
                 } else {
                     if (active('sebagh')) steps.push({ p: pdo('sebagh').name, h: '全脸3–4滴，轻拍至吸收' });
@@ -3111,7 +3304,6 @@
                 if (active('cicaplast')) steps.push({ p: 'Cicaplast B5 点涂', h: '活跃痘痘处、口罩线' });
             }
 
-            // Night type label  
             let nightType = '';
             if (p.shave) nightType = '刮胡夜';
             else if (p.shower && p.items.some(it => it.type === 'acid')) nightType = '洗澡夜 · 酸类夜';
@@ -3119,11 +3311,30 @@
             else if (p.shower) nightType = '洗澡夜 · 修护夜';
             else if (p.items.some(it => it.type === 'acid')) nightType = '非洗澡夜 · 酸类夜';
             else if (p.items.some(it => it.type === 'retinol')) nightType = '视黄醇夜';
-            else nightType = '修护夜';
+            else nightType = p.isPast ? '（历史记录）' : '修护夜';
 
-            const isToday = dayIdx === todayI;
-            dt.innerHTML = `${p.day}${isToday ? ' <span style="font-size:10px;color:var(--tx3);font-weight:400">· 今天</span>' : ''} &nbsp;<span style="font-size:11px;font-weight:400;color:var(--tx3)">${nightType}</span>`;
-            db.innerHTML =
+            const todayBadge = p.isToday ? ' <span style="font-size:10px;color:var(--tx3);font-weight:400">· 今天</span>' : '';
+            const pastBadge  = p.isPast  ? ' <span style="font-size:10px;color:var(--tx3);font-weight:400">· 已过去</span>' : '';
+            dt.innerHTML = `${p.dayName} ${p.shortDate}${todayBadge}${pastBadge} &nbsp;<span style="font-size:11px;font-weight:400;color:var(--tx3)">${nightType}</span>`;
+
+            let histNote = '';
+            if (p.isPast) {
+                const jEntry = (lg(K.jrnl) || []).find(e => e.date === dateStr);
+                if (jEntry) {
+                    const statusStr = (jEntry.status || []).join('、') || '—';
+                    const prodStr = (jEntry.products || []).join('、') || '—';
+                    histNote = `<div style="margin-bottom:10px;padding:8px 10px;background:var(--sur2);border-radius:var(--rs);font-size:11px;color:var(--tx2)">
+                        <div style="font-weight:500;margin-bottom:3px">📋 日志实际记录</div>
+                        <div>状态：${statusStr}</div>
+                        <div>产品：${prodStr}</div>
+                        ${jEntry.note ? `<div>备注：${esc(jEntry.note)}</div>` : ''}
+                    </div>`;
+                } else {
+                    histNote = `<div style="margin-bottom:10px;padding:8px 10px;background:var(--sur2);border-radius:var(--rs);font-size:11px;color:var(--tx3)">该天无日志记录</div>`;
+                }
+            }
+
+            db.innerHTML = histNote +
                 steps.map((s, i) => `<div class="day-detail-step"><div class="day-detail-num">${i+1}</div><div><div style="font-weight:500">${s.p}</div>${s.h ? `<div style="color:var(--tx2);font-size:11px;margin-top:2px">${s.h}</div>` : ''}</div></div>`).join('') +
                 (skips.length ? '<div style="margin-top:8px;font-size:10px;font-family:var(--mono);color:var(--tx3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">跳过</div>' +
                     skips.map(s => `<div class="day-detail-skip"><span>✕</span>${s}</div>`).join('') : '') +
@@ -3497,7 +3708,6 @@
         }
 
         // ══ Init ════════════════════════════════════════════════════
-        WK = loadWk();
         renderBarrierBadge();
         renderProds(); updateProdUI(); renderWk(); renderTn(); renderAm(); renderPaoAlerts();
 
@@ -3526,7 +3736,7 @@
         }
 
         function renderAll() {
-            WK = loadWk(); renderBarrierBadge();
+            renderBarrierBadge();
             PD = loadPD(); PS = lg(K.prods) || PS;
             renderProds(); updateProdUI(); renderWk(); renderTn(); renderAm(); renderPaoAlerts();
         }
