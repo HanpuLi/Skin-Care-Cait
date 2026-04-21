@@ -3181,25 +3181,30 @@
             const m = document.createElement('div');
             m.className = 'modal-overlay open';
             m.style.zIndex = '9999';
+            const bid = 'alert-btn-' + Math.random().toString(36).substr(2,9);
             m.innerHTML = `<div style="background:var(--sur);padding:20px;border-radius:12px;width:300px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.3)">
                 <div style="font-size:14px;line-height:1.6;margin-bottom:20px;white-space:pre-wrap;color:var(--tx)">${msg.replace(/\\\\n/g, '\\n')}</div>
-                <button class="bsv" onclick="this.parentNode.parentNode.remove()">确定</button>
+                <button class="bsv" id="${bid}">确定</button>
             </div>`;
             document.body.appendChild(m);
+            document.getElementById(bid).onclick = () => m.remove();
         }
         function sysConfirm(msg, onConfirm) {
             const m = document.createElement('div');
             m.className = 'modal-overlay open';
             m.style.zIndex = '9999';
+            const cid = 'confirm-cancel-' + Math.random().toString(36).substr(2,9);
+            const oid = 'confirm-ok-' + Math.random().toString(36).substr(2,9);
             m.innerHTML = `<div style="background:var(--sur);padding:20px;border-radius:12px;width:300px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.3)">
                 <div style="font-size:14px;line-height:1.6;margin-bottom:20px;white-space:pre-wrap;color:var(--tx)">${msg.replace(/\\\\n/g, '\\n')}</div>
                 <div style="display:flex;gap:10px;">
-                    <button class="bsv" style="background:var(--sur2);color:var(--tx)" onclick="this.parentNode.parentNode.remove()">取消</button>
-                    <button class="bsv" id="sys-confirm-btn">确定继续</button>
+                    <button class="bsv" style="background:var(--sur2);color:var(--tx)" id="${cid}">取消</button>
+                    <button class="bsv" id="${oid}">确定继续</button>
                 </div>
             </div>`;
             document.body.appendChild(m);
-            document.getElementById('sys-confirm-btn').onclick = () => { m.remove(); onConfirm(); };
+            document.getElementById(cid).onclick = () => m.remove();
+            document.getElementById(oid).onclick = () => { m.remove(); onConfirm(); };
         }
 
         // toggleDay now accepts a date string — past dates are immutable
