@@ -229,14 +229,19 @@
 
         .panel.active {
             display: block;
-            animation: fi .18s ease
+            animation: paneFadeIn .25s ease-out;
         }
 
-        @keyframes fi {
+        @keyframes paneFadeIn {
             from {
                 opacity: 0;
-                transform: translateY(3px)
+                transform: translateY(6px)
             }
+            to {
+                opacity: 1;
+                transform: translateY(0)
+            }
+        }
 
             to {
                 opacity: 1;
@@ -1908,9 +1913,18 @@
             font-family: var(--mono)
         }
         /* Modal */
-        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:100; align-items:center; justify-content:center; padding:1rem }
-        .modal-overlay.open { display:flex }
-        .modal-box { background:var(--sur); border:1px solid var(--bd); border-radius:var(--r); width:100%; max-width:520px; max-height:85vh; overflow-y:auto; animation:fi .18s ease }
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:100; align-items:center; justify-content:center; padding:1rem; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
+        .modal-overlay.open { display:flex; animation: fadeInModal .2s ease-out; }
+        @keyframes fadeInModal {
+            from { opacity:0; }
+            to { opacity:1; }
+        }
+        .modal-box { background:var(--sur); border:1px solid var(--bd); border-radius:var(--r); width:100%; max-width:520px; max-height:85vh; overflow-y:auto; animation: boxSlideUp .3s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 10px 40px rgba(0,0,0,0.2) }
+        @keyframes boxSlideUp {
+            from { opacity:0; transform:translateY(15px) scale(0.98); }
+            to { opacity:1; transform:translateY(0) scale(1); }
+        }
+
         .modal-hdr { padding:14px 20px; border-bottom:1px solid var(--bd); display:flex; justify-content:space-between; align-items:center }
         .modal-hdr h3 { font-size:14px; font-weight:500 }
         .modal-close { background:none; border:none; cursor:pointer; font-size:18px; color:var(--tx3); padding:0; line-height:1 }
@@ -3037,7 +3051,12 @@
                 let tb = '';
                 if (s.t) {
                     const tid = `tmr_${prefix}_${i}`;
-                    tb = `<br><div id="${tid}" class="tmr-btn" onclick="startTimer(event, '${tid}', ${s.t})">⏱ ${Math.floor(s.t/60)}:${(s.t%60).toString().padStart(2,'0')} 开始</div>`;
+                    if (typeof _timers !== 'undefined' && _timers[tid]) {
+                        const left = Math.ceil((_timers[tid].end - Date.now()) / 1000);
+                        tb = `<br><div id="${tid}" class="tmr-btn on" onclick="startTimer(event, '${tid}', ${s.t})">⏳ ${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}</div>`;
+                    } else {
+                        tb = `<br><div id="${tid}" class="tmr-btn" onclick="startTimer(event, '${tid}', ${s.t})">⏱ ${Math.floor(s.t/60)}:${(s.t%60).toString().padStart(2,'0')} 开始</div>`;
+                    }
                 }
                 return `<div class="tn-step${doneSet.has(s.p) ? ' done' : ''}" data-prod="${s.p}" onclick="toggleStep(this)">
     <div class="tn-n"><span class="tn-n-inner">${i + 1}</span></div>
@@ -3087,7 +3106,12 @@
                 let tb = '';
                 if (s.t) {
                     const tid = `tmr_${prefix}_${i}`;
-                    tb = `<br><div id="${tid}" class="tmr-btn" onclick="startTimer(event, '${tid}', ${s.t})">⏱ ${Math.floor(s.t/60)}:${(s.t%60).toString().padStart(2,'0')} 开始</div>`;
+                    if (typeof _timers !== 'undefined' && _timers[tid]) {
+                        const left = Math.ceil((_timers[tid].end - Date.now()) / 1000);
+                        tb = `<br><div id="${tid}" class="tmr-btn on" onclick="startTimer(event, '${tid}', ${s.t})">⏳ ${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}</div>`;
+                    } else {
+                        tb = `<br><div id="${tid}" class="tmr-btn" onclick="startTimer(event, '${tid}', ${s.t})">⏱ ${Math.floor(s.t/60)}:${(s.t%60).toString().padStart(2,'0')} 开始</div>`;
+                    }
                 }
                 return `<div class="tn-step${doneSet.has(s.p) ? ' done' : ''}" data-prod="${s.p}" onclick="toggleStep(this)">
     <div class="tn-n"><span class="tn-n-inner">${i + 1}</span></div>
@@ -3331,11 +3355,10 @@
             // === Phase 4: Conflicts + shave support (future only) ===
             futureDays.forEach(p => {
                 if (p.shave) p.items.push({ id: 'avene', type: 'support', label: 'Avène' });
-                const hasAcid = p.items.some(i => i.type === 'acid');
                 const dayLabel = p.dayName + ' ' + p.shortDate;
-                if (p.shave && hasAcid) { p.conflicts.push(`${dayLabel}：酸类与刮胡冲突`); p.items = p.items.filter(i => i.type !== 'acid'); }
-                if (hasAcid && p.items.some(i => i.type === 'retinol')) { p.conflicts.push(`${dayLabel}：视黄醇与酸类冲突`); p.items = p.items.filter(i => i.type !== 'retinol'); }
+                if (p.shave && p.items.some(i => i.type === 'acid')) { p.conflicts.push(`${dayLabel}：酸类与刮胡冲突`); p.items = p.items.filter(i => i.type !== 'acid'); }
                 if (p.shave && p.items.some(i => i.type === 'retinol')) { p.conflicts.push(`${dayLabel}：视黄醇与刮胡冲突`); p.items = p.items.filter(i => i.type !== 'retinol'); }
+                if (p.items.some(i => i.type === 'acid') && p.items.some(i => i.type === 'retinol')) { p.conflicts.push(`${dayLabel}：视黄醇与酸类冲突`); p.items = p.items.filter(i => i.type !== 'retinol'); }
                 if (p.items.some(i => i.type === 'mask') && p.items.some(i => i.type === 'acid')) { p.conflicts.push(`${dayLabel}：面膜与酸类同晚`); p.items = p.items.filter(i => i.type !== 'mask'); }
                 if (p.items.some(i => i.type === 'mask') && p.items.some(i => i.type === 'retinol')) { p.conflicts.push(`${dayLabel}：面膜与视黄醇同晚`); p.items = p.items.filter(i => i.type !== 'retinol'); }
                 // Backward compat rendering props
@@ -3553,7 +3576,12 @@
                     let tb = '';
                     if (s.t && !p.isPast) {
                         const tid = `tmr_detail_${i}`;
-                        tb = `<br><div id="${tid}" class="tmr-btn" onclick="startTimer(event, '${tid}', ${s.t})">⏱ ${Math.floor(s.t/60)}:${(s.t%60).toString().padStart(2,'0')} 开始</div>`;
+                        if (typeof _timers !== 'undefined' && _timers[tid]) {
+                            const left = Math.ceil((_timers[tid].end - Date.now()) / 1000);
+                            tb = `<br><div id="${tid}" class="tmr-btn on" onclick="startTimer(event, '${tid}', ${s.t})">⏳ ${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}</div>`;
+                        } else {
+                            tb = `<br><div id="${tid}" class="tmr-btn" onclick="startTimer(event, '${tid}', ${s.t})">⏱ ${Math.floor(s.t/60)}:${(s.t%60).toString().padStart(2,'0')} 开始</div>`;
+                        }
                     }
                     return `<div class="day-detail-step"><div class="day-detail-num">${i+1}</div><div><div style="font-weight:500">${s.p}</div>${s.h ? `<div style="color:var(--tx2);font-size:11px;margin-top:2px">${s.h}${tb}</div>` : ''}</div></div>`;
                 }).join('') +
@@ -3681,7 +3709,15 @@
             if (di) { di.value = today(); loadJrnlForm(); } // automatically jump back to today's view after saving past edit
             renderJrnl(); renderStats(); renderTn(); renderBarrierBadge(); // fix: cascade updates
         }
-        function delEntry(date) { if (!confirm(`确定删除 ${date} 的记录？`)) return; ls(K.jrnl, (lg(K.jrnl) || []).filter(e => e.date !== date)); renderJrnl(); renderStats(); renderBarrierBadge(); }
+        function delEntry(date) { 
+            if (!confirm(`确定删除 ${date} 的记录？`)) return; 
+            ls(K.jrnl, (lg(K.jrnl) || []).filter(e => e.date !== date)); 
+            if (_idb) {
+                const tx = _idb.transaction('photos', 'readwrite');
+                tx.objectStore('photos').delete(date);
+            }
+            renderJrnl(); renderStats(); renderBarrierBadge(); 
+        }
         function editEntry(date) {
             const di = document.getElementById('jrnl-date');
             if (di) { di.value = date; loadJrnlForm(); }
