@@ -4194,6 +4194,14 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
 
         initFirebase();
         
+        // Global Haptic Feedback
+        document.addEventListener('click', function(e) {
+            const clickable = e.target.closest('button, .tn-step, .tag, .chip, .sc2, .day-block, .ph-bt, .tmr-btn, .modal-close');
+            if (clickable && navigator.vibrate) {
+                navigator.vibrate(10);
+            }
+        });
+        
         // Register Service Worker for PWA
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
