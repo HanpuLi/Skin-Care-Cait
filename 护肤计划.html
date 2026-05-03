@@ -244,12 +244,6 @@
             }
         }
 
-            to {
-                opacity: 1;
-                transform: none
-            }
-        }
-
         /* Sections */
         .section {
             margin-bottom: 1.5rem
@@ -597,7 +591,7 @@
         }
 
         .tn-step.done .tn-n::after {
-            content: '‘✓’'
+            content: '\2713'
         }
         .tmr-btn { font-size:11px; margin-top:6px; display:inline-block; padding:4px 10px; border-radius:6px; background:var(--sur2); color:var(--tx2); border:1px solid var(--bd); cursor:pointer; font-family:var(--mono); user-select:none; transition:all .2s ease; }
         .tmr-btn:hover { background:var(--bd); }
@@ -817,7 +811,12 @@
 
         .db.today-ring {
             box-shadow: 0 0 0 2px var(--tx);
-            border-color: var(--tx)
+            border-color: var(--tx);
+            animation: todayPulse 2.5s ease-in-out infinite;
+        }
+        @keyframes todayPulse {
+            0%, 100% { box-shadow: 0 0 0 2px var(--tx); }
+            50% { box-shadow: 0 0 0 3px var(--tx), 0 0 12px rgba(0,0,0,0.08); }
         }
 
         /* Past days: historical record — visible but not interactive */
@@ -1219,8 +1218,19 @@
             cursor: pointer;
             background: var(--sur2);
             color: var(--tx2);
-            transition: all .12s;
+            transition: all .15s;
             user-select: none
+        }
+        .chip:active {
+            transform: scale(.92);
+        }
+        @keyframes chipPop {
+            0% { transform: scale(1); }
+            40% { transform: scale(1.08); }
+            100% { transform: scale(1); }
+        }
+        .chip.just-toggled {
+            animation: chipPop .25s ease;
         }
 
         .chip.s-ok {
@@ -1964,6 +1974,43 @@
         .day-detail-num { min-width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:500; font-family:var(--mono); flex-shrink:0; background:var(--pu-bg); color:var(--pu); margin-top:1px; }
         .day-detail-skip { display:flex; align-items:center; gap:8px; padding:5px 0; font-size:11px; color:var(--tx3); text-decoration:line-through; border-bottom:1px solid var(--bd); }
         .day-detail-skip:last-child { border-bottom:none; }
+
+        /* Dark mode manual toggle */
+        .theme-toggle { background:none; border:1px solid var(--bd); border-radius:50%; width:32px; height:32px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px; transition:all .2s; flex-shrink:0; }
+        .theme-toggle:hover { border-color:var(--tx3); background:var(--sur2); }
+        html.dark { color-scheme: dark; }
+        html.dark :root {
+            --bg: #22201d; --sur: #2b2926; --sur2: #36332f; --bd: #45423c; --bd2: #57534c;
+            --tx: #e7e5df; --tx2: #b0aba3; --tx3: #827e77;
+            --bl: #7b9cbf; --bl-bg: #1e2a36; --bl-br: #3a506b;
+            --gr: #6ba88a; --gr-bg: #192e23; --gr-br: #2c523e;
+            --am: #d1945a; --am-bg: #362210; --am-br: #664121;
+            --rd: #d97770; --rd-bg: #3d1b19; --rd-br: #6b3330;
+            --pu: #9689bf; --pu-bg: #272138; --pu-br: #4f4470;
+        }
+        html.light :root {
+            --bg: #f5f4ef; --sur: #ffffff; --sur2: #f0eee5; --bd: #e2dfd3; --bd2: #d1ccbf;
+            --tx: #2e2b24; --tx2: #656156; --tx3: #958f83;
+            --bl: #4b6b8a; --bl-bg: #eef2f6; --bl-br: #b5c7d8;
+            --gr: #427a5d; --gr-bg: #eaf3ee; --gr-br: #a5cbb7;
+            --am: #a6652c; --am-bg: #f8f1e9; --am-br: #e2c1a3;
+            --rd: #b84b42; --rd-bg: #f9eaea; --rd-br: #e0a9a4;
+            --pu: #6b5c9c; --pu-bg: #f1f0f6; --pu-br: #c1b9d6;
+        }
+
+        /* Monthly comparison card */
+        .month-cmp { border:1px solid var(--bd); border-radius:var(--r); padding:14px 16px; margin-bottom:1.25rem; background:var(--sur); }
+        .month-cmp-hdr { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+        .month-cmp-title { font-size:13px; font-weight:500; }
+        .month-cmp-row { display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid var(--bd); font-size:12px; }
+        .month-cmp-row:last-child { border-bottom:none; }
+        .month-cmp-label { color:var(--tx2); }
+        .month-cmp-vals { display:flex; gap:12px; font-family:var(--mono); font-size:11px; }
+        .month-cmp-vals span { min-width:50px; text-align:right; }
+        .month-cmp-arrow { font-size:11px; }
+        .month-cmp-arrow.up { color:var(--gr); }
+        .month-cmp-arrow.down { color:var(--rd); }
+        .month-cmp-arrow.flat { color:var(--tx3); }
     </style>
 
 </head>
@@ -1975,7 +2022,8 @@
                 <h1>护肤计划</h1>
                 <div class="sub" id="header-sub">混油皮 · E2 HRT · 屏障修护</div>
             </div>
-            <div style="display:flex;align-items:center;gap:10px">
+            <div style="display:flex;align-items:center;gap:8px">
+                <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" aria-label="切换深/浅色模式">🌙</button>
                 <div class="barrier-badge" id="barrier-badge"></div>
                 <div id="auth-btn" class="auth-btn"><button class="auth-sign-in" onclick="signInGoogle()">🔐 Google 登录同步</button></div>
             </div>
@@ -1984,13 +2032,13 @@
         <div id="sync-toast-el" class="sync-toast"></div>
         <div class="tabs-wrap">
             <div class="tabs">
-                <button class="tab active" onclick="show('tonight',this)">今晚</button>
-                <button class="tab" onclick="show('am',this)">早晨</button>
-                <button class="tab" onclick="show('guide',this)">指南</button>
-                <button class="tab" onclick="show('wkly',this)">排班</button>
-                <button class="tab" onclick="show('jrnl',this)">日志</button>
-                <button class="tab" onclick="show('stats',this)">统计</button>
-                <button class="tab" onclick="show('prods',this)">产品</button>
+                <button class="tab active" id="tab-tonight" onclick="show('tonight',this)" aria-label="今晚护肤">今晚</button>
+                <button class="tab" id="tab-am" onclick="show('am',this)" aria-label="早晨护肤">早晨</button>
+                <button class="tab" id="tab-guide" onclick="show('guide',this)" aria-label="使用指南">指南</button>
+                <button class="tab" id="tab-wkly" onclick="show('wkly',this)" aria-label="排班管理">排班</button>
+                <button class="tab" id="tab-jrnl" onclick="show('jrnl',this)" aria-label="护肤日志">日志</button>
+                <button class="tab" id="tab-stats" onclick="show('stats',this)" aria-label="数据统计">统计</button>
+                <button class="tab" id="tab-prods" onclick="show('prods',this)" aria-label="产品管理">产品</button>
             </div>
         </div>
 
@@ -2228,6 +2276,8 @@
 
             <div class="sec-title" style="margin-bottom:8px">过去4周酸类频率</div>
             <div id="acid-bars"></div>
+            <div class="sec-title" style="margin:1rem 0 8px">月度对比</div>
+            <div id="month-compare"></div>
             <div class="sec-title" style="margin:1rem 0 8px">HRT 阶段记录</div>
             <div id="hrt-tl"></div>
         </div>
@@ -2330,7 +2380,27 @@
     <script>
         // ══ Storage ══════════════════════════════════════════════════
         function lg(k) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null } catch { return null } }
-        function ls(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); schedulePush(); } catch { } }
+        function ls(k, v) {
+            try {
+                localStorage.setItem(k, JSON.stringify(v));
+                schedulePush();
+            } catch(e) {
+                if (e.name === 'QuotaExceededError' || e.code === 22) {
+                    // Try trimming old journal entries
+                    try {
+                        const jrnl = JSON.parse(localStorage.getItem(K.jrnl) || '[]');
+                        if (jrnl.length > 180) {
+                            localStorage.setItem(K.jrnl, JSON.stringify(jrnl.slice(0, 180)));
+                            localStorage.setItem(k, JSON.stringify(v));
+                            schedulePush();
+                            return;
+                        }
+                    } catch {}
+                    const toast = document.getElementById('sync-toast-el');
+                    if (toast) { toast.textContent = '⚠️ 存储空间已满，请导出备份后清理旧数据'; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 5000); }
+                }
+            }
+        }
         function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
         // Single versioned keys — migrate old keys on load
@@ -2840,6 +2910,24 @@
             if(window.location.hash !== '#jrnl') renderJrnl(); 
         }
         // ══ Timers ══════════════════════════════════════════════════
+        // ══ Shared Step HTML Renderer ════════════════════════════════
+        function getStepHtml(s, i, doneSet, prefix) {
+            let tb = '';
+            if (s.t) {
+                const tid = `tmr_${prefix}_${i}`;
+                if (typeof _timers !== 'undefined' && _timers[tid]) {
+                    const left = Math.ceil((_timers[tid].end - Date.now()) / 1000);
+                    tb = `<br><div id="${tid}" class="tmr-btn on" onclick="startTimer(event, '${tid}', ${s.t})">⏳ ${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}</div>`;
+                } else {
+                    tb = `<br><div id="${tid}" class="tmr-btn" onclick="startTimer(event, '${tid}', ${s.t})">⏱ ${Math.floor(s.t/60)}:${(s.t%60).toString().padStart(2,'0')} 开始</div>`;
+                }
+            }
+            return `<div class="tn-step${doneSet.has(s.p) ? ' done' : ''}" data-prod="${s.p}" onclick="toggleStep(this)">
+    <div class="tn-n"><span class="tn-n-inner">${i + 1}</span></div>
+    <div><div class="tn-prod">${s.p}</div>${s.h ? `<div class="tn-how">${s.h}${tb}</div>` : ''}</div>
+  </div>`;
+        }
+
         let _timers = {}; // id -> { iv, end, t }
         function startTimer(e, id, seconds) {
             e.stopPropagation();
@@ -3048,22 +3136,7 @@
                 });
             }
             
-            const getStepHtml = (s, i, doneSet, prefix) => {
-                let tb = '';
-                if (s.t) {
-                    const tid = `tmr_${prefix}_${i}`;
-                    if (typeof _timers !== 'undefined' && _timers[tid]) {
-                        const left = Math.ceil((_timers[tid].end - Date.now()) / 1000);
-                        tb = `<br><div id="${tid}" class="tmr-btn on" onclick="startTimer(event, '${tid}', ${s.t})">⏳ ${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}</div>`;
-                    } else {
-                        tb = `<br><div id="${tid}" class="tmr-btn" onclick="startTimer(event, '${tid}', ${s.t})">⏱ ${Math.floor(s.t/60)}:${(s.t%60).toString().padStart(2,'0')} 开始</div>`;
-                    }
-                }
-                return `<div class="tn-step${doneSet.has(s.p) ? ' done' : ''}" data-prod="${s.p}" onclick="toggleStep(this)">
-    <div class="tn-n"><span class="tn-n-inner">${i + 1}</span></div>
-    <div><div class="tn-prod">${s.p}</div>${s.h ? `<div class="tn-how">${s.h}${tb}</div>` : ''}</div>
-  </div>`;
-            };
+            // Uses shared getStepHtml()
 
             const pl = document.getElementById('tn-plan'); if (!pl) return;
             const stH = steps.map((s, i) => getStepHtml(s, i, done, 'tn')).join('');
@@ -3103,22 +3176,11 @@
                 skips.push('⚠ 防晒待购入（用了酸类的次日无防晒 = 加深痘印！）');
             }
 
-            const getStepHtml = (s, i, doneSet, prefix) => {
-                let tb = '';
-                if (s.t) {
-                    const tid = `tmr_${prefix}_${i}`;
-                    if (typeof _timers !== 'undefined' && _timers[tid]) {
-                        const left = Math.ceil((_timers[tid].end - Date.now()) / 1000);
-                        tb = `<br><div id="${tid}" class="tmr-btn on" onclick="startTimer(event, '${tid}', ${s.t})">⏳ ${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}</div>`;
-                    } else {
-                        tb = `<br><div id="${tid}" class="tmr-btn" onclick="startTimer(event, '${tid}', ${s.t})">⏱ ${Math.floor(s.t/60)}:${(s.t%60).toString().padStart(2,'0')} 开始</div>`;
-                    }
-                }
-                return `<div class="tn-step${doneSet.has(s.p) ? ' done' : ''}" data-prod="${s.p}" onclick="toggleStep(this)">
-    <div class="tn-n"><span class="tn-n-inner">${i + 1}</span></div>
-    <div><div class="tn-prod">${s.p}</div>${s.h ? `<div class="tn-how">${s.h}${tb}</div>` : ''}</div>
-  </div>`;
-            };
+            // AM products: eye cream and serum (marked as am-capable in product defs)
+            if (active('mzskin')) steps.push({ p: pd('mzskin').name, h: '早晨：无名指轻拍眼眶骨，补水淡化' });
+            if (active('sebagh')) steps.push({ p: pd('sebagh').name, h: '早晨：可代替面霜，全脸3–4滴轻拍' });
+
+            // Uses shared getStepHtml()
 
             const done = loadDoneSteps('am');
             const pl = document.getElementById('am-plan'); if (!pl) return;
@@ -3235,8 +3297,9 @@
         let _planCache = null, _planCacheKey = '';
         function invalidatePlanCache() { _planCache = null; _planCacheKey = ''; }
         function computePlanRolling() {
-            // Simple cache: key = today + wk data hash + jrnl length
-            const ckey = today() + '|' + JSON.stringify(lg(K.wk) || {}).length + '|' + ((lg(K.jrnl) || []).length);
+            // Cache key: today + wk data content hash + jrnl length + product states
+            const wkStr = JSON.stringify(lg(K.wk) || {});
+            const ckey = today() + '|' + wkStr.substring(0, 200) + '|' + wkStr.length + '|' + ((lg(K.jrnl) || []).length) + '|' + JSON.stringify(PS);
             if (_planCache && _planCacheKey === ckey) return _planCache;
 
             const days = getRollingDays();
@@ -3629,6 +3692,11 @@
             const val = el.dataset.val, cls = el.dataset.cls;
             if (g === 's') { if (selS.includes(val)) { selS = selS.filter(v => v !== val); el.className = 'chip'; } else { selS.push(val); el.className = 'chip ' + cls; } }
             else { if (selP.includes(val)) { selP = selP.filter(v => v !== val); el.className = 'chip'; } else { selP.push(val); el.className = 'chip ' + cls; } }
+            // Pop animation feedback
+            el.classList.remove('just-toggled');
+            void el.offsetWidth;
+            el.classList.add('just-toggled');
+            setTimeout(() => el.classList.remove('just-toggled'), 300);
         }
 
         let _photoData = null;
@@ -4055,6 +4123,36 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
       ${(x.status || []).length ? `<div style="font-size:10px;font-family:var(--mono);color:var(--tx3)">${x.status.join('·')}</div>` : ''}
     </div>`).join('') : '<div class="jhem">暂无HRT阶段记录（在日志中填写）</div>';
             }
+
+            // Monthly comparison
+            const mc = document.getElementById('month-compare');
+            if (mc) {
+                const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+                const thisMonth = e.filter(x => { const d = new Date(x.date); return d >= thisMonthStart; });
+                const lastMonth = e.filter(x => { const d = new Date(x.date); return d >= lastMonthStart && d <= lastMonthEnd; });
+                const mStable = (arr) => arr.length ? Math.round(arr.filter(x => (x.status||[]).some(s => ['稳定','好转'].includes(s))).length / arr.length * 100) : 0;
+                const mBo = (arr) => arr.filter(x => (x.status||[]).includes('爆痘')).length;
+                const mAcid = (arr) => arr.filter(x => (x.products||[]).some(p => getAcidTags().includes(p))).length;
+                const arrow = (cur, prev) => cur > prev ? '<span class="month-cmp-arrow up">↑</span>' : cur < prev ? '<span class="month-cmp-arrow down">↓</span>' : '<span class="month-cmp-arrow flat">—</span>';
+                const mNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+                const thisM = mNames[now.getMonth()], lastM = mNames[(now.getMonth()+11)%12];
+                const ts = mStable(thisMonth), ls2 = mStable(lastMonth);
+                const tb = mBo(thisMonth), lb = mBo(lastMonth);
+                const ta = mAcid(thisMonth), la2 = mAcid(lastMonth);
+                if (lastMonth.length === 0 && thisMonth.length === 0) {
+                    mc.innerHTML = '<div style="font-size:12px;color:var(--tx3);font-family:var(--mono);padding:8px 0">需至少两个月的日志数据</div>';
+                } else {
+                    mc.innerHTML = `<div class="month-cmp">
+                        <div class="month-cmp-hdr"><div class="month-cmp-title">📊 ${lastM} vs ${thisM}</div></div>
+                        <div class="month-cmp-row"><span class="month-cmp-label">稳定率</span><div class="month-cmp-vals"><span>${ls2}%</span><span>${ts}%</span>${arrow(ts,ls2)}</div></div>
+                        <div class="month-cmp-row"><span class="month-cmp-label">爆痘天数</span><div class="month-cmp-vals"><span>${lb}天</span><span>${tb}天</span>${arrow(lb,tb)}</div></div>
+                        <div class="month-cmp-row"><span class="month-cmp-label">酸类使用</span><div class="month-cmp-vals"><span>${la2}次</span><span>${ta}次</span>${arrow(la2,ta)}</div></div>
+                        <div class="month-cmp-row"><span class="month-cmp-label">日志天数</span><div class="month-cmp-vals"><span>${lastMonth.length}</span><span>${thisMonth.length}</span>${arrow(thisMonth.length,lastMonth.length)}</div></div>
+                    </div>`;
+                }
+            }
         }
 
         // ══ Tabs ════════════════════════════════════════════════════
@@ -4071,6 +4169,28 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
             if (id === 'tonight') renderTn();
             if (id === 'am') renderAm();
         }
+
+        // ══ Dark Mode Toggle ══════════════════════════════════════════
+        function initTheme() {
+            const saved = localStorage.getItem('sk_theme');
+            if (saved === 'dark') { document.documentElement.classList.add('dark'); document.documentElement.classList.remove('light'); }
+            else if (saved === 'light') { document.documentElement.classList.add('light'); document.documentElement.classList.remove('dark'); }
+            updateThemeIcon();
+        }
+        function toggleTheme() {
+            const html = document.documentElement;
+            const isDark = html.classList.contains('dark') || (!html.classList.contains('light') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            if (isDark) { html.classList.remove('dark'); html.classList.add('light'); localStorage.setItem('sk_theme', 'light'); }
+            else { html.classList.remove('light'); html.classList.add('dark'); localStorage.setItem('sk_theme', 'dark'); }
+            updateThemeIcon();
+        }
+        function updateThemeIcon() {
+            const btn = document.getElementById('theme-toggle'); if (!btn) return;
+            const html = document.documentElement;
+            const isDark = html.classList.contains('dark') || (!html.classList.contains('light') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            btn.textContent = isDark ? '☀️' : '🌙';
+        }
+        initTheme();
 
         // ══ Init ════════════════════════════════════════════════════
         renderBarrierBadge();
