@@ -1,0 +1,54 @@
+name: QA 体检
+
+# 每次提交自动体检:语法编译 + 关键功能存在性。
+# 目的:防止一次坏改动把 App 推成白屏/功能消失(以前只能手动 headless 验证)。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 语法检查(内联脚本逐个编译)
+        run: |
+          node -e '
+          const fs = require("fs");
+          const h = fs.readFileSync("护肤计划.html", "utf8");
+          const re = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g;
+          let m, n = 0, e = 0;
+          while ((m = re.exec(h))) { n++; try { new Function(m[1]); } catch (err) { e++; console.error("SYNTAX ERROR in inline script #" + n + ": " + err.message); } }
+          console.log("内联脚本 " + n + " 个，语法错误 " + e);
+          process.exit(e > 0 ? 1 : 0);
+          '
+
+      - name: 关键功能存在性(防止误删)
+        run: |
+          node -e '
+          const fs = require("fs");
+          const h = fs.readFileSync("护肤计划.html", "utf8");
+          const need = [
+            "function buildNightSteps", "function renderTn", "function renderAm",
+            "function assessSkin", "const AXES", "function renderAssessment",
+            "const PLAN_TEMPLATES", "function applyPlanTemplate",
+            "const PHASES", "function updatePhase", "function goalProgress",
+            "const ONBOARD_SKIN", "function finishOnboarding",
+            "const CLOUD_KEYS", "function clearLocalUserData", "function assignRoles"
+          ];
+          const miss = need.filter(s => !h.includes(s));
+          if (miss.length) { console.error("缺失关键代码: " + miss.join(", ")); process.exit(1); }
+          console.log("关键功能齐全，共 " + need.length + " 项 ✓");
+          '
+
+      - name: 配套文件检查(manifest / sw)
+        run: |
+          test -f manifest.json && node -e 'JSON.parse(require("fs").readFileSync("manifest.json","utf8"));console.log("manifest.json 合法 ✓")'
+          grep -q "skincare-app-v" sw.js && echo "sw.js 缓存版本存在 ✓"
