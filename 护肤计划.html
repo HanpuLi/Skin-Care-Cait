@@ -2039,6 +2039,10 @@
       .assess-rec.warn{background:var(--am-bg)}
       .assess-rec.good{background:var(--gr-bg)}
       .assess-empty{font-size:12px;color:var(--tx3);padding:4px 0}
+      .ob-q{font-size:12px;font-weight:600;margin:12px 0 6px}
+      .ob-opts{display:flex;flex-wrap:wrap;gap:6px}
+      .ob-opt{padding:7px 11px;border-radius:999px;border:1px solid rgba(128,128,128,.3);background:var(--sur2);color:var(--tx2);font-size:12px;cursor:pointer;font-family:inherit}
+      .ob-opt.on{background:var(--bl);color:#fff;border-color:transparent}
     </style>
     <div class="wrap">
         <div class="header">
@@ -2123,6 +2127,7 @@
                 <div class="sec-title" style="margin-top:1.25rem">套用护肤方案模板</div>
                 <p style="font-size:11px;color:var(--tx3);margin:6px 0 8px">一键把整套配置（启用哪些产品 / 酸类频率 / 刮胡 / HRT / 肤质）套到你<b>当前登录的账号</b>；只影响你自己，套完可随时再手动调。</p>
                 <div id="plan-tpl-box" style="display:flex;flex-direction:column;gap:8px"></div>
+                <button class="tpl-btn" style="margin-top:8px" onclick="showOnboarding()"><div class="tpl-n">✨ 做引导设置（生成方案）</div><div class="tpl-d">按肤质 + 诉求自动配一套起步方案</div></button>
             </div>
            <div class="alert info">
                 <div class="at">洗澡夜（约2次/周）</div>洗澡后渗透性增强——酸类优先安排在洗澡夜。
@@ -2499,8 +2504,8 @@
             const hasData = !!(((lg(K.jrnl) || []).length) || lg(K.prods) || lg(K.wk));
             try {
                 localStorage.setItem(K.profile, JSON.stringify(hasData
-                    ? { shaving: true,  hrt: false, skinType: '混油皮 · 屏障修护', name: '' }
-                    : { shaving: false, hrt: false, skinType: '', name: '' }));
+                    ? { shaving: true,  hrt: false, skinType: '混油皮 · 屏障修护', name: '', onboarded: true }
+                    : { shaving: false, hrt: false, skinType: '', name: '', onboarded: false }));
             } catch {}
         })();
 
@@ -2664,7 +2669,7 @@
         let POPEN = lg(K.popen) || {};
 
         // ══ 用户档案（per-user 刮胡 / HRT / 肤质） ══════════════════
-        let PROFILE = lg(K.profile) || { shaving: false, hrt: false, skinType: '', name: '' };
+        let PROFILE = lg(K.profile) || { shaving: false, hrt: false, skinType: '', name: '', onboarded: false };
         function saveProfile() { ls(K.profile, PROFILE); }
         function applyProfileVisibility() {
             document.body.classList.toggle('hide-shave', !PROFILE.shaving);
@@ -2717,18 +2722,80 @@
                 `<button class="tpl-btn" onclick="applyPlanTemplate('${t.id}')"><div class="tpl-n">📋 ${esc(t.name)}</div><div class="tpl-d">${esc(t.desc)}</div></button>`
             ).join('');
         }
+        function applyTemplateCore(t) {
+            if (t.profile) { PROFILE = Object.assign({}, PROFILE, t.profile); saveProfile(); }
+            (t.on  || []).forEach(id => { const p = PD.find(d => d.id === id); if (p) PS[id] = _statusOn(p); });
+            (t.off || []).forEach(id => { const p = PD.find(d => d.id === id); if (p) PS[id] = _statusOff(p); });
+            ls(K.prods, PS);
+            if (t.freq) { Object.entries(t.freq).forEach(([id, f]) => { const p = PD.find(d => d.id === id); if (p && p.schedule) Object.assign(p.schedule, f); }); ls(K.prodDefs, PD); }
+        }
         function applyPlanTemplate(tid) {
             const t = PLAN_TEMPLATES.find(x => x.id === tid); if (!t) return;
             sysConfirm(`套用方案「${t.name}」到你当前账号？\n\n会按此方案设置：启用/暂停哪些产品、酸类频率、刮胡/HRT 开关、肤质副标题。只影响你自己的账号，套完可随时手动再调。`, () => {
-                if (t.profile) { PROFILE = Object.assign({}, PROFILE, t.profile); saveProfile(); }
-                (t.on  || []).forEach(id => { const p = PD.find(d => d.id === id); if (p) PS[id] = _statusOn(p); });
-                (t.off || []).forEach(id => { const p = PD.find(d => d.id === id); if (p) PS[id] = _statusOff(p); });
-                ls(K.prods, PS);
-                if (t.freq) { Object.entries(t.freq).forEach(([id, f]) => { const p = PD.find(d => d.id === id); if (p && p.schedule) Object.assign(p.schedule, f); }); ls(K.prodDefs, PD); }
+                applyTemplateCore(t);
                 applyProfileVisibility(); syncSettingsUI(); invalidatePlanCache();
                 renderAll(); renderJrnl(); renderStats();
                 sysAlert(`已套用方案「${t.name}」。到「排班」页点你自己的洗澡日，酸类会按频率自动排进去。`);
             });
+        }
+
+        // ══ Round 2:引导设置——新用户选肤质+诉求 → 自动生成起始计划(接模板) ══════
+        const ONBOARD_SKIN = [
+            { v: 'oily',   label: '油性',     sub: '油性 · 控油清透' },
+            { v: 'combo',  label: '混合/混油', sub: '混油皮 · 平衡控油' },
+            { v: 'normal', label: '中性',     sub: '中性 · 维稳' },
+            { v: 'dry',    label: '干性',     sub: '干性 · 保湿修护' }
+        ];
+        const ONBOARD_CONCERNS = ['闭口/粉刺', '毛孔粗大', '出油/T区', '泛红/敏感', '干燥/紧绷', '痘痘/炎症', '暗沉/痘印'];
+        function pickTemplateFor(concerns) {
+            const oily = concerns.filter(c => ['闭口/粉刺', '毛孔粗大', '出油/T区', '痘痘/炎症'].includes(c)).length;
+            const gentle = concerns.filter(c => ['泛红/敏感', '干燥/紧绷'].includes(c)).length;
+            return (oily > 0 && oily >= gentle) ? 'cici-congestion' : 'gentle-starter';
+        }
+        function showOnboarding() {
+            if (document.getElementById('onboard-modal')) return;
+            const m = document.createElement('div');
+            m.className = 'modal-overlay open'; m.style.zIndex = '9999'; m.id = 'onboard-modal';
+            m.innerHTML = `<div style="background:var(--sur);padding:20px;border-radius:14px;width:340px;max-width:92vw;max-height:88vh;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,.3)">
+                <div style="font-size:16px;font-weight:600;margin-bottom:4px">✨ 生成你的护肤方案</div>
+                <div style="font-size:12px;color:var(--tx3);margin-bottom:6px">花 20 秒，按你的肤质和诉求自动配一套起步方案；之后都能手动改。</div>
+                <div class="ob-q">你的肤质？</div>
+                <div class="ob-opts" id="ob-skin">${ONBOARD_SKIN.map((s, i) => `<button class="ob-opt${i === 1 ? ' on' : ''}" data-v="${s.v}" onclick="obPickSkin(this)">${s.label}</button>`).join('')}</div>
+                <div class="ob-q">主要想解决？(可多选)</div>
+                <div class="ob-opts" id="ob-concerns">${ONBOARD_CONCERNS.map(c => `<button class="ob-opt" data-v="${esc(c)}" onclick="this.classList.toggle('on')">${esc(c)}</button>`).join('')}</div>
+                <label class="set-row" style="margin-top:14px"><span>需要「刮胡」这一项吗？</span><input type="checkbox" id="ob-shave"></label>
+                <div style="display:flex;gap:10px;margin-top:18px">
+                    <button class="bsv" style="background:var(--sur2);color:var(--tx)" onclick="closeOnboarding(true)">跳过</button>
+                    <button class="bsv" onclick="finishOnboarding()">生成我的计划</button>
+                </div>
+            </div>`;
+            document.body.appendChild(m);
+        }
+        function obPickSkin(btn) { document.querySelectorAll('#ob-skin .ob-opt').forEach(b => b.classList.remove('on')); btn.classList.add('on'); }
+        function closeOnboarding(markDone) {
+            const m = document.getElementById('onboard-modal'); if (m) m.remove();
+            if (markDone) { PROFILE.onboarded = true; saveProfile(); }
+        }
+        function finishOnboarding() {
+            const skinBtn = document.querySelector('#ob-skin .ob-opt.on');
+            const skin = ONBOARD_SKIN.find(s => s.v === (skinBtn ? skinBtn.dataset.v : 'combo')) || ONBOARD_SKIN[1];
+            const concerns = [...document.querySelectorAll('#ob-concerns .ob-opt.on')].map(b => b.dataset.v);
+            const shaving = !!document.getElementById('ob-shave').checked;
+            const tpl = PLAN_TEMPLATES.find(t => t.id === pickTemplateFor(concerns));
+            if (tpl) applyTemplateCore(tpl);
+            // 引导里选的优先于模板里的 profile
+            PROFILE.skinType = skin.sub + (concerns.length ? ' · ' + concerns[0].split('/')[0] : '');
+            PROFILE.shaving = shaving; PROFILE.hrt = false; PROFILE.onboarded = true;
+            saveProfile();
+            applyProfileVisibility(); syncSettingsUI(); invalidatePlanCache();
+            renderAll(); if (typeof renderJrnl === 'function') renderJrnl(); if (typeof renderStats === 'function') renderStats();
+            closeOnboarding(false);
+            sysAlert(`已按「${skin.label}${concerns.length ? ' · ' + concerns[0] : ''}」生成起步方案。到「排班」点你的洗澡日，酸类会自动排进去；随时能在「产品」和「个人设置」里调。`);
+        }
+        function maybeShowOnboarding() {
+            if (PROFILE.onboarded) return;
+            const hasData = !!(((lg(K.jrnl) || []).length) || lg(K.prods) || lg(K.wk));
+            if (!hasData) showOnboarding();
         }
 
         function isSchedActive(prod, status) { return status !== 'paused' && status !== 'pending'; }
@@ -4672,7 +4739,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
             CLOUD_KEYS.forEach(k => localStorage.removeItem(k));
             localStorage.removeItem(K.preset);
             clearAllPhotos();
-            PROFILE = { shaving: false, hrt: false, skinType: '', name: '' };
+            PROFILE = { shaving: false, hrt: false, skinType: '', name: '', onboarded: false };
             try { localStorage.setItem(K.profile, JSON.stringify(PROFILE)); } catch {}
             PD = loadPD(); PS = lg(K.prods) || {}; POPEN = lg(K.popen) || {};
         }
@@ -4713,7 +4780,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
             if (_unsub) _unsub();
             _unsub = _db.collection('users').doc(_user.uid).onSnapshot(doc => {
                 let isInit = !_unsub.initialized; _unsub.initialized = true;
-                if (!doc.exists) { if(isInit) showSyncStatus('✓ 云端已连接(全新账号)'); return; }
+                if (!doc.exists) { if(isInit) { showSyncStatus('✓ 云端已连接(全新账号)'); maybeShowOnboarding(); } return; }
                 let changed = false;
                 Object.entries(doc.data()).forEach(([k, v]) => {
                     const localV = localStorage.getItem(k);
@@ -4816,6 +4883,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
         syncSettingsUI();
         renderPlanTemplates();
         initFirebase();
+        setTimeout(function () { if (!_user) maybeShowOnboarding(); }, 1800);
 
         // Global Haptic Feedback
         document.addEventListener('click', function(e) {
