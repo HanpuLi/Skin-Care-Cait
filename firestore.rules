@@ -1,0 +1,12 @@
+rules_version = '2';
+
+// 护肤计划 App — Firestore 安全规则
+// 数据模型：每个用户的全部数据存在单个文档 users/{uid}（见 pushToCloud / setupRealtimeSync）。
+// 规则：必须登录，且只能读写「自己那份」；其余路径默认拒绝（Firestore 未匹配即拒绝）。
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
