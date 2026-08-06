@@ -1,0 +1,13 @@
+.DS_Store
+
+# ⚠️ 本仓库是 PUBLIC(GitHub Pages)。下面这些是私人/医疗信息,
+# 绝不能进公开仓库——只留本机。App 本体(护肤计划.html + manifest/sw/icon)照常部署。
+CLAUDE.md
+README.md
+LIVING_TODO.md
+家中护肤品清单.md
+Cici档案/
+个人档案/
+*_私人*.md
+*.bak-*
+*.bak
