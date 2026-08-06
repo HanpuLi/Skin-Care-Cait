@@ -2043,6 +2043,10 @@
       .ob-opts{display:flex;flex-wrap:wrap;gap:6px}
       .ob-opt{padding:7px 11px;border-radius:999px;border:1px solid rgba(128,128,128,.3);background:var(--sur2);color:var(--tx2);font-size:12px;cursor:pointer;font-family:inherit}
       .ob-opt.on{background:var(--bl);color:#fff;border-color:transparent}
+      .assess-phase{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;font-weight:600;margin-top:10px;padding-top:9px;border-top:1px solid rgba(128,128,128,.15)}
+      .assess-goal{display:flex;align-items:center;gap:6px;font-size:12px;margin-top:6px}
+      .goal-pct{margin-left:auto;font-family:var(--mono);font-weight:600;color:var(--gr)}
+      .assess-streak{font-size:11px;color:var(--tx3);margin-top:9px;text-align:right}
     </style>
     <div class="wrap">
         <div class="header">
@@ -2504,8 +2508,8 @@
             const hasData = !!(((lg(K.jrnl) || []).length) || lg(K.prods) || lg(K.wk));
             try {
                 localStorage.setItem(K.profile, JSON.stringify(hasData
-                    ? { shaving: true,  hrt: false, skinType: '混油皮 · 屏障修护', name: '', onboarded: true }
-                    : { shaving: false, hrt: false, skinType: '', name: '', onboarded: false }));
+                    ? { shaving: true,  hrt: false, skinType: '混油皮 · 屏障修护', name: '', onboarded: true, phase: 'maintenance', phaseStart: '2026-01-01' }
+                    : { shaving: false, hrt: false, skinType: '', name: '', onboarded: false, phase: 'repair', phaseStart: '' }));
             } catch {}
         })();
 
@@ -2786,6 +2790,8 @@
             // 引导里选的优先于模板里的 profile
             PROFILE.skinType = skin.sub + (concerns.length ? ' · ' + concerns[0].split('/')[0] : '');
             PROFILE.shaving = shaving; PROFILE.hrt = false; PROFILE.onboarded = true;
+            PROFILE.phase = 'repair'; PROFILE.phaseStart = today();
+            if (concerns.length) setGoalFromConcern(concerns[0]);
             saveProfile();
             applyProfileVisibility(); syncSettingsUI(); invalidatePlanCache();
             renderAll(); if (typeof renderJrnl === 'function') renderJrnl(); if (typeof renderStats === 'function') renderStats();
@@ -3053,6 +3059,66 @@
             if (jrnlLastNDays(7).length < 2) recs.push({ level: 'info', text: '多记几天皮肤状态，评估会更准。' });
             return recs.slice(0, 4);
         }
+        // ══ Round 3:阶段化方案(修护→建立耐受→维持，按屏障趋势自动进阶/回退) + 目标追踪 ══
+        const PHASES = {
+            repair:      { name: '修护期',     acidCap: 1,  next: 'tolerance',   desc: '专注屏障，酸类≤1次/周' },
+            tolerance:   { name: '建立耐受期', acidCap: 2,  next: 'maintenance', desc: '逐步加频，观察反应' },
+            maintenance: { name: '维持期',     acidCap: 99, next: null,          desc: '状态稳定，正常维持' }
+        };
+        function currentPhase() { return (PROFILE.phase && PHASES[PROFILE.phase]) ? PROFILE.phase : 'repair'; }
+        function phaseAcidCap() { return PHASES[currentPhase()].acidCap; }
+        function daysSince(dateStr) { if (!dateStr) return 999; const a = new Date(dateStr + 'T12:00:00'), b = new Date(today() + 'T12:00:00'); return Math.round((b - a) / 86400000); }
+        function suggestPhase() {
+            const barrier = barrierScore();
+            if (barrier === null) return null;
+            const ph = currentPhase();
+            if (barrier < 45 && ph !== 'repair') return 'repair';           // 屏障掉了 → 安全回退
+            const held = daysSince(PROFILE.phaseStart);
+            const recentBO = jrnlLastNDays(14).some(e => (e.status || []).includes('爆痘'));
+            if (ph === 'repair' && barrier >= 65 && held >= 7) return 'tolerance';
+            if (ph === 'tolerance' && barrier >= 65 && !recentBO && held >= 10) return 'maintenance';
+            return null;
+        }
+        function updatePhase() {
+            if (!((lg(K.jrnl) || []).length)) return;                        // 没数据不动
+            if (!PROFILE.phaseStart) { PROFILE.phaseStart = today(); saveProfile(); }  // 锚定阶段起点
+            const s = suggestPhase();
+            if (s && s !== currentPhase()) {
+                const up = PHASES[s].acidCap >= phaseAcidCap();
+                PROFILE.phase = s; PROFILE.phaseStart = today(); saveProfile();
+                invalidatePlanCache();
+                if (typeof showSyncStatus === 'function') showSyncStatus(up ? `🎉 进入「${PHASES[s].name}」` : `↩ 回到「${PHASES[s].name}」`, 'ok');
+            }
+        }
+        const CONCERN_AXIS = { '闭口/粉刺': 'congestion', '毛孔粗大': 'congestion', '出油/T区': 'oil', '泛红/敏感': 'barrier', '干燥/紧绷': 'barrier', '痘痘/炎症': 'calm', '暗沉/痘印': 'calm' };
+        function setGoalFromConcern(concern) {
+            const axis = CONCERN_AXIS[concern] || 'congestion';
+            const cur = axisScore(axis, jrnlLastNDays(7));
+            PROFILE.goal = { concern, axis, start: today(), startScore: cur === null ? 60 : cur, target: 75 };
+        }
+        function goalProgress() {
+            const g = PROFILE.goal; if (!g) return null;
+            const cur = axisScore(g.axis, jrnlLastNDays(7));
+            const span = (g.target - g.startScore) || 1;
+            const pct = cur === null ? 0 : Math.max(0, Math.min(100, Math.round((cur - g.startScore) / span * 100)));
+            return Object.assign({}, g, { cur, pct, days: daysSince(g.start) });
+        }
+        // Round 4:连续打卡 / 本周记录频率(激励 + 提醒记录准确度)
+        function logStreak() {
+            const dates = new Set((lg(K.jrnl) || []).filter(x => x && x.date && (x.status || []).length).map(x => x.date));
+            let n = 0;
+            for (let i = 0; i < 90; i++) {
+                const d = offsetDate(-i);
+                if (dates.has(d)) n++;
+                else if (i === 0) continue;   // 今天还没记,不算断
+                else break;
+            }
+            return n;
+        }
+        function weekLoggedCount() {
+            const from = offsetDate(-6), to = today();
+            return new Set((lg(K.jrnl) || []).filter(x => x && x.date && x.date >= from && x.date <= to && (x.status || []).length).map(x => x.date)).size;
+        }
         function renderAssessment() {
             const box = document.getElementById('assess-card'); if (!box) return;
             const a = assessSkin();
@@ -3065,10 +3131,18 @@
                 return `<div class="ax-row"><div class="ax-name">${x.name}</div><div class="ax-bar"><div class="ax-fill" style="width:${sc === null ? 0 : sc}%;background:${col}"></div></div><div class="ax-num">${sc === null ? '—' : sc} ${x.trend.enough ? trendArrow(x.trend) : ''}</div></div>`;
             }).join('');
             const recHtml = a.recs.map(r => `<div class="assess-rec ${r.level}">${r.level === 'safety' ? '⚠ ' : r.level === 'good' ? '✓ ' : '▸ '}${esc(r.text)}</div>`).join('');
+            const ph = PHASES[currentPhase()];
+            const g = goalProgress();
+            const phaseHtml = `<div class="assess-phase"><span>阶段 · ${ph.name}</span><span style="color:var(--tx3);font-weight:400">${esc(ph.desc)}</span></div>`;
+            const goalHtml = g ? `<div class="assess-goal">🎯 ${esc(g.concern.split('/')[0])} ${g.startScore}→${g.cur === null ? '—' : g.cur}<span style="color:var(--tx3)"> / 目标 ${g.target}</span><span class="goal-pct">${g.pct}%</span></div>` : '';
+            const streak = logStreak(), wk = weekLoggedCount();
+            const streakHtml = `<div class="assess-streak">${streak > 0 ? `🔥 连续记录 ${streak} 天 · ` : ''}本周 ${wk}/7 天</div>`;
             box.innerHTML = `<div class="assess-card2">
                 <div class="assess-hd"><span>今日评估</span><span style="font-size:13px;color:${ovCol}">${a.overall} · ${ov.label}${a.sampleN < 4 ? ` <span style="color:var(--tx3);font-weight:400">(记${a.sampleN}天)</span>` : ''}</span></div>
                 <div class="ax-list">${bars}</div>
+                ${phaseHtml}${goalHtml}
                 ${recHtml ? `<div class="assess-recs">${recHtml}</div>` : ''}
+                ${streakHtml}
             </div>`;
         }
         // Dynamic acid limit based on barrier score
@@ -3085,7 +3159,7 @@
             const hrtFluctuation = recent.some(x => isHrtFluctuation(x.phase));
             
             if (hrtFluctuation && limit > 0) limit -= 1; // force downgrade during HRT fluctuations
-            
+            limit = Math.min(limit, phaseAcidCap());     // 阶段上限:修护期≤1、建立耐受≤2、维持不额外限
             return Math.max(0, limit);
         }
         // 屏障分闸门：修护模式(<45) 停掉全部去角质与视黄醇；谨慎模式(45–64) 停视黄醇、酸类限1次。
@@ -3413,6 +3487,7 @@
         }
         function renderTn() {
             const { shower, shave, manual } = TN;
+            updatePhase();
             renderAssessment();
             const sBtn = document.getElementById('tn-sh'), vBtn = document.getElementById('tn-sv');
             if (sBtn) sBtn.className = 'tn-btn' + (shower ? ' on-shower' : '');
