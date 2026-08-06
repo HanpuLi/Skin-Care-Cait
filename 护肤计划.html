@@ -2030,7 +2030,7 @@
         <div class="header">
             <div>
                 <h1>护肤计划</h1>
-                <div class="sub" id="header-sub">混油皮 · 屏障修护</div>
+                <div class="sub" id="header-sub">护肤计划</div>
             </div>
             <div style="display:flex;align-items:center;gap:8px">
                 <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" aria-label="切换深/浅色模式">🌙</button>
@@ -2121,11 +2121,11 @@
                 <div class="sec-title">叠涂顺序口诀</div>
                 <div class="step"><div class="num pm">1</div><div class="sc"><div class="prod">稀薄到浓厚（晚间）</div><div class="how">酸类 → 精华 → 面霜/乳液 → 油（早晨最后加防晒）</div></div></div>
                 <div class="step"><div class="num pm">2</div><div class="sc"><div class="prod">酸类后等待3分钟</div><div class="how">让皮肤pH稳定后再叠后续步骤</div></div></div>
-                <div class="step"><div class="num pm">3</div><div class="sc"><div class="prod">Cicaplast B5 最后封层</div><div class="how">大分子结构会阻碍后续成分渗透</div></div></div>
+                <div class="step"><div class="num pm">3</div><div class="sc"><div class="prod">修护霜最后封层</div><div class="how">大分子结构会阻碍后续成分渗透</div></div></div>
             </div>
             <div class="section feat-hrt">
                 <div class="sec-title">HRT 皮肤变化预警</div>
-                <p style="font-size:13px;color:var(--tx2);margin-bottom:12px;line-height:1.5">进入 E2 周期后，由于雌激素波动，前 3-6 个月可能会经历短暂的爆发期。如果突发连续长痘，遵循以下原则：<br>1. 立即将酸类降至 1 次/周甚至停用，仅在痘痘处点涂。<br>2. 暂停使用 精华油，避免滋养痤疮丙酸杆菌。<br>3. 基础夜间护肤缩减为 <b>洁面（洗澡夜用洗面奶，其余温水）→ Skin Rocks FF 面霜 → Cicaplast B5点涂修护</b>。</p>
+                <p style="font-size:13px;color:var(--tx2);margin-bottom:12px;line-height:1.5">进入 E2 周期后，由于雌激素波动，前 3-6 个月可能会经历短暂的爆发期。如果突发连续长痘，遵循以下原则：<br>1. 立即将酸类降至 1 次/周甚至停用，仅在痘痘处点涂。<br>2. 暂停使用 面油（如有），避免滋养痤疮丙酸杆菌。<br>3. 基础夜间护肤缩减为 <b>洁面（洗澡夜用洗面奶，其余温水）→ 保湿面霜 → 修护霜点涂</b>。</p>
             </div>
         </div>
 
@@ -2190,7 +2190,7 @@
         <div id="jrnl" class="panel">
             <div class="cdc">
                 <div class="cdh">
-                    <div class="cdt">🛡️ Good Genes 解禁倒计时</div>
+                    <div class="cdt">🛡️ 酸类解禁倒计时</div>
                     <div class="cdb" id="cd-badge">未设置</div>
                 </div>
                 <div class="pw">
@@ -2324,7 +2324,7 @@
                     <div class="at">酸类 × 视黄醇</div>任何酸类当晚，视黄醇禁止使用
                 </div>
                 <div class="alert danger">
-                    <div class="at">多种酸类叠加</div>任意两种去角质酸类（PC、Votary、Good Genes等）不可同晚使用
+                    <div class="at">多种酸类叠加</div>任意两种去角质酸类不可同晚使用
                 </div>
                 <div class="alert warn feat-shave">
                     <div class="at">刮胡日 × 酸类/视黄醇</div>刮胡当晚全部活性成分跳过
@@ -2349,7 +2349,7 @@
                 <div class="step">
                     <div class="num pm">③</div>
                     <div class="sc">
-                        <div class="prod">Cicaplast B5 最后封层</div>
+                        <div class="prod">修护霜最后封层</div>
                         <div class="how">高分子结构会阻碍后续成分渗透</div>
                     </div>
                 </div>
@@ -2856,16 +2856,13 @@
             if (sp) sp.innerHTML = pend.length ? pend.map((d, i) => `<div class="shop-item"><div class="shop-pri ${i===0?'p1':'p2'}">0${i+1}</div><div class="si"><div class="sn2">${esc(d.name)}</div><div class="sw">${esc(d.notes[0]||'')}</div></div></div>`).join('') : '<div style="font-size:12px;color:var(--tx3);font-family:var(--mono);padding:8px 0">所有产品均已购入 ✓</div>';
         }
 
-        function updateProdUI() {
-            const spfEl = document.getElementById('am-spf-name'), spfTag = document.getElementById('am-spf-tag');
-            if (spfEl && spfTag) { if (PS.sunscreen === 'owned') { spfEl.className = 'prod'; spfTag.textContent = '已购入'; spfTag.className = 'tag new'; } else { spfEl.className = 'prod danger'; spfTag.textContent = '待购入'; spfTag.className = 'tag must'; } }
-            const bTag = document.getElementById('bio-tag'), bHow = document.getElementById('bio-how');
-            if (bTag) { if (PS.bioderma === 'owned') { bTag.textContent = '已购入'; bTag.className = 'tag new'; } else { bTag.textContent = '待购入'; bTag.className = 'tag skip'; } }
-            if (bHow) bHow.textContent = PS.bioderma === 'owned' ? '无彩妆：温水30秒。有防晒/彩妆：Bioderma Sensibio H2O 再水洗' : '无彩妆：温水30秒。有防晒/彩妆：Bioderma Sensibio H2O（待购）再水洗';
-            const ggS = document.getElementById('gg-step'), ggT = document.getElementById('gg-tag'), ggH = document.getElementById('gg-how');
-            if (ggS) { if (PS.goodGenes === 'active') { ggS.classList.remove('dim'); ggT.textContent = '可使用'; ggT.className = 'tag new'; ggH.textContent = '与PC、Votary交替，不可同晚叠用。观察皮肤反应。'; } else { ggS.classList.add('dim'); ggT.textContent = '暂缓'; ggT.className = 'tag skip'; ggH.textContent = '高酒精+乙醇酸对当前屏障过激进。屏障稳定4周后再评估'; } }
-            const rtS = document.getElementById('rt-step'), rtN = document.getElementById('rt-num'), rtT = document.getElementById('rt-tag'), rtH = document.getElementById('rt-how');
-            if (rtS) { if (PS.retinol === 'active') { rtS.classList.remove('dim'); if (rtN) rtN.className = 'num no'; rtT.textContent = '已纳入常规'; rtT.className = 'tag new'; rtH.textContent = '1次/周，仅非酸夜、非刮胡日。维持频率。'; } else { rtS.classList.add('dim'); if (rtN) rtN.className = 'num gh'; rtT.textContent = '谨慎引入'; rtT.className = 'tag caution'; rtH.textContent = '1次/周，仅非酸夜、非刮胡日。观察4周无反应再维持'; } }
+        // 已废弃：早期用来更新写死的 Cait 静态步骤（对应 DOM id 均已不存在，恒为空操作）。留空桩，免改所有调用点。
+        function updateProdUI() {}
+        // HRT 激素波动判断：单一来源；对关闭 HRT 的用户直接短路（无副作用，且防未来手工造 phase 数据误触发）
+        function isHrtFluctuation(phase) {
+            if (!PROFILE.hrt) return false;
+            const ph = phase || '';
+            return ph.includes('波动') || ph.includes('调整') || ph.includes('加量') || ph.includes('减量') || ph.includes('出血');
         }
 
         function copyShop() {
@@ -2918,10 +2915,7 @@
             
             // Check HRT phases in past 5 days（按日期窗口，不是"最近5条"——否则几个月前的一条能永久压低上限）
             const recent = jrnlLastNDays(5);
-            const hrtFluctuation = recent.some(x => {
-                const ph = x.phase || '';
-                return ph.includes('波动') || ph.includes('调整') || ph.includes('加量') || ph.includes('减量') || ph.includes('出血');
-            });
+            const hrtFluctuation = recent.some(x => isHrtFluctuation(x.phase));
             
             if (hrtFluctuation && limit > 0) limit -= 1; // force downgrade during HRT fluctuations
             
@@ -3035,7 +3029,7 @@
             const seen = new Set();
             const fromPD = PD.filter(p => !p.hidden && p.journalTag && !seen.has(p.journalTag) && seen.add(p.journalTag))
                 .map(p => ({ v: p.journalTag, label: (p.icon ? p.icon + ' ' : '') + p.journalTag, c: 's-blue' }));
-            const all = [...fromPD, ...FIXED_CHIPS.map(x => ({ ...x, label: x.v }))];
+            const all = [...fromPD, ...FIXED_CHIPS.filter(x => x.v !== '刮胡' || PROFILE.shaving).map(x => ({ ...x, label: x.v }))];
             const cur = new Set(typeof selP !== 'undefined' ? selP : []);
             box.innerHTML = all.map(x =>
                 `<div class="chip${cur.has(x.v) ? ' on ' + x.c : ''}" data-val="${esc(x.v)}" data-cls="${x.c}" onclick="toggleChip(this,'p')">${esc(x.label)}</div>`
@@ -3202,6 +3196,54 @@
             if (am) am.innerHTML = html;
         }
 
+        // 生成"当晚护肤步骤"——「今晚」(renderTn) 与「排班点格」(showDayDetail) 共用这一套角色驱动逻辑，
+        // 避免两个视图给出不一致的步骤、或印出已删产品名。slot = 排班引擎算出的当天计划(含 items)。
+        function buildNightSteps(shower, shave, slot) {
+            const items = (slot && slot.items) || [];
+            const schedAcid = items.find(it => it.type === 'acid');
+            const schedMask = items.find(it => it.type === 'mask');
+            const schedRet  = items.find(it => it.type === 'retinol');
+            const hasScheduledAcid = !!schedAcid && !shave;
+            const pd = id => PD.find(p => p.id === id);
+            const active = id => { const p = pd(id); return p && !p.hidden && isSchedActive(p, PS[id] || p.statuses[0]); };
+            const byRole = (role, single) => {
+                const list = PD.filter(p => !p.hidden && p.role === role
+                    && isSchedActive(p, PS[p.id] || p.statuses[0])
+                    && ((p.schedule && p.schedule.time) || ['pm']).includes('pm'));
+                return single ? list.slice(0, 1) : list;
+            };
+            const hint = p => p.pmHint || (p.notes && p.notes[0]) || '';
+            const steps = [], skips = [];
+            if (shave) {
+                steps.push({ p: '凉水冲洗（刮胡后立即）', h: '降温止红' });
+                byRole('repair').forEach(p => steps.push({ p: p.name, h: hint(p) || '全脸薄涂，修护微创口' }));
+                byRole('serum').forEach(p => steps.push({ p: p.name, h: hint(p) || '全脸轻拍至吸收' }));
+                byRole('moist', true).forEach(p => steps.push({ p: p.name, h: hint(p) || '无香精封层' }));
+                skips.push('所有酸类', '视黄醇', '泥面膜');
+            } else {
+                const cleanser = byRole('cleanse', true)[0];
+                const pre = byRole('precleanse', true)[0];
+                if (shower && cleanser) steps.push({ p: cleanser.name, h: hint(cleanser) || '60秒按摩，T区多停留', t: 60 });
+                else steps.push({ p: '温水冲洗' + (pre ? ' / ' + pre.name : ''), h: pre ? '有防晒/彩妆时使用' : '温和清洁' });
+                if (hasScheduledAcid) {
+                    const ap = pd(schedAcid.id); const aName = ap ? ap.name : schedAcid.label;
+                    steps.push({ p: aName, h: (ap && hint(ap)) || '停留3–5分钟，无需冲洗' });
+                    steps.push({ p: '等待3分钟', h: 'pH稳定后再叠后续', t: 180 });
+                    skips.push('修护精华（酸类夜跳过）', '视黄醇（酸类夜禁用）');
+                } else if (schedMask) {
+                    const mp = pd(schedMask.id); if (mp && active(mp.id)) { steps.push({ p: mp.name, h: hint(mp) || '敷10–15分钟后冲洗干净', t: 900 }); skips.push('视黄醇（面膜夜不叠用）'); }
+                } else if (schedRet) {
+                    const rp = pd(schedRet.id); if (rp && active(rp.id)) { steps.push({ p: rp.name, h: (hint(rp) || '1次/周，薄涂全脸，避开眼周') + (PS[rp.id] === 'active' ? '' : '（谨慎引入期）') }); skips.push('酸类（视黄醇夜不叠加）'); }
+                } else {
+                    byRole('serum').forEach(p => steps.push({ p: p.name, h: hint(p) || '全脸轻拍至吸收' }));
+                    if (!shower) byRole('oil').forEach(p => steps.push({ p: p.name, h: hint(p) || '1–2滴，两颊和颈部，额头避开' }));
+                }
+                byRole('eye', true).forEach(p => steps.push({ p: p.name, h: hint(p) || '无名指轻拍眼眶骨' }));
+                byRole('moist', true).forEach(p => steps.push({ p: p.name, h: hasScheduledAcid ? '酸类夜首选封层' : (hint(p) || '全脸封层') }));
+                byRole('repair').forEach(p => steps.push({ p: p.name, h: hint(p) || '活跃痘痘处、口罩线点涂' }));
+            }
+            return { steps, skips };
+        }
         function renderTn() {
             const { shower, shave, manual } = TN;
             const sBtn = document.getElementById('tn-sh'), vBtn = document.getElementById('tn-sv');
@@ -3268,51 +3310,7 @@
             else if (schedRet) { nightType = '视黄醇夜'; nightSub = '1次/周，谨慎使用'; }
             else { nightType = '修护夜'; nightSub = `近7天去角质 ${acidCnt}/${maxAcid} 次，今晚专注修护`; }
 
-            let steps = [], skips = [];
-            // ── 角色驱动：步骤按产品的 role 通用生成，不再写死具体产品 id ──
-            // single=true 只取该角色第一个（洁面/保湿/眼部通常一件）；否则取全部（精华/修护可叠层）。
-            const byRole = (role, single) => {
-                const list = PD.filter(p => !p.hidden && p.role === role
-                    && isSchedActive(p, PS[p.id] || p.statuses[0])
-                    && ((p.schedule && p.schedule.time) || ['pm']).includes('pm'));
-                return single ? list.slice(0, 1) : list;
-            };
-            const hint = p => p.pmHint || (p.notes && p.notes[0]) || '';
-
-            if (shave) {
-                steps.push({ p: '凉水冲洗（刮胡后立即）', h: '降温止红' });
-                byRole('repair').forEach(p => steps.push({ p: p.name, h: hint(p) || '全脸薄涂，修护微创口' }));
-                byRole('serum').forEach(p => steps.push({ p: p.name, h: hint(p) || '全脸轻拍至吸收' }));
-                byRole('moist', true).forEach(p => steps.push({ p: p.name, h: hint(p) || '无香精封层' }));
-                skips.push('所有酸类', '视黄醇', '泥面膜');
-            } else {
-                // 1. 清洁
-                const cleanser = byRole('cleanse', true)[0];
-                const pre = byRole('precleanse', true)[0];
-                if (shower && cleanser) steps.push({ p: cleanser.name, h: hint(cleanser) || '60秒按摩，T区多停留', t: 60 });
-                else steps.push({ p: '温水冲洗' + (pre ? ' / ' + pre.name : ''), h: pre ? '有防晒/彩妆时使用' : '温和清洁' });
-
-                // 2. 当晚活性（由排班引擎选出）
-                if (hasScheduledAcid) {
-                    const ap = pd(schedAcid.id); const aName = ap ? ap.name : schedAcid.label;
-                    steps.push({ p: aName, h: (ap && hint(ap)) || '停留3–5分钟，无需冲洗' });
-                    steps.push({ p: '等待3分钟', h: 'pH稳定后再叠后续', t: 180 });
-                    skips.push('修护精华（酸类夜跳过）', '视黄醇（酸类夜禁用）');
-                } else if (schedMask) {
-                    const mp = pd(schedMask.id); if (mp && active(mp.id)) { steps.push({ p: mp.name, h: hint(mp) || '敷10–15分钟后冲洗干净', t: 900 }); skips.push('视黄醇（面膜夜不叠用）'); }
-                } else if (schedRet) {
-                    const rp = pd(schedRet.id); if (rp && active(rp.id)) { steps.push({ p: rp.name, h: (hint(rp) || '1次/周，薄涂全脸，避开眼周') + (PS[rp.id] === 'active' ? '' : '（谨慎引入期）') }); skips.push('酸类（视黄醇夜不叠加）'); }
-                } else {
-                    byRole('serum').forEach(p => steps.push({ p: p.name, h: hint(p) || '全脸轻拍至吸收' }));
-                    if (!shower) byRole('oil').forEach(p => steps.push({ p: p.name, h: hint(p) || '1–2滴，两颊和颈部，额头避开' }));
-                }
-
-                // 3. 眼部 → 面霜 → 修护点涂
-                byRole('eye', true).forEach(p => steps.push({ p: p.name, h: hint(p) || '无名指轻拍眼眶骨' }));
-                byRole('moist', true).forEach(p => steps.push({ p: p.name, h: hasScheduledAcid ? '酸类夜首选封层' : (hint(p) || '全脸封层') }));
-                byRole('repair').forEach(p => steps.push({ p: p.name, h: hint(p) || '活跃痘痘处、口罩线点涂' }));
-            }
-
+            const { steps, skips } = buildNightSteps(shower, shave, todaySlot);
             const ownedSpf = PD.some(p => p.role === 'spf' && !p.hidden && (PS[p.id] || p.statuses[0]) === 'owned');
             if (!ownedSpf) skips.push('⚠ 明早无防晒 → 痘印风险！尽快购入');
 
@@ -3340,10 +3338,7 @@
             // 改为日期窗口。旧版 slice(0,N) 取的是"最近 N 条"，日志不连续时，
             // 几个月前的一条「爆痘」或「剂量调整」会一直挂在顶部横幅上，用户找不到原因。
             const recentBO = jrnlLastNDays(7).some(e => (e.status || []).includes('爆痘'));
-            const recentHrt = jrnlLastNDays(5).some(e => {
-                const ph = e.phase || '';
-                return ph.includes('波动') || ph.includes('调整') || ph.includes('加量') || ph.includes('减量') || ph.includes('出血');
-            });
+            const recentHrt = jrnlLastNDays(5).some(e => isHrtFluctuation(e.phase));
             
             const bnr = document.getElementById('hrt-bnr');
             if (bnr) {
@@ -3854,47 +3849,7 @@
             const db = document.getElementById('day-detail-body');
             if (!dd || !dt || !db) return;
 
-            const pdo = id => PD.find(x => x.id === id);
-            const active = id => { const x = pdo(id); return x && !x.hidden && isSchedActive(x, PS[id] || x.statuses[0]); };
-            let steps = [], skips = [];
-
-            if (p.shave) {
-                steps.push({ p: '凉水冲洗（刮胡后）', h: '降温止红' });
-                if (active('avene')) steps.push({ p: pdo('avene').name, h: '泛红/刺痛时可选，10–15分钟', t: 900 });
-                if (active('cicaplast')) steps.push({ p: pdo('cicaplast').name, h: '全脸薄涂，修护微创口' });
-                if (active('sebagh')) steps.push({ p: pdo('sebagh').name, h: '全脸3–4滴，轻拍至吸收' });
-                if (active('skinrocks')) steps.push({ p: pdo('skinrocks').name, h: '无香精封层' });
-                if (active('cicaplast')) steps.push({ p: 'Cicaplast B5 点涂', h: '痘痘处收尾' });
-                skips.push('所有酸类', '视黄醇', '泥面膜');
-            } else {
-                if (p.shower && active('lancome')) steps.push({ p: pdo('lancome').name, h: '60秒按摩，T区多停留', t: 60 });
-                else steps.push({ p: '温水冲洗' + (active('bioderma') ? ' / Bioderma 卸妆水' : ''), h: active('bioderma') ? '有防晒/彩妆时用卸妆水' : 'Bioderma 待购，暂用温水' });
-                const acidItem = p.items.find(it => it.type === 'acid');
-                const maskItem = p.items.find(it => it.type === 'mask');
-                const retItem  = p.items.find(it => it.type === 'retinol');
-                if (acidItem) {
-                    const ap = acidItem.id ? pdo(acidItem.id) : null;
-                    const aName = ap ? ap.name : acidItem.label;
-                    const aHint = (aName.includes('Votary') || aName.includes('乳酸')) ? '两颊主选；停留3–5分钟' : '额头+鼻翼+下颌，停留3–5分钟';
-                    steps.push({ p: aName, h: aHint });
-                    steps.push({ p: '等待3分钟', h: 'pH稳定后再叠', t: 180 });
-                    skips.push('Dr Sebagh 精华（酸类夜跳过）', '视黄醇');
-                } else if (maskItem) {
-                    const mp = maskItem.id ? pdo(maskItem.id) : null;
-                    if (mp) steps.push({ p: mp.name, h: '敷10–15分钟后冲洗', t: 900 });
-                    skips.push('视黄醇（面膜夜不叠用）');
-                } else if (retItem) {
-                    const rp = retItem.id ? pdo(retItem.id) : null;
-                    if (rp) steps.push({ p: rp.name, h: '1次/周，薄涂全脸，避开眼周' });
-                    skips.push('酸类');
-                } else {
-                    if (active('sebagh')) steps.push({ p: pdo('sebagh').name, h: '全脸3–4滴，轻拍至吸收' });
-                    if (!p.shower && active('agentholi')) steps.push({ p: pdo('agentholi').name, h: '1–2滴，两颊和颈部' });
-                }
-                if (active('mzskin')) steps.push({ p: pdo('mzskin').name, h: '无名指轻拍眼眶骨' });
-                if (active('skinrocks')) steps.push({ p: pdo('skinrocks').name, h: acidItem ? '酸类夜首选，无香精' : '全脸封层' });
-                if (active('cicaplast')) steps.push({ p: 'Cicaplast B5 点涂', h: '活跃痘痘处、口罩线' });
-            }
+            const { steps, skips } = buildNightSteps(p.shower, p.shave, p);
 
             let nightType = '';
             if (p.shave) nightType = '刮胡夜';
