@@ -2025,6 +2025,20 @@
       .tpl-btn{text-align:left;padding:10px 12px;border:1px solid rgba(128,128,128,.25);border-radius:10px;background:var(--sur2);cursor:pointer;width:100%;font-family:inherit}
       .tpl-n{font-size:13px;font-weight:600;color:var(--tx)}
       .tpl-d{font-size:11px;color:var(--tx3);margin-top:3px;line-height:1.4}
+      .assess-card2{background:var(--sur2);border-radius:var(--rs);padding:12px 14px;margin-bottom:1rem}
+      .assess-hd{display:flex;justify-content:space-between;align-items:baseline;font-weight:600;font-size:14px;margin-bottom:10px}
+      .ax-list{display:flex;flex-direction:column;gap:7px}
+      .ax-row{display:flex;align-items:center;gap:8px;font-size:12px}
+      .ax-name{width:34px;color:var(--tx2);flex:none}
+      .ax-bar{flex:1;height:7px;border-radius:4px;background:rgba(128,128,128,.18);overflow:hidden}
+      .ax-fill{height:100%;border-radius:4px;transition:width .3s}
+      .ax-num{width:54px;text-align:right;font-family:var(--mono);color:var(--tx2);flex:none}
+      .assess-recs{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+      .assess-rec{font-size:12px;line-height:1.45;padding:7px 9px;border-radius:8px;background:var(--sur)}
+      .assess-rec.safety{background:var(--rd-bg);color:var(--rd);font-weight:500}
+      .assess-rec.warn{background:var(--am-bg)}
+      .assess-rec.good{background:var(--gr-bg)}
+      .assess-empty{font-size:12px;color:var(--tx3);padding:4px 0}
     </style>
     <div class="wrap">
         <div class="header">
@@ -2055,6 +2069,7 @@
         <!-- ══ 今晚 ══ -->
 
         <div id="tonight" class="panel active">
+            <div id="assess-card"></div>
             <div id="hrt-bnr"></div>
             <div id="barrier-limit-banner"></div>
             <div id="pao-alert-tn"></div>
@@ -2075,11 +2090,12 @@
             <div style="background:var(--sur2);border-radius:var(--rs);padding:1rem;margin-top:1.5rem">
                 <div style="font-size:13px;font-weight:500;margin-bottom:8px">快速记录今日皮肤状态</div>
                 <div class="chips" id="tn-ql-chips">
-                    <div class="chip" data-cls="s-ok" onclick="logTonightStatus('稳定')">✓ 稳定</div>
-                    <div class="chip" data-cls="s-warn" onclick="logTonightStatus('出油')">💧 出油</div>
-                    <div class="chip" data-cls="s-warn" onclick="logTonightStatus('干燥')">🏜 干燥</div>
-                    <div class="chip" data-cls="s-bad" onclick="logTonightStatus('爆痘')">⚡ 爆痘</div>
-                    <div class="chip" data-cls="s-bad" onclick="logTonightStatus('泛红')">🔴 泛红</div>
+                    <div class="chip" data-val="稳定" data-cls="s-ok" onclick="logTonightStatus('稳定')">✓ 稳定</div>
+                    <div class="chip" data-val="出油" data-cls="s-warn" onclick="logTonightStatus('出油')">💧 出油</div>
+                    <div class="chip" data-val="闭口" data-cls="s-warn" onclick="logTonightStatus('闭口')">🌾 闭口</div>
+                    <div class="chip" data-val="干燥" data-cls="s-warn" onclick="logTonightStatus('干燥')">🏜 干燥</div>
+                    <div class="chip" data-val="爆痘" data-cls="s-bad" onclick="logTonightStatus('爆痘')">⚡ 爆痘</div>
+                    <div class="chip" data-val="泛红" data-cls="s-bad" onclick="logTonightStatus('泛红')">🔴 泛红</div>
                 </div>
                 <div id="tn-ql-msg" class="svm" style="margin-top:8px"></div>
             </div>
@@ -2222,6 +2238,7 @@
                 <div class="chips" id="sc-chips">
                     <div class="chip" data-val="稳定" data-cls="s-ok" onclick="toggleChip(this,'s')">✓ 稳定</div>
                     <div class="chip" data-val="出油" data-cls="s-warn" onclick="toggleChip(this,'s')">💧 出油</div>
+                    <div class="chip" data-val="闭口" data-cls="s-warn" onclick="toggleChip(this,'s')">🌾 闭口</div>
                     <div class="chip" data-val="干燥" data-cls="s-warn" onclick="toggleChip(this,'s')">🏜 干燥</div>
                     <div class="chip" data-val="泛红" data-cls="s-bad" onclick="toggleChip(this,'s')">🔴 泛红</div>
                     <div class="chip" data-val="爆痘" data-cls="s-bad" onclick="toggleChip(this,'s')">⚡ 爆痘</div>
@@ -2904,6 +2921,89 @@
             if (s >= 45) return { label: '需要注意', cls: 'caution' };
             return { label: '重点修护', cls: 'repair' };
         }
+
+        // ══ 皮肤评估引擎 v2：多维(屏障/控油/清透/无炎) + 趋势 + 行动建议 ═══════════
+        // 每个状态标签对各轴的权重(负=让该轴变差)。轴分 = 60 + 平均权重×3.5×置信度，夹 0–100(同屏障分口径)。
+        const AX_W = {
+            '稳定': { barrier: 8,  oil: 4,   congestion: 5,  calm: 8  },
+            '好转': { barrier: 12, oil: 6,   congestion: 10, calm: 12 },
+            '出油': { barrier: -2, oil: -10 },
+            '干燥': { barrier: -3 },
+            '敏感': { barrier: -5, calm: -4 },
+            '泛红': { barrier: -7, calm: -8 },
+            '爆痘': { barrier: -10, congestion: -4, calm: -12 },
+            '闭口': { congestion: -10 },
+            '粗糙': { congestion: -6 }
+        };
+        const AXES = [
+            { key: 'barrier',    name: '屏障' },
+            { key: 'oil',        name: '控油' },
+            { key: 'congestion', name: '清透' },
+            { key: 'calm',       name: '无炎' }
+        ];
+        function axisScore(key, entries) {
+            if (!entries || !entries.length) return null;
+            let sum = 0;
+            entries.forEach(e => (e.status || []).forEach(t => { const w = AX_W[t] && AX_W[t][key]; if (w !== undefined) sum += w; }));
+            const avg = sum / entries.length;
+            const conf = Math.min(1, entries.length / BARRIER_FULL_N);
+            return Math.max(0, Math.min(100, Math.round(60 + avg * BARRIER_GAIN * conf)));
+        }
+        // 趋势：近3天 vs 前一窗(4–8天前)比较，判方向
+        function axisTrend(key) {
+            const recent = axisScore(key, jrnlLastNDays(3));
+            const from = offsetDate(-8), to = offsetDate(-4), seen = new Set();
+            const prior = axisScore(key, (lg(K.jrnl) || [])
+                .filter(x => x && x.date && x.date >= from && x.date <= to)
+                .sort((a, b) => b.date.localeCompare(a.date))
+                .filter(x => { if (seen.has(x.date)) return false; seen.add(x.date); return true; }));
+            if (recent === null || prior === null) return { dir: 'flat', delta: 0, enough: false };
+            const d = recent - prior;
+            return { dir: d >= 6 ? 'up' : d <= -6 ? 'down' : 'flat', delta: d, enough: true };
+        }
+        function trendArrow(t) { return t.dir === 'up' ? '↗' : t.dir === 'down' ? '↘' : '→'; }
+        function assessSkin() {
+            const e7 = jrnlLastNDays(7);
+            const axes = AXES.map(a => ({ ...a, score: axisScore(a.key, e7), trend: axisTrend(a.key) }));
+            const scored = axes.filter(a => a.score !== null);
+            const overall = scored.length ? Math.round(scored.reduce((s, a) => s + a.score, 0) / scored.length) : null;
+            return { axes, overall, sampleN: e7.length, recs: buildRecs(axes, overall) };
+        }
+        // 规则化行动建议(含安全就医红线)，按优先级排序，最多 4 条
+        function buildRecs(axes, overall) {
+            const recs = [];
+            const ax = k => axes.find(a => a.key === k) || {};
+            const inflamDays = jrnlLastNDays(14).filter(e => (e.status || []).some(s => s === '泛红' || s === '爆痘')).length;
+            const barrier = ax('barrier').score, cong = ax('congestion').score, oil = ax('oil').score;
+            if (inflamDays >= 5 && ax('calm').trend && ax('calm').trend.dir !== 'up') {
+                recs.push({ level: 'safety', text: `近两周有 ${inflamDays} 天泛红/爆痘、且未见好转。若集中在口鼻/嘴周且久不消，可能是口周皮炎(越刷酸越糟)——建议看 GP / 皮肤科。` });
+            }
+            if (barrier !== null && barrier < 45) recs.push({ level: 'warn', text: '屏障偏弱：本周已自动停酸、暂停视黄醇/泥膜，专注修护封层。' });
+            else if (barrier !== null && barrier < 65) recs.push({ level: 'warn', text: '屏障一般：本周刷酸限 1 次，别叠猛料。' });
+            if (cong !== null && cong < 50 && (barrier === null || barrier >= 60)) recs.push({ level: 'info', text: '闭口/毛孔偏多而屏障稳：维持温和刷酸(杏仁酸即可)，别上磨砂搓脸。' });
+            if (oil !== null && oil < 50) recs.push({ level: 'info', text: 'T区出油：控油但别过度清洁(越剥越油)，防晒选无油款。' });
+            if (!recs.length && overall !== null && overall >= 75) recs.push({ level: 'good', text: '整体不错，保持当前节奏。' });
+            if (jrnlLastNDays(7).length < 2) recs.push({ level: 'info', text: '多记几天皮肤状态，评估会更准。' });
+            return recs.slice(0, 4);
+        }
+        function renderAssessment() {
+            const box = document.getElementById('assess-card'); if (!box) return;
+            const a = assessSkin();
+            if (a.overall === null) { box.innerHTML = `<div class="assess-empty">记一次今日皮肤状态，就能生成多维评估与建议。</div>`; return; }
+            const ov = barrierLabel(a.overall);
+            const ovCol = a.overall >= 65 ? 'var(--gr)' : a.overall >= 45 ? 'var(--am)' : 'var(--rd)';
+            const bars = a.axes.map(x => {
+                const sc = x.score;
+                const col = sc === null ? 'var(--tx3)' : sc >= 65 ? 'var(--gr)' : sc >= 45 ? 'var(--am)' : 'var(--rd)';
+                return `<div class="ax-row"><div class="ax-name">${x.name}</div><div class="ax-bar"><div class="ax-fill" style="width:${sc === null ? 0 : sc}%;background:${col}"></div></div><div class="ax-num">${sc === null ? '—' : sc} ${x.trend.enough ? trendArrow(x.trend) : ''}</div></div>`;
+            }).join('');
+            const recHtml = a.recs.map(r => `<div class="assess-rec ${r.level}">${r.level === 'safety' ? '⚠ ' : r.level === 'good' ? '✓ ' : '▸ '}${esc(r.text)}</div>`).join('');
+            box.innerHTML = `<div class="assess-card2">
+                <div class="assess-hd"><span>今日评估</span><span style="font-size:13px;color:${ovCol}">${a.overall} · ${ov.label}${a.sampleN < 4 ? ` <span style="color:var(--tx3);font-weight:400">(记${a.sampleN}天)</span>` : ''}</span></div>
+                <div class="ax-list">${bars}</div>
+                ${recHtml ? `<div class="assess-recs">${recHtml}</div>` : ''}
+            </div>`;
+        }
         // Dynamic acid limit based on barrier score
         function maxAcidPerWeek() {
             const s = barrierScore();
@@ -3246,6 +3346,7 @@
         }
         function renderTn() {
             const { shower, shave, manual } = TN;
+            renderAssessment();
             const sBtn = document.getElementById('tn-sh'), vBtn = document.getElementById('tn-sv');
             if (sBtn) sBtn.className = 'tn-btn' + (shower ? ' on-shower' : '');
             if (vBtn) vBtn.className = 'tn-btn' + (shave ? ' on-shave' : '');
@@ -3322,7 +3423,7 @@
             const qlChips = document.getElementById('tn-ql-chips');
             if (qlChips) {
                 Array.from(qlChips.children).forEach(chip => {
-                    const val = chip.textContent.replace('✓ ', '').replace('💧 ', '').replace('🏜 ', '').replace('⚡ ', '').replace('🔴 ', '').trim();
+                    const val = chip.dataset.val || chip.textContent.trim();
                     if (todayStatus.includes(val)) chip.className = 'chip ' + chip.dataset.cls;
                     else chip.className = 'chip';
                 });
