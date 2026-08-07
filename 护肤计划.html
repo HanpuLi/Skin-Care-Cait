@@ -111,7 +111,14 @@
             font-family: var(--font);
             background: var(--bg);
             color: var(--tx);
-            padding: calc(1.25rem + env(safe-area-inset-top)) 1rem calc(4rem + env(safe-area-inset-bottom));
+            /* PWA(standalone)下顶栏会顶到状态栏/灵动岛底下：env() 在部分机型取不到值会退成 0，
+               1.25rem 基础留白不够高刘海机型(状态栏可达 ~59px)，登录按钮会被信号/电量遮住。
+               用 max() 兜底最小 44px，并加左右安全区(横屏/圆角屏)。 */
+            padding:
+                max(calc(1.25rem + env(safe-area-inset-top, 0px)), 2.75rem)
+                calc(1rem + env(safe-area-inset-right, 0px))
+                calc(4rem + env(safe-area-inset-bottom, 0px))
+                calc(1rem + env(safe-area-inset-left, 0px));
             -webkit-font-smoothing: antialiased;
             line-height: 1.5;
             overscroll-behavior-y: none;
@@ -120,6 +127,15 @@
         .wrap {
             max-width: 680px;
             margin: 0 auto
+        }
+
+        /* 装成 App(standalone/fullscreen)时没有浏览器 UI 顶着，顶栏更容易被状态栏压住：
+           在安全区基础上再多给一点，浏览器里打开则不受影响、不会平白多空白。 */
+        @media (display-mode: standalone), (display-mode: fullscreen) {
+            body { padding-top: max(calc(1.75rem + env(safe-area-inset-top, 0px)), 3.5rem); }
+            /* 装成 App 时没有浏览器 UI 顶着，按钮必须自己躲开状态栏。
+               注意 .auth-btn 的基础规则在本文件更靠后，这里用 body 后代提升特异性以免被覆盖。 */
+            body .auth-btn { top: max(calc(12px + env(safe-area-inset-top, 0px)), 52px); }
         }
 
         /* Header */
@@ -1901,7 +1917,9 @@
         }
 
         /* Auth pill */
-        .auth-btn { position:fixed; top:12px; right:12px; z-index:50; display:flex; align-items:center; gap:0; background:var(--sur); border:1px solid var(--bd); border-radius:20px; padding:0; box-shadow:0 2px 12px rgba(0,0,0,.10); font-size:12px; font-family:var(--font); color:var(--tx2); cursor:default; overflow:hidden; transition:border-color .2s }
+        /* fixed 定位不受 body 的 safe-area padding 影响，必须自己算安全区：
+           否则装成 PWA 后这颗按钮压在状态栏(信号/电量)底下，高刘海机型尤其明显(真实反馈)。 */
+        .auth-btn { position:fixed; top:calc(12px + env(safe-area-inset-top, 0px)); right:calc(12px + env(safe-area-inset-right, 0px)); z-index:50; display:flex; align-items:center; gap:0; background:var(--sur); border:1px solid var(--bd); border-radius:20px; padding:0; box-shadow:0 2px 12px rgba(0,0,0,.10); font-size:12px; font-family:var(--font); color:var(--tx2); cursor:default; overflow:hidden; transition:border-color .2s }
         .auth-btn.signed-in { border-color:var(--gr-br) }
         .auth-pill-left { display:flex; align-items:center; gap:7px; padding:6px 10px 6px 8px }
         .auth-pill-sync { padding:6px 10px; border-left:1px solid var(--bd); border-right:1px solid var(--bd); font-size:11px; font-family:var(--mono); min-width:72px; text-align:center; transition:all .3s }
