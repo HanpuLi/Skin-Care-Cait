@@ -4,7 +4,8 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <!-- 不锁死缩放：禁用双指放大对看不清小字的人是无障碍问题 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#fafaf9" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#141210" media="(prefers-color-scheme: dark)">
     <title>护肤计划</title>
@@ -135,7 +136,8 @@
         /* 装成 App(standalone/fullscreen)时没有浏览器 UI 顶着，顶栏更容易被状态栏压住：
            在安全区基础上再多给一点，浏览器里打开则不受影响、不会平白多空白。 */
         @media (display-mode: standalone), (display-mode: fullscreen) {
-            body { padding-top: max(calc(1.75rem + env(safe-area-inset-top, 0px)), 3.5rem); }
+            /* 再多留出登录胶囊的高度，否则它会压住 header 里的屏障分和主题按钮 */
+            body { padding-top: max(calc(1.75rem + env(safe-area-inset-top, 0px) + 34px), 5.5rem); }
             /* 装成 App 时没有浏览器 UI 顶着，按钮必须自己躲开状态栏。
                注意 .auth-btn 的基础规则在本文件更靠后，这里用 body 后代提升特异性以免被覆盖。 */
             body .auth-btn { top: max(calc(12px + env(safe-area-inset-top, 0px)), 52px); }
@@ -2128,6 +2130,8 @@
                     <div class="chip" data-val="干燥" data-cls="s-warn" onclick="logTonightStatus('干燥')">🏜 干燥</div>
                     <div class="chip" data-val="爆痘" data-cls="s-bad" onclick="logTonightStatus('爆痘')">⚡ 爆痘</div>
                     <div class="chip" data-val="泛红" data-cls="s-bad" onclick="logTonightStatus('泛红')">🔴 泛红</div>
+                    <div class="chip" data-val="敏感" data-cls="s-warn" onclick="logTonightStatus('敏感')">⚠ 敏感</div>
+                    <div class="chip" data-val="好转" data-cls="s-ok" onclick="logTonightStatus('好转')">↑ 好转</div>
                 </div>
                 <div id="tn-ql-msg" class="svm" style="margin-top:8px"></div>
             </div>
@@ -2152,7 +2156,7 @@
                     <label class="set-row"><span>HRT · 显示激素相关内容</span><input type="checkbox" id="set-hrt" onchange="onProfileEdit()"></label>
                 </div>
                 <p style="font-size:11px;color:var(--tx3);margin-top:8px">关掉某项只是隐藏对应界面，已记录的历史数据不会删除，可随时打开。</p>
-                <div class="sec-title" style="margin-top:1.25rem">套用护肤方案模板</div>
+                <div class="sec-title" style="margin-top:1.25rem">套用护肤方案模版</div>
                 <p style="font-size:11px;color:var(--tx3);margin:6px 0 8px">一键把整套配置（启用哪些产品 / 酸类频率 / 刮胡 / HRT / 肤质）套到你<b>当前登录的账号</b>；只影响你自己，套完可随时再手动调。</p>
                 <div id="plan-tpl-box" style="display:flex;flex-direction:column;gap:8px"></div>
                 <button class="tpl-btn" style="margin-top:8px" onclick="showOnboarding()"><div class="tpl-n">✨ 做引导设置（生成方案）</div><div class="tpl-d">按肤质 + 诉求自动配一套起步方案</div></button>
@@ -2164,7 +2168,7 @@
                 <div class="at">非洗澡夜</div>屏障修复主要时段，使用微温水或温和卸妆膏简单清洁，修护为主。
             </div>
             <div class="alert warn feat-shave">
-                <div class="at">刮胡 = 机械性去角质</div>刮胡日当晚必须跳过所有剥脱性酸类和视黄醇。刮胡后全脸薄涂 Cicaplast B5 是必须的动作。
+                <div class="at">刮胡 = 机械性去角质</div>刮胡日当晚必须跳过所有剥脱性酸类和视黄醇。刮胡后全脸薄涂修护霜是必须的动作。
             </div>
             <div class="section" style="margin-top:2rem">
                 <div class="sec-title">叠涂顺序口诀</div>
@@ -2191,7 +2195,7 @@
                     <button class="tb" id="mode-clear" onclick="setMode('clear')">✕ 清除</button>
                 </div>
                 <div style="display:flex;align-items:center;gap:4px;">
-                    <button type="button" class="tb" style="background:var(--sur2);color:var(--tx2)" onclick="savePreset()" title="保存今天及未来6天模式为模板">💾 保存为模版</button>
+                    <button type="button" class="tb" style="background:var(--sur2);color:var(--tx2)" onclick="savePreset()" title="保存今天及未来6天模式为模版">💾 保存为模版</button>
                     <button type="button" class="tb" style="background:var(--sur2);color:var(--tx2)" onclick="applyPreset()" title="将模版循环填入未来7天">🔄 填入模版</button>
                 </div>
             </div>
@@ -2742,10 +2746,13 @@
             PROFILE.hrt     = !!(b && b.checked);
             PROFILE.skinType = c ? c.value.trim() : PROFILE.skinType;
             saveProfile(); applyProfileVisibility();
-            renderTn(); renderWk();
+            // 全量重渲染：产品卡文案(visNotes/visCat)、日志芯片、快速记录按钮、日历标签都随开关变，
+            // 旧版只重渲今晚+排班，其余要等下一次 renderAll 才跟上。
+            renderProdChips(); renderQuickAcidBtns(); renderProds();
+            invalidatePlanCache(); renderTn(); renderAm(); renderWk(); renderJrnl(); renderStats();
         }
 
-        // ══ 护肤方案模板：一整套配置一键套用到当前账号（数据驱动，加模板只改这个数组） ══
+        // ══ 护肤方案模版：一整套配置一键套用到当前账号（数据驱动，加模版只改这个数组） ══
         // 套用只改「当前登录账号」的数据（PS/PROFILE/proddefs 都按 uid 隔离），不影响别的账号。
         const PLAN_TEMPLATES = [
             {
@@ -2792,7 +2799,7 @@
             });
         }
 
-        // ══ Round 2:引导设置——新用户选肤质+诉求 → 自动生成起始计划(接模板) ══════
+        // ══ Round 2:引导设置——新用户选肤质+诉求 → 自动生成起始计划(接模版) ══════
         const ONBOARD_SKIN = [
             { v: 'oily',   label: '油性',     sub: '油性 · 控油清透' },
             { v: 'combo',  label: '混合/混油', sub: '混油皮 · 平衡控油' },
@@ -2836,7 +2843,7 @@
             const shaving = !!document.getElementById('ob-shave').checked;
             const tpl = PLAN_TEMPLATES.find(t => t.id === pickTemplateFor(concerns));
             if (tpl) applyTemplateCore(tpl);
-            // 引导里选的优先于模板里的 profile
+            // 引导里选的优先于模版里的 profile
             PROFILE.skinType = skin.sub + (concerns.length ? ' · ' + concerns[0].split('/')[0] : '');
             PROFILE.shaving = shaving; PROFILE.hrt = false; PROFILE.onboarded = true;
             PROFILE.phase = 'repair'; PROFILE.phaseStart = today();
@@ -2883,9 +2890,9 @@
             const pTime = sch.time || ['pm'];
             document.getElementById('modal-body').innerHTML = `
                 <div class="fg"><label class="fg-label">产品名称</label><input class="fg-input" id="m-name" value="${esc(prod?prod.name:'')}"></div>
-                <div class="fg-row"><div class="fg"><label class="fg-label">分类</label><input class="fg-input" id="m-cat" value="${esc(prod?prod.cat:'')}"></div>
+                <div class="fg-row"><div class="fg"><label class="fg-label">分类</label><input class="fg-input" id="m-cat" value="${esc(prod?visCat(prod):'')}"></div>
                 <div class="fg"><label class="fg-label">图标</label><input class="fg-input" id="m-icon" value="${prod?prod.icon:'🧴'}" style="width:60px"></div></div>
-                <div class="fg"><label class="fg-label">备注（每行一条）</label><textarea class="fg-input" id="m-notes" rows="3" style="resize:vertical">${prod?prod.notes.join('\n'):''}</textarea></div>
+                <div class="fg"><label class="fg-label">备注（每行一条）</label><textarea class="fg-input" id="m-notes" rows="3" style="resize:vertical">${prod?visNotes(prod).join('\n'):''}</textarea></div>
                 <div class="fg"><label class="fg-label">日志标签</label><input class="fg-input" id="m-jtag" value="${esc(prod?prod.journalTag||'':'')}"></div>
                 <div class="fg-row"><div class="fg"><label class="fg-label">排班类型</label><select class="fg-select" id="m-stype" onchange="toggleSchedFields()">${TYPES.map(t=>`<option value="${t.value}" ${sch.type===t.value?'selected':''}>${t.label}</option>`).join('')}</select></div>
                 <div class="fg"><label class="fg-label">保质期 (PAO月数, 0为不提醒)</label><input type="number" class="fg-input" id="m-pao" min="0" value="${prod?prod.paoMonths||0:0}"></div></div>
@@ -2911,8 +2918,18 @@
         function saveProdModal() {
             const name = document.getElementById('m-name').value.trim(); if (!name) { alert('请输入产品名称'); return; }
             const icon = document.getElementById('m-icon').value.trim()||'🧴';
-            const cat = document.getElementById('m-cat').value.trim();
-            const notes = document.getElementById('m-notes').value.trim().split('\n').filter(Boolean);
+            let cat = document.getElementById('m-cat').value.trim();
+            let notes = document.getElementById('m-notes').value.trim().split('\n').filter(Boolean);
+            if (editingProdId) {
+                // 弹窗里显示的是过滤后的内容(visNotes/visCat)。保存时必须把「当前用户看不到的那些条目」原样合并回去，
+                // 否则关掉刮胡的人编辑一次产品，就把刮胡相关备注永久删了。
+                const orig = PD.find(p => p.id === editingProdId);
+                if (orig) {
+                    const hidden = (orig.notes || []).filter(n => visNotes(orig).indexOf(n) === -1);
+                    notes = notes.concat(hidden);
+                    if (cat === visCat(orig)) cat = orig.cat;   // 分类没被改动就保留原始值(别把"修护 · 刮胡后"存成"修护 · 舒缓")
+                }
+            }
             const journalTag = document.getElementById('m-jtag').value.trim();
             const timeArr = [];
             if (document.getElementById('m-tam').checked) timeArr.push('am');
@@ -3036,7 +3053,14 @@
             entries = (entries || []).filter(e => e && (e.status || []).length);
             if (!entries.length) return null;
             let sum = 0;
-            entries.forEach(e => { (e.status || []).forEach(t => { if (BARRIER_W[t] !== undefined) sum += BARRIER_W[t]; }); });
+            // 同一天多个负标签做衰减：最重的一项全额计，其余各打 5 折。
+            // 否则混油皮如实勾「出油+干燥+泛红」会线性叠加把阈值打穿，被永久锁在修护模式。
+            entries.forEach(e => {
+                const ws = (e.status || []).map(t => BARRIER_W[t]).filter(w => w !== undefined);
+                const pos = ws.filter(w => w > 0), neg = ws.filter(w => w < 0).sort((a, b) => a - b);
+                sum += pos.reduce((a, b) => a + b, 0);
+                neg.forEach((w, i) => { sum += i === 0 ? w : w * 0.5; });
+            });
             const avg = sum / entries.length;
             const conf = Math.min(1, entries.length / BARRIER_FULL_N);
             return Math.max(0, Math.min(100, Math.round(60 + avg * BARRIER_GAIN * conf)));
@@ -3732,12 +3756,12 @@
                 preset.push({ shower: cur.shower, shave: cur.shave, dow: new Date(dStr + 'T12:00:00').getDay() });
             }
             ls(K.preset, preset);
-            sysAlert('已保存今天及未来6天的排班模式作为模版！\n\n之后的日期您可以直接点击「填入模版」快速覆盖。');
+            sysAlert('已保存今天及未来6天的排班模式作为模版！\n\n之后的日期你可以直接点击「填入模版」快速覆盖。');
         }
         function applyPreset() {
             const preset = lg(K.preset);
             if (!preset || preset.length !== 7) return sysAlert('没有找到保存的模版记录，请先保存。');
-            sysConfirm('这将会使用模版覆盖「今天」以及「未来6天」的洗澡与刮胡排班，确定继续吗？', () => {
+            sysConfirm('这将会使用模版覆盖「今天」以及「未来6天」的' + (PROFILE.shaving ? '洗澡与刮胡' : '洗澡') + '排班，确定继续吗？', () => {
                 const t = today();
                 for (let i = 0; i < 7; i++) {
                     const dStr = offsetDate(i);
@@ -3937,28 +3961,41 @@
             // === Phase 2: Masks ===
             // 计数必须把"过去 7 天日志里已经用过的次数"算进去。旧版 placed 每次重算都从 0 起，
             // 而 futureDays 只有今天和未来，历史用量从不进入判断 —— 于是 maxPerWeek:1 的泥膜天天被重排。
+            // 泥膜也占"去角质额度",必须和酸类查同一本账，否则计划里稳定超发、次日引擎又回头把酸清空
+            const exfoliantLoadAt = (dateStr) => {
+                const windowFrom = localD(new Date(new Date(dateStr + 'T12:00:00').getTime() - 6 * 86400000));
+                const fromJrnl = jrnlLastNDays(7).filter(x => x.date >= windowFrom && x.date <= dateStr &&
+                    (x.products || []).some(t => getExfoliantTags().includes(t))).length;
+                const fromPlan = futureDays.filter(d => d.date >= windowFrom && d.date <= dateStr &&
+                    d.items.some(it => it.type === 'acid' || it.type === 'mask')).length;
+                return fromJrnl + fromPlan;
+            };
             masks.forEach(prod => {
                 const used = pastUseDates(prod);
                 let placed = used.length;
                 const takenDates = [...used];
-                for (let pass = 0; pass < 2 && placed < capOf(prod); pass++) {
+                // 外层按"还差几次"循环，内层 pass 0/1 由紧到松；旧版写死 pass<2，maxPerWeek≥3 永远排不出来
+                let guard = 0;
+                while (placed < capOf(prod) && guard++ < 14) {
                     let bestIdx = -1, bestScore = -Infinity;
-                    for (let i = 0; i < futureDays.length; i++) {
-                        const fd = futureDays[i];
-                        if (fd.shave && prod.schedule.avoidShaveDay) continue;
-                        if (fd.items.some(it => it.type === 'mask')) continue;
-                        if (prod.schedule.avoidAcid && fd.items.some(it => it.type === 'acid')) continue;
-                        if (prod.schedule.preferShowerNight && !fd.shower && pass === 0) continue;
-                        let minDist = 999;
-                        for (const d of takenDates) minDist = Math.min(minDist, dayDist(fd.date, d));
-                        if (takenDates.length > 0 && minDist < gapOf(prod)) continue;
-                        const score = minDist * 10 + (fd.shower && prod.schedule.preferShowerNight ? 5 : 0);
-                        if (score > bestScore) { bestScore = score; bestIdx = i; }
+                    for (let pass = 0; pass < 2 && bestIdx < 0; pass++) {
+                        for (let i = 0; i < futureDays.length; i++) {
+                            const fd = futureDays[i];
+                            if (fd.shave && prod.schedule.avoidShaveDay) continue;
+                            if (fd.items.some(it => it.type === 'mask')) continue;
+                            if (prod.schedule.avoidAcid && fd.items.some(it => it.type === 'acid')) continue;
+                            if (prod.schedule.preferShowerNight && !fd.shower && pass === 0) continue;
+                            if (exfoliantLoadAt(fd.date) >= maxAcid) continue;   // 与酸类共用去角质预算
+                            let minDist = 999;
+                            for (const d of takenDates) minDist = Math.min(minDist, dayDist(fd.date, d));
+                            if (takenDates.length > 0 && minDist < gapOf(prod)) continue;
+                            const score = minDist * 10 + (prod.schedule.preferShowerNight ? (fd.shower ? 60 : -30) : 0);
+                            if (score > bestScore) { bestScore = score; bestIdx = i; }
+                        }
                     }
-                    if (bestIdx >= 0) {
-                        futureDays[bestIdx].items.push({ id: prod.id, type: 'mask', label: prod.name });
-                        takenDates.push(futureDays[bestIdx].date); placed++;
-                    }
+                    if (bestIdx < 0) break;
+                    futureDays[bestIdx].items.push({ id: prod.id, type: 'mask', label: prod.name });
+                    takenDates.push(futureDays[bestIdx].date); placed++;
                 }
             });
 
@@ -3967,8 +4004,10 @@
                 const used = pastUseDates(prod);
                 let placed = used.length;
                 const takenDates = [...used];
-                for (let pass = 0; pass < 2 && placed < capOf(prod); pass++) {
+                let guardR = 0;
+                while (placed < capOf(prod) && guardR++ < 14) {   // 同上：外层按剩余次数循环，别写死 2 次
                     let bestIdx = -1, bestScore = -Infinity;
+                    for (let pass = 0; pass < 2 && bestIdx < 0; pass++) {
                     for (let i = 0; i < futureDays.length; i++) {
                         const fd = futureDays[i];
                         if (fd.shave && prod.schedule.avoidShaveDay) continue;
@@ -3982,6 +4021,8 @@
                         const score = minDist * 10;
                         if (score > bestScore) { bestScore = score; bestIdx = i; }
                     }
+                    }
+                    if (bestIdx < 0) break;
                     if (bestIdx >= 0) {
                         futureDays[bestIdx].items.push({ id: prod.id, type: 'retinol', label: prod.name });
                         takenDates.push(futureDays[bestIdx].date); placed++;
@@ -3998,7 +4039,11 @@
                 return !prod || !prod.schedule || prod.schedule[flag] !== false;
             };
             futureDays.forEach(p => {
-                if (p.shave) p.items.push({ id: 'avene', type: 'support', label: 'Avène' });
+                // 刮胡日的舒缓支援按角色取当前账号真实产品，不写死 Avène
+                if (p.shave && PROFILE.shaving) {
+                    const sup = PD.find(x => !x.hidden && x.role === 'repair' && isSchedActive(x, PS[x.id] || x.statuses[0]));
+                    if (sup) p.items.push({ id: sup.id, type: 'support', label: sup.name });
+                }
                 const dayLabel = p.dayName + ' ' + p.shortDate;
                 const has = t => p.items.some(i => i.type === t);
                 const dropIf = (type, flag, msg) => {
@@ -4414,8 +4459,16 @@
             const e = lg(K.jrnl) || []; if (!e.length) { alert('暂无日志记录'); return; }
             // 每一列都要转义：HRT阶段是自由文本输入框，里面一个双引号就会让 Excel 从该行起整体错列。
             const cell = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-            const rows = [['日期','皮肤状态','今晚使用','HRT阶段','备注'].map(cell).join(',')];
-            e.forEach(x => rows.push([x.date, (x.status || []).join('|'), (x.products || []).join('|'), x.phase || '', x.note || ''].map(cell).join(',')));
+            // 关掉 HRT 的用户不该拿到一列空的「HRT阶段」
+            const withHrt = !!PROFILE.hrt;
+            const head = withHrt ? ['日期','皮肤状态','今晚使用','HRT阶段','备注'] : ['日期','皮肤状态','今晚使用','备注'];
+            const rows = [head.map(cell).join(',')];
+            e.forEach(x => {
+                const base = [x.date, (x.status || []).join('|'), (x.products || []).join('|')];
+                if (withHrt) base.push(x.phase || '');
+                base.push(x.note || '');
+                rows.push(base.map(cell).join(','));
+            });
             const blob = new Blob(['\uFEFF' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a'); a.href = url; a.download = 'skincare_' + today() + '.csv'; a.click();
@@ -4538,7 +4591,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
 📝 特别备注：
   ${noteList || '无'}
 
-🌟 系统建议：${barrierScore() < 60 ? '状态波动，建议精简并注重修护。' : '状态相对平稳，继续保持节奏。'}`;
+🌟 系统建议：${(function(){ const bs = barrierScore(); return bs === null ? '近 7 天没有记录，先补几天状态再看趋势。' : bs < 60 ? '状态波动，建议精简并注重修护。' : '状态相对平稳，继续保持节奏。'; })()}`;
             
             sysConfirm("已生成复盘报告，是否复制到剪贴板？\n\n" + report, () => {
                 navigator.clipboard.writeText(report).then(() => sysAlert('✓ 已成功复制复盘报告到剪贴板！')).catch(() => sysAlert('复制失败，可能是浏览器限制剪贴板API访问权限'));
@@ -4709,19 +4762,27 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
                 // 频率图却把上限线画在 50% 处并给绿色。这里保留真实 0。
                 const _mA = maxAcidPerWeek();
                 const maxA = _mA;
+                // 口径必须与引擎一致:滚动 7 天窗 + 计入泥膜(getExfoliantTags)。
+                // 旧版用自然周且只数酸类,画出来的上限线与实际闸门对不上,会骗人。
+                const jr = lg(K.jrnl) || [];
                 ab.innerHTML = [0, 1, 2, 3].map(w => {
-                    const wsMon = mondayNWeeksAgo(w);
-                    const weekEntries = entriesInWeek(wsMon);
-                    const cnt = weekEntries.filter(x => (x.products||[]).some(p => getAcidTags().includes(p))).length;
-                    const lbl = w === 0 ? '本周' : w === 1 ? '上周' : w === 2 ? '上上周' : '3周前';
+                    const to = offsetDate(-7 * w), from = offsetDate(-7 * w - 6);
+                    const seenD = new Set();
+                    const cnt = jr.filter(x => x && x.date && x.date >= from && x.date <= to &&
+                        (x.products || []).some(p => getExfoliantTags().includes(p)))
+                        .filter(x => { if (seenD.has(x.date)) return false; seenD.add(x.date); return true; }).length;
+                    const lbl = w === 0 ? '近7天' : w === 1 ? '前7天' : w === 2 ? '再前7天' : '更早7天';
                     const scale = Math.max(maxA, 4);
                     const limitPct = Math.min(100, maxA / scale * 100);
                     const pct = Math.min(100, cnt / scale * 100);
                     const col = maxA === 0 ? (cnt > 0 ? 'var(--rd)' : 'var(--gr)') : cnt <= maxA ? 'var(--gr)' : cnt <= 3 ? 'var(--am)' : 'var(--rd)';
                     // Per-product counts
                     const prodCounts = acidProds.map(p => {
-                        const pc = weekEntries.filter(x => (x.products||[]).includes(p.journalTag)).length;
-                        return pc > 0 ? `<span style="font-size:10px;font-family:var(--mono);color:var(--tx3);margin-left:4px">${p.journalTag.replace('酸','').replace('Good Genes','GG')}×${pc}</span>` : '';
+                        // 与上面的 cnt 同口径：同一个滚动 7 天窗
+                        const pc = jr.filter(x => x && x.date && x.date >= from && x.date <= to && (x.products||[]).includes(p.journalTag)).length;
+                        // 标签用通用截断，别对特定产品名做写死替换
+                        const short = p.journalTag.length > 5 ? p.journalTag.slice(0, 5) + '…' : p.journalTag;
+                        return pc > 0 ? `<span style="font-size:10px;font-family:var(--mono);color:var(--tx3);margin-left:4px">${esc(short)}×${pc}</span>` : '';
                     }).join('');
                     return `<div class="br"><div class="brl">${lbl}</div><div class="brt" style="position:relative"><div class="brf" style="width:${pct}%;background:${col}"></div><div class="acid-limit-line" style="left:${limitPct}%" data-label="上限"></div></div><div class="brv">${cnt}天${prodCounts}</div></div>`;
                 }).join('');
@@ -4886,8 +4947,9 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
         let _unsub = null;
         const UIDK = 'sk_uid';   // 记住上一个登录的 uid（不同步、仅本机用来判断"是否换了人"）
         // 只清「未加账号前缀的旧照片」：新照片按 uid 隔离，换账号不该删别人的
-        function clearAllPhotos(cb) {
-            if (!_idb) { if (cb) cb(); return; }
+        function clearAllPhotos(cb, _retried) {
+            // _idb 常常还没初始化(唯一常规初始化点在 renderAll)，旧版直接 return 会静默跳过清理
+            if (!_idb) { if (_retried) { if (cb) cb(); return; } initPhotoDB(() => clearAllPhotos(cb, true)); return; }
             try {
                 const tx = _idb.transaction('photos', 'readwrite');
                 const st = tx.objectStore('photos');
