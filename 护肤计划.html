@@ -2156,6 +2156,10 @@
                     <label class="set-row"><span>HRT · 显示激素相关内容</span><input type="checkbox" id="set-hrt" onchange="onProfileEdit()"></label>
                 </div>
                 <p style="font-size:11px;color:var(--tx3);margin-top:8px">关掉某项只是隐藏对应界面，已记录的历史数据不会删除，可随时打开。</p>
+                <div class="sec-title" style="margin-top:1.25rem">需要避开的区域</div>
+                <p style="font-size:11px;color:var(--tx3);margin:6px 0 8px">选了之后，每晚的酸类/面膜/视黄醇步骤会直接标出「避开这里」，评估建议也会带上它。</p>
+                <div class="ob-opts" id="zone-opts"></div>
+                <div id="zone-cur" style="font-size:11px;color:var(--tx2);margin-top:8px"></div>
                 <div class="sec-title" style="margin-top:1.25rem">套用护肤方案模版</div>
                 <p style="font-size:11px;color:var(--tx3);margin:6px 0 8px">一键把整套配置（启用哪些产品 / 酸类频率 / 刮胡 / HRT / 肤质）套到你<b>当前登录的账号</b>；只影响你自己，套完可随时再手动调。</p>
                 <div id="plan-tpl-box" style="display:flex;flex-direction:column;gap:8px"></div>
@@ -2725,6 +2729,33 @@
         let PS = lg(K.prods) || {};
         let POPEN = lg(K.popen) || {};
 
+        // ══ 私人化层:关注区域(分区护理) + 硬性排除清单 + 诉求建议 ══════════════
+        // 都是 per-user 数据，不写死任何人的情况。
+        // zones: [{name:'人中/鼻下', avoid:['acid','mask','retinol'], care:'只温和清洁+修护点涂'}]
+        // excluded: ['drorganic', ...] —— 明确不用的产品，排班与步骤一律不出现(比"暂停"更硬)
+        const ZONE_PRESETS = [
+            { name: '人中/鼻下', avoid: ['acid', 'mask', 'retinol'], care: '只温和清洁 + 修护霜点涂' },
+            { name: '眼周',     avoid: ['acid', 'mask', 'retinol'], care: '只用眼部产品' },
+            { name: '两颊',     avoid: ['acid', 'mask'],            care: '干燥/易泛红时避开去角质' },
+            { name: '下巴',     avoid: ['mask'],                    care: '易闭口，避免厚重封闭' },
+            { name: '发际线',   avoid: ['mask'],                    care: '易长闭口，冲洗要彻底' }
+        ];
+        function userZones() { return (PROFILE.zones || []).filter(z => z && z.name); }
+        function zonesAvoiding(type) { return userZones().filter(z => (z.avoid || []).includes(type)).map(z => z.name); }
+        // 某一类活性成分该避开哪些区域 → 直接拼进步骤提示，让"避开人中"变成每晚看得见的指令
+        function zoneHintFor(type) {
+            const zs = zonesAvoiding(type);
+            return zs.length ? '　⚠️ 避开：' + zs.join('、') : '';
+        }
+        function isExcluded(p) { return !!p && (PROFILE.excluded || []).includes(p.id); }
+        function toggleExcluded(id) {
+            const list = (PROFILE.excluded || []).slice();
+            const i = list.indexOf(id);
+            if (i >= 0) list.splice(i, 1); else list.push(id);
+            PROFILE.excluded = list; saveProfile();
+            invalidatePlanCache(); renderProds(); renderProdChips(); renderQuickAcidBtns(); renderTn(); renderAm(); renderWk();
+        }
+
         // ══ 用户档案（per-user 刮胡 / HRT / 肤质） ══════════════════
         let PROFILE = lg(K.profile) || { shaving: false, hrt: false, skinType: '', name: '', onboarded: false };
         function saveProfile() { ls(K.profile, PROFILE); }
@@ -2734,7 +2765,25 @@
             const sub = document.getElementById('header-sub');
             if (sub) sub.textContent = PROFILE.skinType || '护肤计划';
         }
+        function renderZoneUI() {
+            const box = document.getElementById('zone-opts'); if (!box) return;
+            const on = userZones().map(z => z.name);
+            box.innerHTML = ZONE_PRESETS.map(z =>
+                `<button class="ob-opt${on.includes(z.name) ? ' on' : ''}" onclick="toggleZone('${esc(z.name)}')">${esc(z.name)}</button>`
+            ).join('');
+            const cur = document.getElementById('zone-cur');
+            if (cur) cur.textContent = on.length ? '已避开：' + userZones().map(z => z.name + '（' + (z.care || '') + '）').join('；') : '未设置——如果某块皮肤反复出问题（比如人中长疹子），把它选上。';
+        }
+        function toggleZone(name) {
+            const preset = ZONE_PRESETS.find(z => z.name === name); if (!preset) return;
+            const list = (PROFILE.zones || []).slice();
+            const i = list.findIndex(z => z && z.name === name);
+            if (i >= 0) list.splice(i, 1); else list.push(JSON.parse(JSON.stringify(preset)));
+            PROFILE.zones = list; saveProfile();
+            renderZoneUI(); invalidatePlanCache(); renderTn(); renderAm(); renderAssessment();
+        }
         function syncSettingsUI() {
+            renderZoneUI();
             const a = document.getElementById('set-shave'), b = document.getElementById('set-hrt'), c = document.getElementById('set-skintype');
             if (a) a.checked = !!PROFILE.shaving;
             if (b) b.checked = !!PROFILE.hrt;
@@ -2823,6 +2872,8 @@
                 <div class="ob-opts" id="ob-skin">${ONBOARD_SKIN.map((s, i) => `<button class="ob-opt${i === 1 ? ' on' : ''}" data-v="${s.v}" onclick="obPickSkin(this)">${s.label}</button>`).join('')}</div>
                 <div class="ob-q">主要想解决？(可多选)</div>
                 <div class="ob-opts" id="ob-concerns">${ONBOARD_CONCERNS.map(c => `<button class="ob-opt" data-v="${esc(c)}" onclick="this.classList.toggle('on')">${esc(c)}</button>`).join('')}</div>
+                <div class="ob-q">有没有反复出问题、要特别避开的区域？(可多选)</div>
+                <div class="ob-opts" id="ob-zones">${ZONE_PRESETS.map(z => `<button class="ob-opt" data-v="${esc(z.name)}" onclick="this.classList.toggle('on')">${esc(z.name)}</button>`).join('')}</div>
                 <label class="set-row" style="margin-top:14px"><span>需要「刮胡」这一项吗？</span><input type="checkbox" id="ob-shave"></label>
                 <div style="display:flex;gap:10px;margin-top:18px">
                     <button class="bsv" style="background:var(--sur2);color:var(--tx)" onclick="closeOnboarding(true)">跳过</button>
@@ -2847,6 +2898,8 @@
             PROFILE.skinType = skin.sub + (concerns.length ? ' · ' + concerns[0].split('/')[0] : '');
             PROFILE.shaving = shaving; PROFILE.hrt = false; PROFILE.onboarded = true;
             PROFILE.phase = 'repair'; PROFILE.phaseStart = today();
+            const zoneNames = [...document.querySelectorAll('#ob-zones .ob-opt.on')].map(b => b.dataset.v);
+            PROFILE.zones = ZONE_PRESETS.filter(z => zoneNames.includes(z.name)).map(z => JSON.parse(JSON.stringify(z)));
             if (concerns.length) setGoalFromConcern(concerns[0]);
             saveProfile();
             applyProfileVisibility(); syncSettingsUI(); invalidatePlanCache();
@@ -3006,12 +3059,12 @@
                 if (usageCountHtml) schedTags += `<div class="sched-info" style="margin-top:2px">${usageCountHtml}</div>`;
                 return `<div class="pc"><div class="pch" onclick="togglePCB('${def.id}')">
       <div class="pci">${def.icon}</div>
-      <div class="pci2"><div class="pcn">${esc(def.name)}</div><div class="pcc">${esc(visCat(def))}${wo!==null?` · 开封${wo}周`:''}</div><div class="sched-info" style="margin-top:4px">${paoTag}</div>${schedTags}</div>
+      <div class="pci2"><div class="pcn"${isExcluded(def)?' style="opacity:.45;text-decoration:line-through"':''}>${esc(def.name)}</div><div class="pcc">${isExcluded(def)?'🚫 我不用 · ':''}${esc(visCat(def))}${wo!==null?` · 开封${wo}周`:''}</div><div class="sched-info" style="margin-top:4px">${paoTag}</div>${schedTags}</div>
       ${can?`<button class="pcp ${def.pillCls[s]}" onclick="cyclePS('${def.id}',event)">${def.labels[s]}</button>`:`<span class="pcp ${def.pillCls[s]}">${def.labels[s]}</span>`}
     </div><div class="pcb" id="pcb-${def.id}">
       <div style="margin-top:0">${notes}</div>
       <div class="popen"><label>开封日期：</label><input type="date" value="${POPEN[def.id]||''}" onchange="saveOpenDate('${def.id}',this.value)">${woHtml}</div>
-      <div class="prod-acts"><button class="prod-act" onclick="showProdModal('${def.id}')">✏️ 编辑</button><button class="prod-act del" onclick="deleteProd('${def.id}')">${def.builtin?'👁 隐藏':'🗑 删除'}</button></div>
+      <div class="prod-acts"><button class="prod-act" onclick="showProdModal('${def.id}')">✏️ 编辑</button><button class="prod-act" onclick="toggleExcluded('${def.id}')">${isExcluded(def)?'↩︎ 取消不用':'🚫 我不用这个'}</button><button class="prod-act del" onclick="deleteProd('${def.id}')">${def.builtin?'👁 隐藏':'🗑 删除'}</button></div>
       ${can?`<div class="pch2">点击状态循环切换 → ${def.statuses.map(s2=>def.labels[s2]).join(' → ')}</div>`:''}
     </div></div>`;
             }).join('') + `<button class="add-prod-btn" onclick="showProdModal()">+ 添加产品</button>`;
@@ -3139,9 +3192,28 @@
             return { axes, overall, sampleN: e7.length, recs: buildRecs(axes, overall) };
         }
         // 规则化行动建议(含安全就医红线)，按优先级排序，最多 4 条
+        // 诉求 → 针对性建议(按当前目标出话，不是只给通用四轴话术)
+        const CONCERN_ADVICE = {
+            '闭口/粉刺': '闭口靠"温和疏通 + 别搓脸"：维持温和刷酸的节奏，磨砂和厚重面霜先放一边。',
+            '毛孔粗大': '毛孔改善慢，重点是清洁到位 + 控油 + 长期防晒，别指望短期见效。',
+            '出油/T区': 'T区出油：清洁别过度(越剥越油)，保湿选无油质地，防晒也挑清爽的。',
+            '泛红/敏感': '泛红期做减法：停掉多余活性物，只留清洁+保湿+修护，等稳定再加回来。',
+            '干燥/紧绷': '干燥优先补水锁水，刷酸降频，洗脸水温别高。',
+            '痘痘/炎症': '有炎症时别叠猛料；成片或久不消要考虑就医，不是靠加产品解决。',
+            '暗沉/痘印': '痘印主要靠防晒 + 时间，防晒不到位再多美白也白搭。'
+        };
         function buildRecs(axes, overall) {
             const recs = [];
             const ax = k => axes.find(a => a.key === k) || {};
+            // 分区护理:有关注区域就明确提醒(这是最"私人"的一条)
+            const zs = userZones();
+            if (zs.length) {
+                const z = zs[0];
+                recs.push({ level: 'info', text: `${z.name}：${z.care || '避开刺激性成分'}${(z.avoid || []).length ? '（该区不用' + (z.avoid || []).map(a => ({acid:'酸类',mask:'面膜/磨砂',retinol:'视黄醇'})[a] || a).join('、') + '）' : ''}` });
+            }
+            // 诉求驱动
+            const goalConcern = PROFILE.goal && PROFILE.goal.concern;
+            if (goalConcern && CONCERN_ADVICE[goalConcern]) recs.push({ level: 'info', text: CONCERN_ADVICE[goalConcern] });
             const inflamDays = jrnlLastNDays(14).filter(e => (e.status || []).some(s => s === '泛红' || s === '爆痘')).length;
             const barrier = ax('barrier').score, cong = ax('congestion').score, oil = ax('oil').score;
             if (inflamDays >= 5 && ax('calm').trend && ax('calm').trend.dir !== 'up') {
@@ -3151,9 +3223,12 @@
             else if (barrier !== null && barrier < 65) recs.push({ level: 'warn', text: '屏障一般：本周刷酸限 1 次，别叠猛料。' });
             if (cong !== null && cong < 50 && (barrier === null || barrier >= 60)) recs.push({ level: 'info', text: '闭口/毛孔偏多而屏障稳：维持温和刷酸(杏仁酸即可)，别上磨砂搓脸。' });
             if (oil !== null && oil < 50) recs.push({ level: 'info', text: 'T区出油：控油但别过度清洁(越剥越油)，防晒选无油款。' });
-            if (!recs.length && overall !== null && overall >= 75) recs.push({ level: 'good', text: '整体不错，保持当前节奏。' });
+            if (!recs.filter(r => r.level !== 'info').length && overall !== null && overall >= 75) recs.push({ level: 'good', text: '整体不错，保持当前节奏。' });
             if (jrnlLastNDays(7).length < 2) recs.push({ level: 'info', text: '多记几天皮肤状态，评估会更准。' });
-            return recs.slice(0, 4);
+            // 按重要性排序：就医红线 > 警告 > 个性化提示 > 其它。分区/诉求建议不能把 safety 挤掉。
+            const order = { safety: 0, warn: 1, info: 2, good: 3 };
+            recs.sort((a, b) => (order[a.level] ?? 9) - (order[b.level] ?? 9));
+            return recs.slice(0, 5);
         }
         // ══ Round 3:阶段化方案(修护→建立耐受→维持，按屏障趋势自动进阶/回退) + 目标追踪 ══
         const PHASES = {
@@ -3538,7 +3613,7 @@
             const pd = id => PD.find(p => p.id === id);
             const active = id => { const p = pd(id); return p && !p.hidden && isSchedActive(p, PS[id] || p.statuses[0]); };
             const byRole = (role, single) => {
-                const list = PD.filter(p => !p.hidden && p.role === role
+                const list = PD.filter(p => !p.hidden && !isExcluded(p) && p.role === role
                     && isSchedActive(p, PS[p.id] || p.statuses[0])
                     && ((p.schedule && p.schedule.time) || ['pm']).includes('pm'));
                 return single ? list.slice(0, 1) : list;
@@ -3558,13 +3633,13 @@
                 else steps.push({ p: '温水冲洗' + (pre ? ' / ' + pre.name : ''), h: pre ? '有防晒/彩妆时使用' : '温和清洁' });
                 if (hasScheduledAcid) {
                     const ap = pd(schedAcid.id); const aName = ap ? ap.name : schedAcid.label;
-                    steps.push({ p: aName, h: (ap && hint(ap)) || '停留3–5分钟，无需冲洗' });
+                    steps.push({ p: aName, h: ((ap && hint(ap)) || '停留3–5分钟，无需冲洗') + zoneHintFor('acid') });
                     steps.push({ p: '等待3分钟', h: 'pH稳定后再叠后续', t: 180 });
                     skips.push('修护精华（酸类夜跳过）', '视黄醇（酸类夜禁用）');
                 } else if (schedMask) {
-                    const mp = pd(schedMask.id); if (mp && active(mp.id)) { steps.push({ p: mp.name, h: hint(mp) || '敷10–15分钟后冲洗干净', t: 900 }); skips.push('视黄醇（面膜夜不叠用）'); }
+                    const mp = pd(schedMask.id); if (mp && active(mp.id)) { steps.push({ p: mp.name, h: (hint(mp) || '敷10–15分钟后冲洗干净') + zoneHintFor('mask'), t: 900 }); skips.push('视黄醇（面膜夜不叠用）'); }
                 } else if (schedRet) {
-                    const rp = pd(schedRet.id); if (rp && active(rp.id)) { steps.push({ p: rp.name, h: (hint(rp) || '1次/周，薄涂全脸，避开眼周') + (PS[rp.id] === 'active' ? '' : '（谨慎引入期）') }); skips.push('酸类（视黄醇夜不叠加）'); }
+                    const rp = pd(schedRet.id); if (rp && active(rp.id)) { steps.push({ p: rp.name, h: (hint(rp) || '1次/周，薄涂全脸') + (PS[rp.id] === 'active' ? '' : '（谨慎引入期）') + zoneHintFor('retinol') }); skips.push('酸类（视黄醇夜不叠加）'); }
                 } else {
                     byRole('serum').forEach(p => steps.push({ p: p.name, h: hint(p) || '全脸轻拍至吸收' }));
                     if (!shower) byRole('oil').forEach(p => steps.push({ p: p.name, h: hint(p) || '1–2滴，两颊和颈部，额头避开' }));
@@ -3697,7 +3772,7 @@
             
             // 角色驱动（只取标记了早晨 'am' 的产品）：精华 → 眼部 → 保湿 → 防晒（最后）
             const byRoleAm = (role, single) => {
-                const list = PD.filter(p => !p.hidden && p.role === role
+                const list = PD.filter(p => !p.hidden && !isExcluded(p) && p.role === role
                     && isSchedActive(p, PS[p.id] || p.statuses[0])
                     && ((p.schedule && p.schedule.time) || ['pm']).includes('am'));
                 return single ? list.slice(0, 1) : list;
@@ -3905,7 +3980,7 @@
                 return jrnlLastNDays(7).filter(x => (x.products || []).includes(tag)).map(x => x.date);
             };
 
-            let schedulable = PD.filter(p => !p.hidden && p.schedule && p.schedule.enableAutoSchedule &&
+            let schedulable = PD.filter(p => !p.hidden && !isExcluded(p) && p.schedule && p.schedule.enableAutoSchedule &&
                 ['acid','mask','retinol'].includes(p.schedule.type) && isSchedActive(p, PS[p.id] || p.statuses[0]) &&
                 capOf(p) > 0);
             // 屏障闸门：修护模式下不排任何去角质/视黄醇；谨慎模式下不排视黄醇。
@@ -4280,7 +4355,7 @@
         // 按当前账号启用中的酸类动态生成快速记录按钮
         function renderQuickAcidBtns() {
             const box = document.getElementById('ql-acid-btns'); if (!box) return;
-            const acids = PD.filter(p => !p.hidden && p.role === 'acid' && p.journalTag && isSchedActive(p, PS[p.id] || p.statuses[0]));
+            const acids = PD.filter(p => !p.hidden && !isExcluded(p) && p.role === 'acid' && p.journalTag && isSchedActive(p, PS[p.id] || p.statuses[0]));
             box.innerHTML = acids.map(p => `<button class="ql-btn" onclick="quickLogAcid('${esc(p.journalTag)}')">${esc(p.journalTag)}夜 · 稳定</button>`).join('');
         }
         function quickLogAcid(tag) { quickLog({ status: ['稳定'], products: [tag] }); }
