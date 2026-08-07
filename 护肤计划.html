@@ -2354,7 +2354,7 @@
                     <div class="at">多种酸类叠加</div>任意两种去角质酸类不可同晚使用
                 </div>
                 <div class="alert warn feat-shave">
-                    <div class="at">刮胡日 × 酸类/视黄醇</div>刮胡当晚全部活性成分跳过<!-- feat-shave -->
+                    <div class="at">刮胡日 × 酸类/视黄醇</div>刮胡当晚全部活性成分跳过
                 </div>
             </div>
             <div class="section">
@@ -2652,6 +2652,10 @@
             return 'moist';
         }
         function assignRoles(list) { list = list.filter(p => !RETIRED.includes(p.id)); list.forEach(p => { if (!p.role) p.role = ROLE_MAP[p.id] || inferRole(p); }); return list; }
+        // 数据层的刮胡过滤：产品 notes / 分类里写着"刮胡后…"这类文字，CSS 门控管不了，
+        // 不刮胡的用户(如 Cici)会在产品卡和步骤提示里看到。这里按档案过滤/改写。
+        function visNotes(p) { const n = (p && p.notes) || []; return PROFILE.shaving ? n : n.filter(x => !/刮胡/.test(x)); }
+        function visCat(p) { const c = (p && p.cat) || ''; return PROFILE.shaving ? c : c.replace(/\s*[·・]\s*刮胡后\s*/, ' · 舒缓').replace(/刮胡/g, '').trim(); }
         function loadPD() {
             const saved = lg(K.prodDefs);
             if (saved) {
@@ -2909,7 +2913,7 @@
             list.innerHTML = visiblePD.map(def => {
                 const s = PS[def.id] || def.statuses[0];
                 const can = def.statuses.length > 1;
-                const notes = def.notes.map(n => `<div class="pcni">· ${esc(n)}</div>`).join('');
+                const notes = visNotes(def).map(n => `<div class="pcni">· ${esc(n)}</div>`).join('');
                 const wo = weeksOpen(def.id);
                 let woHtml = wo !== null ? `<span class="popen-lbl">已开封 ${wo} 周</span>` : '';
                 const paoMonths = def.paoMonths || 0;
@@ -2937,7 +2941,7 @@
                 if (usageCountHtml) schedTags += `<div class="sched-info" style="margin-top:2px">${usageCountHtml}</div>`;
                 return `<div class="pc"><div class="pch" onclick="togglePCB('${def.id}')">
       <div class="pci">${def.icon}</div>
-      <div class="pci2"><div class="pcn">${esc(def.name)}</div><div class="pcc">${esc(def.cat)}${wo!==null?` · 开封${wo}周`:''}</div><div class="sched-info" style="margin-top:4px">${paoTag}</div>${schedTags}</div>
+      <div class="pci2"><div class="pcn">${esc(def.name)}</div><div class="pcc">${esc(visCat(def))}${wo!==null?` · 开封${wo}周`:''}</div><div class="sched-info" style="margin-top:4px">${paoTag}</div>${schedTags}</div>
       ${can?`<button class="pcp ${def.pillCls[s]}" onclick="cyclePS('${def.id}',event)">${def.labels[s]}</button>`:`<span class="pcp ${def.pillCls[s]}">${def.labels[s]}</span>`}
     </div><div class="pcb" id="pcb-${def.id}">
       <div style="margin-top:0">${notes}</div>
@@ -3459,7 +3463,7 @@
                     && ((p.schedule && p.schedule.time) || ['pm']).includes('pm'));
                 return single ? list.slice(0, 1) : list;
             };
-            const hint = p => p.pmHint || (p.notes && p.notes[0]) || '';
+            const hint = p => p.pmHint || visNotes(p)[0] || '';
             const steps = [], skips = [];
             if (shave) {
                 steps.push({ p: '凉水冲洗（刮胡后立即）', h: '降温止红' });
@@ -3497,7 +3501,9 @@
             renderAssessment();
             const sBtn = document.getElementById('tn-sh'), vBtn = document.getElementById('tn-sv');
             if (sBtn) sBtn.className = 'tn-btn' + (shower ? ' on-shower' : '');
-            if (vBtn) vBtn.className = 'tn-btn' + (shave ? ' on-shave' : '');
+            // 必须保留 feat-shave：整体覆盖 className 会把门控 class 冲掉，
+            // 导致关了刮胡的用户(如 Cici)照样看到「今天刮胡」按钮(真实反馈的 bug)。
+            if (vBtn) vBtn.className = 'tn-btn feat-shave' + (shave ? ' on-shave' : '');
 
             // Sync note
             const sna = document.getElementById('sync-note-area');
@@ -3615,7 +3621,7 @@
                     && ((p.schedule && p.schedule.time) || ['pm']).includes('am'));
                 return single ? list.slice(0, 1) : list;
             };
-            const amHint = p => p.amHint || p.pmHint || (p.notes && p.notes[0]) || '';
+            const amHint = p => p.amHint || p.pmHint || visNotes(p)[0] || '';
 
             let steps = [{ p: '清水冲洗 30秒', h: '早晨轻柔冲洗，不用洁面产品，保留皮脂膜' }];
             let skips = [];
