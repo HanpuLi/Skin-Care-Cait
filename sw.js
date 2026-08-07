@@ -1,4 +1,4 @@
-const CACHE_NAME = 'skincare-app-v2';
+const CACHE_NAME = 'skincare-app-v3';
 const ASSETS = [
   './护肤计划.html',
   './icon.svg',
@@ -9,6 +9,16 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => cache.addAll(ASSETS))
+      .then(() => self.skipWaiting())
+  );
+});
+
+// 清掉旧版本缓存并立刻接管：否则离线回退会命中旧缓存，升 CACHE_NAME 对已装 App 的用户无效
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
 });
 
@@ -26,8 +36,9 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => {
-        // Fallback to cache if network fails
-        return caches.match(event.request);
+        // 只回退到当前版本的缓存，避免命中残留的旧版本
+        return caches.match(event.request, { cacheName: CACHE_NAME })
+          .then((hit) => hit || caches.match(event.request));
       })
   );
 });

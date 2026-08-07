@@ -10,6 +10,9 @@
     <title>护肤计划</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧴</text></svg>" type="image/svg+xml">
     <link rel="manifest" href="manifest.json">
+    <!-- iOS 加到主屏必须有 apple-touch-icon(png),否则用的是网页截图当图标 -->
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='%23fafaf9'/><text x='50%' y='.92em' font-size='110' text-anchor='middle'>🧴</text></svg>">
+    <meta name="apple-mobile-web-app-title" content="护肤计划">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1999,7 +2002,9 @@
         .theme-toggle { background:none; border:1px solid var(--bd); border-radius:50%; width:32px; height:32px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px; transition:all .2s; flex-shrink:0; }
         .theme-toggle:hover { border-color:var(--tx3); background:var(--sur2); }
         html.dark { color-scheme: dark; }
-        html.dark :root {
+        /* 必须是 html.dark 本身，不能写 `html.dark :root` —— 那是"html.dark 的后代里的 :root",永不匹配，
+           手动深浅色切换因此完全失效(只跟随系统)。 */
+        html.dark {
             --bg: #22201d; --sur: #2b2926; --sur2: #36332f; --bd: #45423c; --bd2: #57534c;
             --tx: #e7e5df; --tx2: #b0aba3; --tx3: #827e77;
             --bl: #7b9cbf; --bl-bg: #1e2a36; --bl-br: #3a506b;
@@ -2008,7 +2013,8 @@
             --rd: #d97770; --rd-bg: #3d1b19; --rd-br: #6b3330;
             --pu: #9689bf; --pu-bg: #272138; --pu-br: #4f4470;
         }
-        html.light :root {
+        html.light { color-scheme: light; }
+        html.light {
             --bg: #f5f4ef; --sur: #ffffff; --sur2: #f0eee5; --bd: #e2dfd3; --bd2: #d1ccbf;
             --tx: #2e2b24; --tx2: #656156; --tx3: #958f83;
             --bl: #4b6b8a; --bl-bg: #eef2f6; --bl-br: #b5c7d8;
@@ -2152,10 +2158,10 @@
                 <button class="tpl-btn" style="margin-top:8px" onclick="showOnboarding()"><div class="tpl-n">✨ 做引导设置（生成方案）</div><div class="tpl-d">按肤质 + 诉求自动配一套起步方案</div></button>
             </div>
            <div class="alert info">
-                <div class="at">洗澡夜（约2次/周）</div>洗澡后渗透性增强——酸类优先安排在洗澡夜。
+                <div class="at">洗澡夜</div>洗澡后渗透性增强——酸类优先安排在洗澡夜。
             </div>
             <div class="alert info">
-                <div class="at">非洗澡夜（约5天/周）</div>屏障修复主要时段，使用微温水或温和卸妆膏简单清洁，修护为主。
+                <div class="at">非洗澡夜</div>屏障修复主要时段，使用微温水或温和卸妆膏简单清洁，修护为主。
             </div>
             <div class="alert warn feat-shave">
                 <div class="at">刮胡 = 机械性去角质</div>刮胡日当晚必须跳过所有剥脱性酸类和视黄醇。刮胡后全脸薄涂 Cicaplast B5 是必须的动作。
@@ -2250,10 +2256,9 @@
                 <div class="ql-title">⚡ 快速记录</div>
                 <div class="ql-btns">
                     <button class="ql-btn" onclick="quickLog('repair')">🛡 修护夜 · 稳定</button>
-                    <button class="ql-btn" onclick="quickLog('shower-repair')">🚿 洗澡夜 · 稳定</button>
-                    <button class="ql-btn" onclick="quickLog('pc-acid')">PC酸夜 · 稳定</button>
-                    <button class="ql-btn" onclick="quickLog('votary-acid')">Votary酸夜 · 稳定</button>
                     <button class="ql-btn feat-shave" onclick="quickLog('shave')">✂️ 刮胡日 · 稳定</button>
+                    <!-- 酸类按钮按当前账号实际启用的酸动态生成（旧版写死 PC / Votary，别人根本没这两瓶） -->
+                    <span id="ql-acid-btns"></span>
                 </div>
             </div>
 
@@ -2471,21 +2476,33 @@
             req.onupgradeneeded = e => {
                 let db = e.target.result;
                 if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos', { keyPath: 'date' });
+                // 说明:store 的 keyPath 仍叫 'date'，但实际存的是 photoKey(date)=「uid__日期」，
+                // 这样两个账号的照片天然隔离，换账号不必删除(删除曾导致上一个人的照片被永久清空)。
             };
             req.onsuccess = e => { _idb = e.target.result; if(cb) cb(); };
             req.onerror = () => console.warn('IndexedDB failed');
         }
+        // 照片按账号隔离：key = 「uid__日期」。换账号只是换前缀，各自的照片都留着(旧版是直接清空整库→别人的照片被永久删)
+        function photoUid() { try { return (_user && _user.uid) || 'local'; } catch (e) { return 'local'; } }
+        function photoKey(date) { return photoUid() + '__' + date; }
         function savePhoto(date, dataUrl, cb) {
             if (!_idb) return;
             const tx = _idb.transaction('photos', 'readwrite');
-            tx.objectStore('photos').put({ date, dataUrl });
+            tx.objectStore('photos').put({ date: photoKey(date), dataUrl });
             tx.oncomplete = () => { if(cb) cb(); schedulePush(); };
         }
         function getPhoto(date, cb) {
             if (!_idb) { cb(null); return; }
             const tx = _idb.transaction('photos', 'readonly');
-            const req = tx.objectStore('photos').get(date);
-            req.onsuccess = () => cb(req.result ? req.result.dataUrl : null);
+            const st = tx.objectStore('photos');
+            const req = st.get(photoKey(date));
+            req.onsuccess = () => {
+                if (req.result) { cb(req.result.dataUrl); return; }
+                // 兼容旧数据(未加前缀时存的裸日期 key)
+                const old = st.get(date);
+                old.onsuccess = () => cb(old.result ? old.result.dataUrl : null);
+                old.onerror = () => cb(null);
+            };
             req.onerror = () => cb(null);
         }
         function getAllPhotos(cb) {
@@ -2493,8 +2510,12 @@
             const tx = _idb.transaction('photos', 'readonly');
             const req = tx.objectStore('photos').getAll();
             req.onsuccess = () => {
-                const map = {};
-                (req.result||[]).forEach(r => map[r.date] = r.dataUrl);
+                const map = {}, pre = photoUid() + '__';
+                (req.result||[]).forEach(r => {
+                    const k = r.date || '';
+                    if (k.indexOf(pre) === 0) map[k.slice(pre.length)] = r.dataUrl;       // 本账号的
+                    else if (k.indexOf('__') === -1 && map[k] === undefined) map[k] = r.dataUrl;  // 旧的裸日期(兼容)
+                });
                 cb(map);
             };
         }
@@ -2833,6 +2854,9 @@
         }
 
         function isSchedActive(prod, status) { return status !== 'paused' && status !== 'pending'; }
+        // 防晒"手上有没有"的统一判定：旧版写死 === 'owned'，而用户自建产品的状态是 'active'，
+        // 于是自己加的防晒永远不被认账(早晨丢步骤 + 今晚永久误报"明早无防晒")。
+        function hasSpfReady(p) { const st = PS[p.id] || p.statuses[0]; return isSchedActive(p, st); }
 
         function cyclePS(id, e) {
             e.stopPropagation();
@@ -2909,10 +2933,15 @@
             const paoMonths = parseInt(document.getElementById('m-pao').value)||0;
             if (editingProdId) {
                 const p = PD.find(p => p.id === editingProdId);
-                if (p) { Object.assign(p, {name,icon,cat,notes,journalTag,schedule,paoMonths}); }
+                // role 必须跟着重算：否则把「精华」改成「酸类」后 role 停在 serum，
+                // 同一瓶东西会被当两种角色在同一晚重复排。
+                if (p) { Object.assign(p, {name,icon,cat,notes,journalTag,schedule,paoMonths}); p.role = ROLE_MAP[p.id] || inferRole(p); }
             } else {
                 const id = 'custom_'+Date.now();
-                PD.push({id,icon,name,cat,notes,journalTag,statuses:['active','paused'],labels:{active:'使用中',paused:'已暂停'},pillCls:{active:'active',paused:'paused'},schedule,paoMonths,builtin:false});
+                // 新增也要立刻定 role，否则 role=undefined，byRole 严格比较永不匹配 → 加了产品却不进任何步骤
+                const np = {id,icon,name,cat,notes,journalTag,statuses:['active','paused'],labels:{active:'使用中',paused:'已暂停'},pillCls:{active:'active',paused:'paused'},schedule,paoMonths,builtin:false};
+                np.role = ROLE_MAP[id] || inferRole(np);
+                PD.push(np);
                 PS[id] = 'active'; ls(K.prods, PS);
             }
             ls(K.prodDefs, PD); closeProdModal(); renderProds(); updateProdUI(); renderProdChips(); renderWk(); renderTn();
@@ -2938,8 +2967,9 @@
                 let paoTag = '';
                 if (paoMonths > 0 && wo !== null) {
                     const paoWeeksLimit = Math.round(paoMonths * 4.345);
-                    if (wo >= paoWeeksLimit) paoTag = `<span class="sched-tag" style="background:var(--danger);color:#fff">⚠️已过期(超${paoMonths}M)</span>`;
-                    else if (wo >= paoWeeksLimit - paoLead(paoWeeksLimit)) paoTag = `<span class="sched-tag" style="background:var(--warn);color:#000">⏳即将过期(${paoMonths}M)</span>`;
+                    // 用已定义的主题变量：旧版 --danger/--warn 未定义 → 背景透明，"已过期"白底白字看不见
+                    if (wo >= paoWeeksLimit) paoTag = `<span class="sched-tag" style="background:var(--rd);color:#fff">⚠️已过期(超${paoMonths}M)</span>`;
+                    else if (wo >= paoWeeksLimit - paoLead(paoWeeksLimit)) paoTag = `<span class="sched-tag" style="background:var(--am);color:#fff">⏳即将过期(${paoMonths}M)</span>`;
                     else paoTag = `<span class="sched-tag">PAO: ${paoMonths}M</span>`;
                 }
                 const sch = def.schedule || {};
@@ -3002,7 +3032,9 @@
         const BARRIER_GAIN = 3.5;   // 平均权重 → 分数的放大倍数
         const BARRIER_FULL_N = 4;   // 记录满 4 天才给满信度，不足则向 60 收敛
         function calcScore(entries) {
-            if (!entries || !entries.length) return null;
+            // 只吃"记了皮肤状态"的条目：只传照片/只写备注的空条目会进分母，把分数往 60 稀释、连带改动刷酸闸门
+            entries = (entries || []).filter(e => e && (e.status || []).length);
+            if (!entries.length) return null;
             let sum = 0;
             entries.forEach(e => { (e.status || []).forEach(t => { if (BARRIER_W[t] !== undefined) sum += BARRIER_W[t]; }); });
             const avg = sum / entries.length;
@@ -3043,7 +3075,8 @@
             { key: 'calm',       name: '无炎' }
         ];
         function axisScore(key, entries) {
-            if (!entries || !entries.length) return null;
+            entries = (entries || []).filter(e => e && (e.status || []).length);   // 同 calcScore：空状态条目不进分母
+            if (!entries.length) return null;
             let sum = 0;
             entries.forEach(e => (e.status || []).forEach(t => { const w = AX_W[t] && AX_W[t][key]; if (w !== undefined) sum += w; }));
             const avg = sum / entries.length;
@@ -3051,15 +3084,26 @@
             return Math.max(0, Math.min(100, Math.round(60 + avg * BARRIER_GAIN * conf)));
         }
         // 趋势：近3天 vs 前一窗(4–8天前)比较，判方向
+        // 趋势必须用**原始平均权重**比较，不能用带置信度的分数：
+        // 旧版 recent(3天窗,conf≤0.75) 减 prior(5天窗,conf=1) 口径不同 → 状态没变也会系统性偏移，
+        // 天天记「稳定」显示↘、天天「爆痘」反而显示↗，还会把 buildRecs 里的就医红线静默吞掉。
+        function axisAvg(key, entries) {
+            if (!entries || !entries.length) return null;
+            let sum = 0;
+            entries.forEach(e => (e.status || []).forEach(t => { const w = AX_W[t] && AX_W[t][key]; if (w !== undefined) sum += w; }));
+            return sum / entries.length;
+        }
         function axisTrend(key) {
-            const recent = axisScore(key, jrnlLastNDays(3));
+            const recentEntries = jrnlLastNDays(3);
             const from = offsetDate(-8), to = offsetDate(-4), seen = new Set();
-            const prior = axisScore(key, (lg(K.jrnl) || [])
+            const priorEntries = (lg(K.jrnl) || [])
                 .filter(x => x && x.date && x.date >= from && x.date <= to)
                 .sort((a, b) => b.date.localeCompare(a.date))
-                .filter(x => { if (seen.has(x.date)) return false; seen.add(x.date); return true; }));
+                .filter(x => { if (seen.has(x.date)) return false; seen.add(x.date); return true; });
+            if (recentEntries.length < 2 || priorEntries.length < 2) return { dir: 'flat', delta: 0, enough: false };
+            const recent = axisAvg(key, recentEntries), prior = axisAvg(key, priorEntries);
             if (recent === null || prior === null) return { dir: 'flat', delta: 0, enough: false };
-            const d = recent - prior;
+            const d = (recent - prior) * BARRIER_GAIN;   // 换算回"分"的量纲，阈值仍用 ±6
             return { dir: d >= 6 ? 'up' : d <= -6 ? 'down' : 'flat', delta: d, enough: true };
         }
         function trendArrow(t) { return t.dir === 'up' ? '↗' : t.dir === 'down' ? '↘' : '→'; }
@@ -3122,27 +3166,20 @@
         function setGoalFromConcern(concern) {
             const axis = CONCERN_AXIS[concern] || 'congestion';
             const cur = axisScore(axis, jrnlLastNDays(7));
-            PROFILE.goal = { concern, axis, start: today(), startScore: cur === null ? 60 : cur, target: 75 };
+            const start = cur === null ? 60 : cur;
+            // 目标必须高于起点，否则 span 为负、进度条整个反向
+            PROFILE.goal = { concern, axis, start: today(), startScore: start, target: Math.max(75, Math.min(100, start + 10)) };
         }
         function goalProgress() {
             const g = PROFILE.goal; if (!g) return null;
             const cur = axisScore(g.axis, jrnlLastNDays(7));
-            const span = (g.target - g.startScore) || 1;
+            const span = g.target - g.startScore;
+            if (span <= 0) return Object.assign({}, g, { cur, pct: 100, days: daysSince(g.start) });   // 起点已达标
             const pct = cur === null ? 0 : Math.max(0, Math.min(100, Math.round((cur - g.startScore) / span * 100)));
             return Object.assign({}, g, { cur, pct, days: daysSince(g.start) });
         }
-        // Round 4:连续打卡 / 本周记录频率(激励 + 提醒记录准确度)
-        function logStreak() {
-            const dates = new Set((lg(K.jrnl) || []).filter(x => x && x.date && (x.status || []).length).map(x => x.date));
-            let n = 0;
-            for (let i = 0; i < 90; i++) {
-                const d = offsetDate(-i);
-                if (dates.has(d)) n++;
-                else if (i === 0) continue;   // 今天还没记,不算断
-                else break;
-            }
-            return n;
-        }
+        // 注：logStreak / weekLoggedCount 的唯一实现在文件后半段(统计区),这里不再重复定义
+        // （旧版在此处有一份同名函数，被后面的声明覆盖，属死代码，已删）
         function weekLoggedCount() {
             const from = offsetDate(-6), to = today();
             return new Set((lg(K.jrnl) || []).filter(x => x && x.date && x.date >= from && x.date <= to && (x.status || []).length).map(x => x.date)).size;
@@ -3468,6 +3505,7 @@
         // 生成"当晚护肤步骤"——「今晚」(renderTn) 与「排班点格」(showDayDetail) 共用这一套角色驱动逻辑，
         // 避免两个视图给出不一致的步骤、或印出已删产品名。slot = 排班引擎算出的当天计划(含 items)。
         function buildNightSteps(shower, shave, slot) {
+            shave = !!shave && !!PROFILE.shaving;   // 门控收口：关掉刮胡的用户，任何遗留 shave 数据都不得产出刮胡文案/流程
             const items = (slot && slot.items) || [];
             const schedAcid = items.find(it => it.type === 'acid');
             const schedMask = items.find(it => it.type === 'mask');
@@ -3514,7 +3552,8 @@
             return { steps, skips };
         }
         function renderTn() {
-            const { shower, shave, manual } = TN;
+            const { shower, manual } = TN;
+            const shave = !!TN.shave && !!PROFILE.shaving;   // 同上：门控收口
             updatePhase();
             renderAssessment();
             const sBtn = document.getElementById('tn-sh'), vBtn = document.getElementById('tn-sv');
@@ -3584,7 +3623,7 @@
             else { nightType = '修护夜'; nightSub = `近7天去角质 ${acidCnt}/${maxAcid} 次，今晚专注修护`; }
 
             const { steps, skips } = buildNightSteps(shower, shave, todaySlot);
-            const ownedSpf = PD.some(p => p.role === 'spf' && !p.hidden && (PS[p.id] || p.statuses[0]) === 'owned');
+            const ownedSpf = PD.some(p => p.role === 'spf' && !p.hidden && hasSpfReady(p));
             if (!ownedSpf) skips.push('⚠ 明早无防晒 → 痘印风险！尽快购入');
 
             const done = loadDoneSteps('tn');
@@ -3641,14 +3680,18 @@
             };
             const amHint = p => p.amHint || p.pmHint || visNotes(p)[0] || '';
 
-            let steps = [{ p: '清水冲洗 30秒', h: '早晨轻柔冲洗，不用洁面产品，保留皮脂膜' }];
+            // 有标了"早晨"的洁面产品就用它，没有才回退到清水冲洗(旧版写死"不用洁面产品"，与产品自带的 amHint 矛盾)
+            const amCleanser = byRoleAm('cleanse', true)[0];
+            let steps = amCleanser
+                ? [{ p: amCleanser.name, h: amHint(amCleanser) || '温和洁面，30秒洗净' }]
+                : [{ p: '清水冲洗 30秒', h: '早晨轻柔冲洗，不用洁面产品，保留皮脂膜' }];
             let skips = [];
 
             byRoleAm('serum').forEach(p => steps.push({ p: p.name, h: amHint(p) || '早晨全脸轻拍' }));
             byRoleAm('eye', true).forEach(p => steps.push({ p: p.name, h: amHint(p) || '早晨：无名指轻拍眼眶骨，补水淡化' }));
             byRoleAm('moist', true).forEach(p => steps.push({ p: p.name, h: amHint(p) || '全脸薄涂打底' }));
 
-            const spf = PD.filter(p => !p.hidden && p.role === 'spf' && (PS[p.id] || p.statuses[0]) === 'owned'
+            const spf = PD.filter(p => !p.hidden && p.role === 'spf' && hasSpfReady(p)
                 && ((p.schedule && p.schedule.time) || ['am']).includes('am'))[0];
             if (spf) {
                 const dsla = daysSinceLastAcid();
@@ -3671,7 +3714,9 @@
 
         function setMode(m) {
             mode = m;
-            document.querySelectorAll('.tb').forEach(b => b.className = 'tb');
+            // 只增删状态类，别整体覆盖 className —— 否则会把 feat-shave 门控冲掉，
+            // 关了刮胡的用户点一下模式按钮，「✂️ 刮胡日」就会冒出来(真实 bug)。
+            document.querySelectorAll('.tb').forEach(b => b.classList.remove('on-shower', 'on-shave', 'on-clear'));
             if (m === 'shower') document.getElementById('mode-shower').classList.add('on-shower');
             else if (m === 'shave') document.getElementById('mode-shave').classList.add('on-shave');
             else document.getElementById('mode-clear').classList.add('on-clear');
@@ -3996,7 +4041,8 @@
                     if (day.isToday) cls += ' today-ring';
                 }
                 const icon = both ? '🚿✂️' : day.shower ? '🚿' : day.shave ? '✂️' : '·';
-                const lbl  = both ? '洗+刮' : day.shower ? '已洗澡' : day.shave ? '已刮胡' : '无记录';
+                const sv2  = day.shave && PROFILE.shaving;
+                const lbl  = (day.shower && sv2) ? '洗+刮' : day.shower ? '已洗澡' : sv2 ? '已刮胡' : '无记录';
                 const label = `<div class="dn">${day.dayName}${day.isToday ? '·今' : ''}<br><span style="font-size:9px">${day.shortDate}</span></div>`;
                 if (day.isPast) {
                     // Past: non-interactive div showing stored history
@@ -4017,7 +4063,7 @@
             const clayPlan = futurePlan.filter(p => p.clay).length;
             document.getElementById('wk-sum').innerHTML = `
     <div class="wr"><span class="wrl">今后7天 · 洗澡</span><span class="wrv">${futurePlan.filter(p => p.shower).length} 天</span></div>
-    <div class="wr"><span class="wrl">今后7天 · 刮胡</span><span class="wrv">${futurePlan.filter(p => p.shave).length} 天</span></div>
+    ${PROFILE.shaving ? `<div class="wr"><span class="wrl">今后7天 · 刮胡</span><span class="wrv">${futurePlan.filter(p => p.shave).length} 天</span></div>` : ''}
     <div class="wr"><span class="wrl">酸类上限</span><span class="wrv ${maxAcid < 2 ? 'warn' : ''}">${maxAcid} 次/周（屏障评分动态）</span></div>
     <div class="wr"><span class="wrl">去角质酸类</span><span class="wrv ${acidOk ? 'ok' : 'bad'}">${journalAcidCnt > 0 ? `已用${journalAcidCnt}次+计划${planAcidD}次，共${totalAcid}次` : `计划${planAcidD}次`}（上限${maxAcid}次）</span></div>
     ${(() => {
@@ -4184,13 +4230,17 @@
 
         const QL_PRESETS = {
             'repair': { status: ['稳定'], products: ['修护夜'] },
-            'shower-repair': { status: ['稳定'], products: ['修护夜'] },
-            'pc-acid': { status: ['稳定'], products: ['PC酸'] },
-            'votary-acid': { status: ['稳定'], products: ['Votary酸'] },
             'shave': { status: ['稳定'], products: ['刮胡'] }
         };
+        // 按当前账号启用中的酸类动态生成快速记录按钮
+        function renderQuickAcidBtns() {
+            const box = document.getElementById('ql-acid-btns'); if (!box) return;
+            const acids = PD.filter(p => !p.hidden && p.role === 'acid' && p.journalTag && isSchedActive(p, PS[p.id] || p.statuses[0]));
+            box.innerHTML = acids.map(p => `<button class="ql-btn" onclick="quickLogAcid('${esc(p.journalTag)}')">${esc(p.journalTag)}夜 · 稳定</button>`).join('');
+        }
+        function quickLogAcid(tag) { quickLog({ status: ['稳定'], products: [tag] }); }
         function quickLog(preset) {
-            const p = QL_PRESETS[preset]; if (!p) return;
+            const p = typeof preset === 'string' ? QL_PRESETS[preset] : preset; if (!p) return;
             const di = document.getElementById('jrnl-date');
             const t = di && di.value ? di.value : today();
             const existing = (lg(K.jrnl) || []).find(x => x.date === t);
@@ -4296,7 +4346,8 @@
                 savePhoto(t, _photoData);
             } else if (_idb) {
                 const tx = _idb.transaction('photos', 'readwrite');
-                tx.objectStore('photos').delete(t);
+                tx.objectStore('photos').delete(photoKey(t));
+                tx.objectStore('photos').delete(t);   // 兼容旧的裸日期 key
             }
 
             const m = document.getElementById('sv-msg'); m.classList.add('show'); setTimeout(() => m.classList.remove('show'), 2000);
@@ -4308,7 +4359,8 @@
             ls(K.jrnl, (lg(K.jrnl) || []).filter(e => e.date !== date)); 
             if (_idb) {
                 const tx = _idb.transaction('photos', 'readwrite');
-                tx.objectStore('photos').delete(date);
+                tx.objectStore('photos').delete(photoKey(date));
+                tx.objectStore('photos').delete(date);   // 兼容旧的裸日期 key
             }
             renderJrnl(); renderStats(); renderBarrierBadge(); 
         }
@@ -4337,7 +4389,7 @@
                     ...(x.products || []).map(p => `<span class="jhch blue">${p}</span>`)].join('');
                     const photoHtml = photos[x.date] ? `<div style="margin-top:6px"><img src="${photos[x.date]}" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--bd);cursor:pointer;" onclick="showImageModal('${photos[x.date]}')"></div>` : '';
                     return `<div class="jhe">
-          <div class="jhd">${x.date}${x.phase ? ` · ${x.phase}` : ''}<span><button class="jhedit" onclick="editEntry('${x.date}')">编辑</button> · <button class="jhdel" onclick="delEntry('${x.date}')">删除</button></span></div>
+          <div class="jhd">${x.date}${PROFILE.hrt && x.phase ? ` · ${esc(x.phase)}` : ''}<span><button class="jhedit" onclick="editEntry('${x.date}')">编辑</button> · <button class="jhdel" onclick="delEntry('${x.date}')">删除</button></span></div>
           <div class="jhc">${chips || '<span class="jhch">无标记</span>'}</div>
           ${x.note ? `<div class="jhn">${esc(x.note)}</div>` : ''}
           ${photoHtml}
@@ -4395,7 +4447,7 @@
                         await new Promise(res => initPhotoDB(() => {
                             if (!_idb) return res();
                             const tx = _idb.transaction('photos', 'readwrite');
-                            Object.entries(photos).forEach(([date, dataUrl]) => tx.objectStore('photos').put({ date, dataUrl }));
+                            Object.entries(photos).forEach(([date, dataUrl]) => tx.objectStore('photos').put({ date: photoKey(date), dataUrl }));
                             tx.oncomplete = res; tx.onerror = res;
                         }));
                     }
@@ -4424,10 +4476,10 @@
             bar.style.width = prog + '%'; pct.textContent = prog + '%';
             if (elapsed < 0) { badge.textContent = '尚未开始'; badge.className = 'cdb'; left.textContent = `修护起始日设在 ${Math.abs(elapsed)} 天后`; }
             else if (elapsed >= 28) {
-                const ggProd = PD.find(p => p.id === 'goodGenes' && !p.hidden);
-                const evalTarget = ggProd ? ggProd.name : 'Good Genes';
+                // 取当前账号里"暂缓中的强效酸",没有就说通用的(旧版写死 Good Genes,别人根本没这瓶)
+                const strong = PD.find(p => !p.hidden && p.role === 'acid' && (PS[p.id] || p.statuses[0]) === 'paused');
                 badge.textContent = '✓ 可评估'; badge.className = 'cdb done';
-                left.textContent = `已满4周，可评估引入 ${evalTarget}`;
+                left.textContent = strong ? `已满4周，可评估引入 ${strong.name}` : '已满4周，可评估提高酸类频率';
             }
             else { badge.textContent = '还剩' + rem + '天'; badge.className = 'cdb'; left.textContent = '已过' + elapsed + '天 / 共28天'; }
         }
@@ -4438,7 +4490,8 @@
         // 现在：从今天算起；今天没记录就从昨天算起，另用 todayLogged 单独表示"今日未打卡"。
         function todayLogged() { return (lg(K.jrnl) || []).some(x => x.date === today()); }
         function logStreak() {
-            const dates = new Set((lg(K.jrnl) || []).map(x => x.date));
+            // 口径与旁边的「本周 X/7」一致：必须**记了皮肤状态**才算打卡(只传照片/只写备注不算)
+            const dates = new Set((lg(K.jrnl) || []).filter(x => x && x.date && (x.status || []).length).map(x => x.date));
             let streak = 0, i = dates.has(today()) ? 0 : 1;
             while (streak < 365) {
                 if (!dates.has(offsetDate(-i))) break;
@@ -4660,7 +4713,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
                     const wsMon = mondayNWeeksAgo(w);
                     const weekEntries = entriesInWeek(wsMon);
                     const cnt = weekEntries.filter(x => (x.products||[]).some(p => getAcidTags().includes(p))).length;
-                    const lbl = w === 0 ? '本周' : w === 1 ? '上周' : w === 2 ? '上上周' : '4周前';
+                    const lbl = w === 0 ? '本周' : w === 1 ? '上周' : w === 2 ? '上上周' : '3周前';
                     const scale = Math.max(maxA, 4);
                     const limitPct = Math.min(100, maxA / scale * 100);
                     const pct = Math.min(100, cnt / scale * 100);
@@ -4817,8 +4870,8 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
         setInterval(checkDayRollover, 60000);
 
         // ══ Firebase 云同步 ═══════════════════════════════════
-        const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_amsteps1','sk_proddefs1','sk_profile1'];
-        let _db = null, _user = null, _pushTimer = null, _pushing = false;
+        const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_amsteps1','sk_proddefs1','sk_profile1','sk_preset1'];
+        let _db = null, _user = null, _pushTimer = null, _pushing = false, _pushDirty = false;
 
         function initFirebase() {
             const cfg = typeof FIREBASE_CONFIG !== 'undefined' && FIREBASE_CONFIG;
@@ -4832,11 +4885,14 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
 
         let _unsub = null;
         const UIDK = 'sk_uid';   // 记住上一个登录的 uid（不同步、仅本机用来判断"是否换了人"）
+        // 只清「未加账号前缀的旧照片」：新照片按 uid 隔离，换账号不该删别人的
         function clearAllPhotos(cb) {
             if (!_idb) { if (cb) cb(); return; }
             try {
                 const tx = _idb.transaction('photos', 'readwrite');
-                tx.objectStore('photos').clear();
+                const st = tx.objectStore('photos');
+                const req = st.getAllKeys();
+                req.onsuccess = () => (req.result || []).forEach(k => { if (String(k).indexOf('__') === -1) st.delete(k); });
                 tx.oncomplete = () => { if (cb) cb(); };
                 tx.onerror = () => { if (cb) cb(); };
             } catch (e) { if (cb) cb(); }
@@ -4849,6 +4905,8 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
             PROFILE = { shaving: false, hrt: false, skinType: '', name: '', onboarded: false, phase: 'repair', phaseStart: '' };
             try { localStorage.setItem(K.profile, JSON.stringify(PROFILE)); localStorage.setItem('__profile_owner_seeded__', '1'); } catch {}
             PD = loadPD(); PS = lg(K.prods) || {}; POPEN = lg(K.popen) || {};
+            TN = initTN();   // 关键：内存里的「今晚洗澡/刮胡」也必须重置，否则上一个人的状态会串到新账号并被写回其排班
+            localStorage.removeItem(K.preset);   // 排班模版不进云端，属于上一个人的，一并清
             applyProfileVisibility(); syncSettingsUI();
         }
         async function handleAuthChange(user) {
@@ -4860,6 +4918,20 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
                     clearLocalUserData();
                     renderAll(); renderJrnl(); renderStats(); updateCd();
                     showSyncStatus('↻ 已切换账号，正在载入…', 'syncing');
+                } else if (!prevUid) {
+                    // 首次登录：本机可能存着**别人**在云同步之前攒下的数据(真实场景:Cici 在 Cait 机器上第一次登录)。
+                    // 旧版直接跳过清理 → 上一个人的日志/产品/档案被并进新账号。这里按云端文档判断归属。
+                    const hasLocal = !!(((lg(K.jrnl) || []).length) || lg(K.prods) || lg(K.wk));
+                    if (hasLocal) {
+                        let cloudExists = false;
+                        try { const snap = await _db.collection('users').doc(user.uid).get(); cloudExists = snap.exists; } catch (e) {}
+                        const mine = !cloudExists && confirm('这台设备上有一份还没同步过的护肤数据。\n\n把它归到「' + (user.email || '当前账号') + '」名下吗？\n\n· 确定 = 这是我的数据，继续使用\n· 取消 = 不是我的，清空并从我的云端载入');
+                        if (!mine) {
+                            clearLocalUserData();
+                            renderAll(); renderJrnl(); renderStats(); updateCd();
+                            showSyncStatus('↻ 已清空本机旧数据，正在载入…', 'syncing');
+                        }
+                    }
                 }
                 localStorage.setItem(UIDK, user.uid);
                 setupRealtimeSync();
@@ -4872,6 +4944,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
         function renderAll() {
             invalidatePlanCache();   // PD/PS 可能刚被云端换掉，排班必须重算
             PROFILE = lg(K.profile) || PROFILE;   // 云端可能刚同步来新档案
+            TN = initTN();                        // 云端同步来的 sk_tn1 也要让内存生效(否则跨设备的今晚状态本机不更新)
             applyProfileVisibility();
             syncSettingsUI();
             renderPlanTemplates();
@@ -4880,7 +4953,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
             initPhotoDB(() => {
                 if (document.getElementById('jrnl').classList.contains('active')) renderJrnl();
             });
-            renderProdChips(); renderProds(); updateProdUI(); renderWk(); renderTn(); renderAm(); renderPaoAlerts();
+            renderProdChips(); renderQuickAcidBtns(); renderProds(); updateProdUI(); renderWk(); renderTn(); renderAm(); renderPaoAlerts();
         }
 
         function setupRealtimeSync() {
@@ -4889,8 +4962,20 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
             _unsub = _db.collection('users').doc(_user.uid).onSnapshot(doc => {
                 let isInit = !_unsub.initialized; _unsub.initialized = true;
                 if (!doc.exists) { if(isInit) { showSyncStatus('✓ 云端已连接(全新账号)'); if (!PROFILE.onboarded) showOnboarding(); } return; }
+                if (doc.metadata && doc.metadata.hasPendingWrites) return;   // 这是本机自己刚写的回声，别拿它覆盖自己
+                const cloudDoc = doc.data() || {};
+                // 版本判断：云端比本机最后一次成功推送更旧 → 说明本地有还没推上去的新改动，
+                // 不能让旧云覆盖(这正是"改动没推成→下次打开被旧云盖掉"的丢数据主因),反过来把本地推上去。
+                const cloudAt = Number(cloudDoc._updatedAt || 0);
+                const lastPush = Number(localStorage.getItem('sk_lastpush') || 0);
+                if (lastPush && cloudAt && cloudAt < lastPush) {
+                    showSyncStatus('↑ 本机数据较新，正在上传…', 'syncing');
+                    clearTimeout(_pushTimer); _pushTimer = setTimeout(pushToCloud, 200);
+                    return;
+                }
                 let changed = false;
-                Object.entries(doc.data()).forEach(([k, v]) => {
+                Object.entries(cloudDoc).forEach(([k, v]) => {
+                    if (k === '_updatedAt') return;
                     const localV = localStorage.getItem(k);
                     let cloudVal = v;
                     // 排班表要逐日合并：本地已成为"过去"的日子保留本地值。
@@ -4931,16 +5016,30 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
         }
 
         async function pushToCloud() {
-            if (!_db || !_user || _pushing) return;
-            _pushing = true;
+            if (!_db || !_user) return;
+            if (_pushing) { _pushDirty = true; return; }   // 别丢掉推送中到来的改动
+            _pushing = true; _pushDirty = false;
             const data = {};
             CLOUD_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v !== null) { try { data[k] = JSON.parse(v); } catch { data[k] = v; } } });
+            data._updatedAt = Date.now();   // 版本戳：给云→本地覆盖做新旧判断，防"旧云盖新本地"
             try {
-                await _db.collection('users').doc(_user.uid).set(data, { merge: true });
+                // 加超时：离线时 set() 可能永不 settle，旧版会把 _pushing 永久卡死 → 之后所有修改再也不上传
+                await Promise.race([
+                    _db.collection('users').doc(_user.uid).set(data, { merge: true }),
+                    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
+                ]);
+                try { localStorage.setItem('sk_lastpush', String(data._updatedAt)); } catch {}
                 showSyncStatus('✓ 已保存', 'ok');
-            } catch(e) { console.warn('上传失败:', e); showSyncStatus('⚠️ 同步失败，请检查网络', 'err'); }
-            _pushing = false;
+            } catch(e) {
+                console.warn('上传失败:', e); showSyncStatus('⚠️ 同步失败，请检查网络', 'err');
+                _pushDirty = true;
+                clearTimeout(_pushTimer); _pushTimer = setTimeout(pushToCloud, 8000);   // 退避重试
+            } finally {
+                _pushing = false;
+                if (_pushDirty) { clearTimeout(_pushTimer); _pushTimer = setTimeout(pushToCloud, 1500); }
+            }
         }
+        window.addEventListener('online', () => { if (_db && _user) pushToCloud(); });
 
         let _syncFadeTimer = null, _syncState = 'ok';
         function showSyncStatus(msg, state) {
@@ -4965,8 +5064,8 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
         }
 
         function signInGoogle() {
-            if (typeof firebase === 'undefined') { alert('请先填入 Firebase 配置'); return; }
-            firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(e => alert('登录失败如果使用了Safari拦截弹窗，请允许弹窗，或使用电脑端登录。详细报错: ' + e.message));
+            if (typeof firebase === 'undefined') { alert('登录服务没加载出来，请检查网络后重试。'); return; }
+            firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(e => alert('登录失败。如果用的是 Safari，可能是弹窗被拦截了——请允许弹窗后重试，或改用电脑端登录。\n\n详细报错：' + e.message));
         }
         function signOut() {
             if (confirm('确定退出登录？退出后将使用本地缓存。')) firebase.auth().signOut();
