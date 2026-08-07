@@ -2179,6 +2179,7 @@
                 <div class="leg feat-shave">
                     <div class="ld" style="background:var(--gr-bg);border:1px solid var(--gr-br)"></div>刮胡
                 </div>
+                <!-- 上面这条已由 feat-shave 门控 -->
                 <div class="leg">
                     <div class="ld" style="background:var(--am-bg);border:1px solid var(--am-br)"></div>酸类
                 </div>
@@ -2353,7 +2354,7 @@
                     <div class="at">多种酸类叠加</div>任意两种去角质酸类不可同晚使用
                 </div>
                 <div class="alert warn feat-shave">
-                    <div class="at">刮胡日 × 酸类/视黄醇</div>刮胡当晚全部活性成分跳过
+                    <div class="at">刮胡日 × 酸类/视黄醇</div>刮胡当晚全部活性成分跳过<!-- feat-shave -->
                 </div>
             </div>
             <div class="section">
@@ -2500,14 +2501,19 @@
             if (!lg(K.prods) && lg(old.prods)) { ls(K.prods, lg(old.prods)); }
             if (!lg(K.cd) && lg(old.cd)) { ls(K.cd, lg(old.cd)); }
         })();
-        // ── 用户档案：每人独立的「刮胡 / HRT」开关 ──────────────────
-        // 有本地数据 = 现任用户(Cait)：刮胡开、HRT关(已停，历史保留)、副标题去 E2；
-        // 无任何数据 = 全新用户(如 Cici)：刮胡关、HRT关、副标题留空。
+        // ── 用户档案：每人独立的「刮胡 / HRT / 肤质 / 阶段」──────────────
+        // ⚠️ 只有"本机原主的历史数据"才继承旧设定(刮胡开等)，且**一台设备只认一次**。
+        // 旧版靠 hasData 猜身份：别人(如 Cici)在这台机器上打开、或云端数据尚未替换本地时，
+        // 会被误判成原主 → 直接套上原主的肤质/刮胡/已引导，看起来"全是别人的痕迹"。现改为带 owner 标记。
         (function seedProfile() {
             if (lg(K.profile)) return;
+            const OWNER = '__profile_owner_seeded__';
+            const firstTimeOnThisDevice = !localStorage.getItem(OWNER);
             const hasData = !!(((lg(K.jrnl) || []).length) || lg(K.prods) || lg(K.wk));
+            const inherit = firstTimeOnThisDevice && hasData;   // 只认第一次
             try {
-                localStorage.setItem(K.profile, JSON.stringify(hasData
+                localStorage.setItem(OWNER, '1');
+                localStorage.setItem(K.profile, JSON.stringify(inherit
                     ? { shaving: true,  hrt: false, skinType: '混油皮 · 屏障修护', name: '', onboarded: true, phase: 'maintenance', phaseStart: '2026-01-01' }
                     : { shaving: false, hrt: false, skinType: '', name: '', onboarded: false, phase: 'repair', phaseStart: '' }));
             } catch {}
@@ -2846,7 +2852,7 @@
                     <div class="fg"><label class="fg-label">最小间隔天数</label><input type="number" class="fg-input" id="m-gap" min="0" max="6" value="${sch.minDaysBetween||0}"></div></div>
                     <div class="fg"><label class="fg-label">排班偏好</label>
                         <div class="fg-toggle"><span>优先洗澡日</span>${tglHTML('m-shower',sch.preferShowerNight)}</div>
-                        <div class="fg-toggle"><span>避开刮胡日</span>${tglHTML('m-shave',sch.avoidShaveDay)}</div>
+                        <div class="fg-toggle feat-shave"><span>避开刮胡日</span>${tglHTML('m-shave',sch.avoidShaveDay)}</div>
                         <div class="fg-toggle"><span>避开酸类日</span>${tglHTML('m-acid',sch.avoidAcid)}</div>
                         <div class="fg-toggle"><span>避开视黄醇日</span>${tglHTML('m-retinol',sch.avoidRetinol)}</div>
                         <div class="fg-toggle"><span>纳入自动排班</span>${tglHTML('m-auto',sch.enableAutoSchedule)}</div>
@@ -3847,8 +3853,10 @@
                         (x.products || []).some(t => getExfoliantTags().includes(t))).length
                         + assignedAcidDates.filter(d => d >= windowFrom && d <= fd.date).length;
                     if (inWindow >= maxAcid) continue;
+                    // 洗澡夜偏好必须压过"间隔更远"：旧版 +5 会被 minDist*10 淹没，
+                    // 结果洗澡夜排不到酸、今晚显示修护流程，用户得手动点才对（真实反馈的 bug）。
                     let score = minDist * 10;
-                    if (fd.shower && prod.schedule.preferShowerNight) score += 5;
+                    if (prod.schedule.preferShowerNight) score += fd.shower ? 60 : -30;
                     if (score > bestScore) { bestScore = score; bestIdx = i; }
                 }
                 if (bestIdx >= 0) {
@@ -4814,9 +4822,10 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
             CLOUD_KEYS.forEach(k => localStorage.removeItem(k));
             localStorage.removeItem(K.preset);
             clearAllPhotos();
-            PROFILE = { shaving: false, hrt: false, skinType: '', name: '', onboarded: false };
-            try { localStorage.setItem(K.profile, JSON.stringify(PROFILE)); } catch {}
+            PROFILE = { shaving: false, hrt: false, skinType: '', name: '', onboarded: false, phase: 'repair', phaseStart: '' };
+            try { localStorage.setItem(K.profile, JSON.stringify(PROFILE)); localStorage.setItem('__profile_owner_seeded__', '1'); } catch {}
             PD = loadPD(); PS = lg(K.prods) || {}; POPEN = lg(K.popen) || {};
+            applyProfileVisibility(); syncSettingsUI();
         }
         async function handleAuthChange(user) {
             _user = user; renderAuthBtn();
@@ -4855,7 +4864,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
             if (_unsub) _unsub();
             _unsub = _db.collection('users').doc(_user.uid).onSnapshot(doc => {
                 let isInit = !_unsub.initialized; _unsub.initialized = true;
-                if (!doc.exists) { if(isInit) { showSyncStatus('✓ 云端已连接(全新账号)'); maybeShowOnboarding(); } return; }
+                if (!doc.exists) { if(isInit) { showSyncStatus('✓ 云端已连接(全新账号)'); if (!PROFILE.onboarded) showOnboarding(); } return; }
                 let changed = false;
                 Object.entries(doc.data()).forEach(([k, v]) => {
                     const localV = localStorage.getItem(k);
