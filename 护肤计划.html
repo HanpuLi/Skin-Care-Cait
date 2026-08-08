@@ -2678,9 +2678,9 @@
             { id:'cicaplast',icon:'🩹',name:'Cicaplast B5 修护霜',cat:'修护 · 每晚',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['活跃痘痘处、口罩线点涂','刮胡后全脸薄涂修护微创口'],schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
             { id:'avene',role:'soothe',icon:'🍃',name:'Avène Tolérance Extrême 舒缓面膜',cat:'面膜 · 舒缓（冲洗型）',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['敷约 5 分钟后用温水洗掉','泛红/刺痛/不舒服的时候用，不必天天'],pmHint:'敷约5分钟后洗掉',schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
             { id:'clay',role:'mask',icon:'🫙',name:'IPSA 深层净化泥面膜',cat:'去角质 · 泥膜',journalTag:'泥面膜',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['1次/周，洗澡夜使用','使用当晚视为酸类占用','泛红/敏感期暂停'],schedule:{type:'mask',time:['pm'],maxPerWeek:1,minDaysBetween:0,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:false,enableAutoSchedule:true},paoMonths:6,builtin:true },
-            { id:'lancome',role:'cleanse',icon:'🧼',name:'Lancôme Clarifique 洁面泡沫',cat:'洁面 · 洗澡夜',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['洗澡夜使用，60秒按摩，T区多停留','替代温水冲洗，清洁力更强'],schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:true,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
+            { id:'lancome',role:'cleanse',cleanseStrength:'strong',icon:'🧼',name:'Lancôme Clarifique 洁面泡沫',cat:'洁面 · 洗澡夜',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['洗澡夜使用，60秒按摩，T区多停留','替代温水冲洗，清洁力更强'],schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:true,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
             // ── 2026-08-06 家中实拍库存新增（真实产品；排在已有产品之后，故各角色首位仍是既有主力，不打乱现有流程） ──
-            { id:'lacura',role:'cleanse',icon:'🧼',name:'Lacura 温和洗面奶',cat:'洁面 · 温和无皂基',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['无皂基氨基酸洁面，敏感肌','出油也别用皂基/强力泡沫，越洗越油'],pmHint:'全脸打圈30秒后温水洗净',amHint:'温和洁面，30秒洗净',schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
+            { id:'lacura',role:'cleanse',cleanseStrength:'gentle',icon:'🧼',name:'Lacura 温和洗面奶',cat:'洁面 · 温和无皂基',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['无皂基氨基酸洁面，敏感肌','出油也别用皂基/强力泡沫，越洗越油'],pmHint:'全脸打圈30秒后温水洗净',amHint:'温和洁面，30秒洗净',schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
             { id:'wildsource',role:'precleanse',icon:'🧈',name:'Wild Source 卸妆膏',cat:'清洁 · 卸妆第一遍',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['晚间卸防晒/妆的第一遍','没妆没厚防晒可跳过'],pmHint:'干手打圈乳化后温水洗净',schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
             { id:'toleriane',role:'moist',icon:'💧',name:'La Roche-Posay Toleriane Ultra Light',cat:'保湿 · 无油轻薄',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['无油轻薄乳，敏感/易泛红','油皮/混油首选，防晒前打底'],pmHint:'全脸薄涂封层',amHint:'全脸薄涂，防晒前打底',schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
             { id:'drorganic',role:'mask',icon:'🍊',name:'dr.organic 葡萄柚水杨酸磨砂',cat:'去角质 · 磨砂（慎用）',journalTag:'磨砂',statuses:['paused','owned'],labels:{paused:'暂停',owned:'偶尔用'},pillCls:{paused:'paused',owned:'active'},notes:['物理颗粒+水杨酸，油痘肌','⚠️对泛红/红疹区偏刺激，最多两周1次、避开发红处'],pmHint:'湿脸轻打圈、避开红疹区，冲净',schedule:{type:'mask',time:['pm'],maxPerWeek:1,minDaysBetween:6,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
@@ -2755,6 +2755,34 @@
             return zs.length ? '　⚠️ 避开：' + zs.join('、') : '';
         }
         function isExcluded(p) { return !!p && (PROFILE.excluded || []).includes(p.id); }
+        // 洁面强度:有多支洁面时按当晚情况自动选。产品可显式标 cleanseStrength，否则按名称/分类推断。
+        function cleanseStrength(p) {
+            if (p && p.cleanseStrength) return p.cleanseStrength;
+            const s = ((p && p.cat) || '') + ((p && p.name) || '') + (((p && p.notes) || []).join(''));
+            if (/泡沫|洁颜蜜|深层|净化|清爽|控油|foam|purify|deep|clarif/i.test(s)) return 'strong';
+            if (/温和|无皂|氨基酸|敏感|gentle|mild|soap.?free|sensitive/i.test(s)) return 'gentle';
+            return 'normal';
+        }
+        // 选洁面:泛红/敏感期、或当晚要刷酸 → 用温和的;洗澡夜或近期出油 → 用清洁力强的
+        function pickCleanser(list, ctx) {
+            if (!list.length) return null;
+            if (list.length === 1) return list[0];
+            const irritated = jrnlLastNDays(3).some(e => (e.status || []).some(s => s === '泛红' || s === '敏感'));
+            const oily = jrnlLastNDays(3).some(e => (e.status || []).includes('出油'));
+            const want = (irritated || ctx.acidTonight) ? 'gentle' : ((ctx.shower || oily) ? 'strong' : 'normal');
+            const hit = list.find(p => cleanseStrength(p) === want);
+            if (hit) return hit;
+            // 想要温和却没有 → 退而求其次挑非 strong 的
+            if (want === 'gentle') return list.find(p => cleanseStrength(p) !== 'strong') || list[0];
+            return list[0];
+        }
+        function cleanserReason(ctx) {
+            const irritated = jrnlLastNDays(3).some(e => (e.status || []).some(s => s === '泛红' || s === '敏感'));
+            if (irritated) return '最近有泛红/敏感 → 今晚用温和的';
+            if (ctx.acidTonight) return '今晚要刷酸 → 先用温和的洁面';
+            if (ctx.shower) return '洗澡夜 → 用清洁力强一点的';
+            return '';
+        }
         // 刷酸时机偏好:'prefer' 洗澡夜优先 / 'neutral' 无所谓(默认) / 'avoid' 避开洗澡夜
         // 未显式设置时,若用户标了关注区域或近期有泛红/敏感记录 → 自动倾向 avoid(热水后屏障通透性升高、刺激风险更大)
         function acidTiming() {
@@ -3679,10 +3707,14 @@
             } else {
                 // 有洁面产品就用它——不分洗澡夜(真实反馈:「温水冲洗觉得不够、洗不干净」)。
                 // 卸妆只在用户确实留着卸妆产品时才出现;不想卸妆的把它标成「我不用这个」即可。
-                const cleanser = byRole('cleanse', true)[0];
+                const ctx = { shower: shower, acidTonight: hasScheduledAcid };
+                const cleanser = pickCleanser(byRole('cleanse'), ctx);
                 const pre = byRole('precleanse', true)[0];
                 if (pre) steps.push({ p: pre.name, h: hint(pre) || '化了妆或厚防晒时先卸' });
-                if (cleanser) steps.push({ p: cleanser.name, h: hint(cleanser) || '打圈30–60秒后温水洗净', t: 60 });
+                if (cleanser) {
+                    const why = cleanserReason(ctx);
+                    steps.push({ p: cleanser.name, h: (why ? why + '；' : '') + (cleanser.pmHint || '打圈30–60秒后温水洗净'), t: 60 });
+                }
                 else steps.push({ p: '温水冲洗', h: '没有洁面产品时的兜底——建议在「产品」页加一支洁面' });
                 // 舒缓面膜:冲洗型,只在最近有泛红/敏感/刺痛时才提示,不占去角质额度
                 if (jrnlLastNDays(3).some(e => (e.status || []).some(s => s === '泛红' || s === '敏感' || s === '爆痘'))) {
@@ -3847,7 +3879,7 @@
                 return;
             }
             // 有标了"早晨"的洁面产品就用它，没有才回退到清水冲洗
-            const amCleanser = amPolicy === 'spfonly' ? null : byRoleAm('cleanse', true)[0];
+            const amCleanser = amPolicy === 'spfonly' ? null : pickCleanser(byRoleAm('cleanse'), { shower: false, acidTonight: false });
             let steps = amPolicy === 'spfonly' ? []
                 : amCleanser
                 ? [{ p: amCleanser.name, h: amHint(amCleanser) || '温和洁面，30秒洗净' }]
