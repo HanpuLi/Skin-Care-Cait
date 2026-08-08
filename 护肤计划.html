@@ -2065,6 +2065,9 @@
       .assess-rec.warn{background:var(--am-bg)}
       .assess-rec.good{background:var(--gr-bg)}
       .assess-empty{font-size:12px;color:var(--tx3);padding:4px 0}
+      .todo-row{display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.5;padding:3px 0}
+      .todo-mark{flex:none;width:16px;text-align:center;color:var(--tx3);font-weight:700}
+      .todo-mark.ok{color:var(--gr)}
       .ob-q{font-size:12px;font-weight:600;margin:12px 0 6px}
       .ob-opts{display:flex;flex-wrap:wrap;gap:6px}
       .ob-opt{padding:7px 11px;border-radius:999px;border:1px solid rgba(128,128,128,.3);background:var(--sur2);color:var(--tx2);font-size:12px;cursor:pointer;font-family:inherit}
@@ -2103,6 +2106,7 @@
         <!-- ══ 今晚 ══ -->
 
         <div id="tonight" class="panel active">
+            <div id="daily-todo"></div>
             <div id="assess-card"></div>
             <div id="hrt-bnr"></div>
             <div id="barrier-limit-banner"></div>
@@ -2154,6 +2158,7 @@
                     <label class="set-row"><span>肤质副标题</span><input id="set-skintype" class="hf" style="max-width:190px" oninput="onProfileEdit()" placeholder="如：混油皮 · 屏障修护"></label>
                     <label class="set-row"><span>刮胡 · 排班与步骤含刮胡</span><input type="checkbox" id="set-shave" onchange="onProfileEdit()"></label>
                     <label class="set-row"><span>HRT · 显示激素相关内容</span><input type="checkbox" id="set-hrt" onchange="onProfileEdit()"></label>
+                    <label class="set-row"><span>早晨流程</span><select id="set-ampolicy" class="hf" style="max-width:190px" onchange="onProfileEdit()"><option value="full">完整（保湿+防晒）</option><option value="spfonly">只涂防晒</option><option value="none">早上不护肤</option></select></label>
                     <label class="set-row"><span>刷酸时机</span><select id="set-acidtiming" class="hf" style="max-width:190px" onchange="onProfileEdit()"><option value="">自动（易泛红则避开洗澡夜）</option><option value="neutral">无所谓</option><option value="avoid">避开刚洗完热水澡</option><option value="prefer">优先安排在洗澡夜</option></select></label>
                     <label class="set-row"><span>修护霜用法</span><select id="set-repairuse" class="hf" style="max-width:190px" onchange="onProfileEdit()"><option value="">自动（按屏障状态）</option><option value="full">全脸薄涂</option><option value="spot">仅点涂</option></select></label>
                 </div>
@@ -2671,7 +2676,7 @@
             { id:'sebagh',icon:'💎',name:'Dr Sebagh Rose de Vie 精华',cat:'精华 · 修护',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['白天可代替面霜，晚上无酸夜使用','全脸3–4滴，轻拍至吸收'],schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:true,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
             { id:'mzskin',icon:'👁',name:'MZ Skin Soothe & Smooth 眼部精华',cat:'眼部 · 护理',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['玻尿酸眼部精华，提亮眼周','无名指轻拍眼眶骨，不要触碰眼球'],schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
             { id:'cicaplast',icon:'🩹',name:'Cicaplast B5 修护霜',cat:'修护 · 每晚',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['活跃痘痘处、口罩线点涂','刮胡后全脸薄涂修护微创口'],schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
-            { id:'avene',icon:'🍃',name:'Avène Tolérance Extrême',cat:'修护 · 刮胡后',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['刮胡后泛红/刺痛时使用（可选）','10–15分钟后再叠后续步骤'],schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
+            { id:'avene',role:'soothe',icon:'🍃',name:'Avène Tolérance Extrême 舒缓面膜',cat:'面膜 · 舒缓（冲洗型）',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['敷约 5 分钟后用温水洗掉','泛红/刺痛/不舒服的时候用，不必天天'],pmHint:'敷约5分钟后洗掉',schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
             { id:'clay',role:'mask',icon:'🫙',name:'IPSA 深层净化泥面膜',cat:'去角质 · 泥膜',journalTag:'泥面膜',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['1次/周，洗澡夜使用','使用当晚视为酸类占用','泛红/敏感期暂停'],schedule:{type:'mask',time:['pm'],maxPerWeek:1,minDaysBetween:0,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:false,enableAutoSchedule:true},paoMonths:6,builtin:true },
             { id:'lancome',role:'cleanse',icon:'🧼',name:'Lancôme Clarifique 洁面泡沫',cat:'洁面 · 洗澡夜',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['洗澡夜使用，60秒按摩，T区多停留','替代温水冲洗，清洁力更强'],schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:true,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
             // ── 2026-08-06 家中实拍库存新增（真实产品；排在已有产品之后，故各角色首位仍是既有主力，不打乱现有流程） ──
@@ -2807,6 +2812,8 @@
             const at = document.getElementById('set-acidtiming'), ru = document.getElementById('set-repairuse');
             if (at) at.value = PROFILE.acidTiming || '';
             if (ru) ru.value = PROFILE.repairUse || '';
+            const ap = document.getElementById('set-ampolicy');
+            if (ap) ap.value = PROFILE.amPolicy || 'full';
         }
         function onProfileEdit() {
             const a = document.getElementById('set-shave'), b = document.getElementById('set-hrt'), c = document.getElementById('set-skintype');
@@ -2816,6 +2823,8 @@
             const at = document.getElementById('set-acidtiming'), ru = document.getElementById('set-repairuse');
             PROFILE.acidTiming = at ? at.value : PROFILE.acidTiming;
             PROFILE.repairUse  = ru ? ru.value : PROFILE.repairUse;
+            const ap = document.getElementById('set-ampolicy');
+            PROFILE.amPolicy = ap ? ap.value : PROFILE.amPolicy;
             saveProfile(); applyProfileVisibility();
             // 全量重渲染：产品卡文案(visNotes/visCat)、日志芯片、快速记录按钮、日历标签都随开关变，
             // 旧版只重渲今晚+排班，其余要等下一次 renderAll 才跟上。
@@ -3305,7 +3314,26 @@
             const from = offsetDate(-6), to = today();
             return new Set((lg(K.jrnl) || []).filter(x => x && x.date && x.date >= from && x.date <= to && (x.status || []).length).map(x => x.date)).size;
         }
+        // 「今天要记什么」——真实反馈:用户不清楚每天该手动做哪些记录。这里明确列出、并显示完成状态。
+        function renderDailyTodo() {
+            const box = document.getElementById('daily-todo'); if (!box) return;
+            const t = today();
+            const entry = (lg(K.jrnl) || []).find(x => x.date === t) || {};
+            const hasStatus = (entry.status || []).length > 0;
+            const hasProds  = (entry.products || []).length > 0;
+            const doneTn = (loadDoneSteps('tn') || new Set()).size > 0;
+            const row = (ok, label, hintTxt) =>
+                `<div class="todo-row"><span class="todo-mark ${ok ? 'ok' : ''}">${ok ? '✓' : '○'}</span><span><b>${label}</b><span style="color:var(--tx3)"> — ${hintTxt}</span></span></div>`;
+            box.innerHTML = `<div class="assess-card2" style="margin-bottom:.75rem">
+                <div class="assess-hd"><span>今天要记的（就这几样）</span><span style="font-size:12px;color:var(--tx3)">${[hasStatus, hasProds, doneTn].filter(Boolean).length}/3</span></div>
+                ${row(hasStatus, '皮肤状态', '下面「快速记录」点一下就行，最影响计划')}
+                ${row(hasProds,  '今晚用了什么', '「日志」页勾选，用来算刷酸间隔')}
+                ${row(doneTn,    '护肤步骤打勾', '做一步点一下，纯粹给自己看')}
+                <div style="font-size:11px;color:var(--tx3);margin-top:8px">其它都不用管：排班、频率、评估都是自动算的。拍照可选。</div>
+            </div>`;
+        }
         function renderAssessment() {
+            renderDailyTodo();
             const box = document.getElementById('assess-card'); if (!box) return;
             const a = assessSkin();
             if (a.overall === null) { box.innerHTML = `<div class="assess-empty">记一次今日皮肤状态，就能生成多维评估与建议。</div>`; return; }
@@ -3649,10 +3677,17 @@
                 byRole('moist', true).forEach(p => steps.push({ p: p.name, h: hint(p) || '无香精封层' }));
                 skips.push('所有酸类', '视黄醇', '泥面膜');
             } else {
+                // 有洁面产品就用它——不分洗澡夜(真实反馈:「温水冲洗觉得不够、洗不干净」)。
+                // 卸妆只在用户确实留着卸妆产品时才出现;不想卸妆的把它标成「我不用这个」即可。
                 const cleanser = byRole('cleanse', true)[0];
                 const pre = byRole('precleanse', true)[0];
-                if (shower && cleanser) steps.push({ p: cleanser.name, h: hint(cleanser) || '60秒按摩，T区多停留', t: 60 });
-                else steps.push({ p: '温水冲洗' + (pre ? ' / ' + pre.name : ''), h: pre ? '有防晒/彩妆时使用' : '温和清洁' });
+                if (pre) steps.push({ p: pre.name, h: hint(pre) || '化了妆或厚防晒时先卸' });
+                if (cleanser) steps.push({ p: cleanser.name, h: hint(cleanser) || '打圈30–60秒后温水洗净', t: 60 });
+                else steps.push({ p: '温水冲洗', h: '没有洁面产品时的兜底——建议在「产品」页加一支洁面' });
+                // 舒缓面膜:冲洗型,只在最近有泛红/敏感/刺痛时才提示,不占去角质额度
+                if (jrnlLastNDays(3).some(e => (e.status || []).some(s => s === '泛红' || s === '敏感' || s === '爆痘'))) {
+                    byRole('soothe').forEach(p => steps.push({ p: p.name, h: (hint(p) || '敷约5分钟后洗掉') + '（最近有泛红/不适才建议用）', t: 300 }));
+                }
                 if (hasScheduledAcid) {
                     const ap = pd(schedAcid.id); const aName = ap ? ap.name : schedAcid.label;
                     steps.push({ p: aName, h: ((ap && hint(ap)) || '停留3–5分钟，无需冲洗') + zoneHintFor('acid') });
@@ -3804,16 +3839,26 @@
             };
             const amHint = p => p.amHint || p.pmHint || visNotes(p)[0] || '';
 
-            // 有标了"早晨"的洁面产品就用它，没有才回退到清水冲洗(旧版写死"不用洁面产品"，与产品自带的 amHint 矛盾)
-            const amCleanser = byRoleAm('cleanse', true)[0];
-            let steps = amCleanser
+            const amPolicy = PROFILE.amPolicy || 'full';
+            const pl0 = document.getElementById('am-plan');
+            if (amPolicy === 'none') {
+                if (pl0) pl0.innerHTML = `<div class="tn-hdr"><div class="tn-hdr-t">早上不护肤</div><div class="tn-hdr-s">你在「个人设置 → 早晨流程」里选了不做</div></div>
+                    <div class="assess-rec info" style="margin-top:10px">▸ 如果最近在刷酸，白天还是建议涂防晒——不然容易留印。想只涂防晒可把设置改成「只涂防晒」。</div>`;
+                return;
+            }
+            // 有标了"早晨"的洁面产品就用它，没有才回退到清水冲洗
+            const amCleanser = amPolicy === 'spfonly' ? null : byRoleAm('cleanse', true)[0];
+            let steps = amPolicy === 'spfonly' ? []
+                : amCleanser
                 ? [{ p: amCleanser.name, h: amHint(amCleanser) || '温和洁面，30秒洗净' }]
                 : [{ p: '清水冲洗 30秒', h: '早晨轻柔冲洗，不用洁面产品，保留皮脂膜' }];
             let skips = [];
 
-            byRoleAm('serum').forEach(p => steps.push({ p: p.name, h: amHint(p) || '早晨全脸轻拍' }));
-            byRoleAm('eye', true).forEach(p => steps.push({ p: p.name, h: amHint(p) || '早晨：无名指轻拍眼眶骨，补水淡化' }));
-            byRoleAm('moist', true).forEach(p => steps.push({ p: p.name, h: amHint(p) || '全脸薄涂打底' }));
+            if (amPolicy === 'full') {
+                byRoleAm('serum').forEach(p => steps.push({ p: p.name, h: amHint(p) || '早晨全脸轻拍' }));
+                byRoleAm('eye', true).forEach(p => steps.push({ p: p.name, h: amHint(p) || '早晨：无名指轻拍眼眶骨，补水淡化' }));
+                byRoleAm('moist', true).forEach(p => steps.push({ p: p.name, h: amHint(p) || '全脸薄涂打底' }));
+            }
 
             const spf = PD.filter(p => !p.hidden && p.role === 'spf' && hasSpfReady(p)
                 && ((p.schedule && p.schedule.time) || ['am']).includes('am'))[0];
