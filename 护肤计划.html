@@ -2094,7 +2094,6 @@
         <div class="tabs-wrap">
             <div class="tabs">
                 <button class="tab active" id="tab-tonight" onclick="show('tonight',this)" aria-label="今晚护肤">今晚</button>
-                <button class="tab" id="tab-am" onclick="show('am',this)" aria-label="早晨护肤">早晨</button>
                 <button class="tab" id="tab-guide" onclick="show('guide',this)" aria-label="使用指南">指南</button>
                 <button class="tab" id="tab-wkly" onclick="show('wkly',this)" aria-label="排班管理">排班</button>
                 <button class="tab" id="tab-jrnl" onclick="show('jrnl',this)" aria-label="护肤日志">日志</button>
@@ -2141,14 +2140,7 @@
             </div>
         </div>
 
-        <!-- ══ 早晨 ══ -->
-
-        <!-- ══ 早晨 ══ -->
-        <div id="am" class="panel">
-            <div id="pao-alert-am"></div>
-            <div id="am-plan"></div>
-            <p style="font-size:11px;color:var(--tx3);font-family:var(--mono);margin-top:.75rem">与“今晚”同样，点击步骤可打勾标记完成</p>
-        </div>
+        <!-- 早晨面板已按用户要求移除（两人都不做早间流程）。renderAm 有 #am-plan 早退保护，调用点无需改动。 -->
 
         <!-- ══ 使用指南 ══ -->
         <div id="guide" class="panel">
@@ -2158,7 +2150,6 @@
                     <label class="set-row"><span>肤质副标题</span><input id="set-skintype" class="hf" style="max-width:190px" oninput="onProfileEdit()" placeholder="如：混油皮 · 屏障修护"></label>
                     <label class="set-row"><span>刮胡 · 排班与步骤含刮胡</span><input type="checkbox" id="set-shave" onchange="onProfileEdit()"></label>
                     <label class="set-row"><span>HRT · 显示激素相关内容</span><input type="checkbox" id="set-hrt" onchange="onProfileEdit()"></label>
-                    <label class="set-row"><span>早晨流程</span><select id="set-ampolicy" class="hf" style="max-width:190px" onchange="onProfileEdit()"><option value="full">完整（保湿+防晒）</option><option value="spfonly">只涂防晒</option><option value="none">早上不护肤</option></select></label>
                     <label class="set-row"><span>刷酸时机</span><select id="set-acidtiming" class="hf" style="max-width:190px" onchange="onProfileEdit()"><option value="">自动（易泛红则避开洗澡夜）</option><option value="neutral">无所谓</option><option value="avoid">避开刚洗完热水澡</option><option value="prefer">优先安排在洗澡夜</option></select></label>
                     <label class="set-row"><span>修护霜用法</span><select id="set-repairuse" class="hf" style="max-width:190px" onchange="onProfileEdit()"><option value="">自动（按屏障状态）</option><option value="full">全脸薄涂</option><option value="spot">仅点涂</option></select></label>
                 </div>
@@ -2840,8 +2831,6 @@
             const at = document.getElementById('set-acidtiming'), ru = document.getElementById('set-repairuse');
             if (at) at.value = PROFILE.acidTiming || '';
             if (ru) ru.value = PROFILE.repairUse || '';
-            const ap = document.getElementById('set-ampolicy');
-            if (ap) ap.value = PROFILE.amPolicy || 'full';
         }
         function onProfileEdit() {
             const a = document.getElementById('set-shave'), b = document.getElementById('set-hrt'), c = document.getElementById('set-skintype');
@@ -2851,8 +2840,6 @@
             const at = document.getElementById('set-acidtiming'), ru = document.getElementById('set-repairuse');
             PROFILE.acidTiming = at ? at.value : PROFILE.acidTiming;
             PROFILE.repairUse  = ru ? ru.value : PROFILE.repairUse;
-            const ap = document.getElementById('set-ampolicy');
-            PROFILE.amPolicy = ap ? ap.value : PROFILE.amPolicy;
             saveProfile(); applyProfileVisibility();
             // 全量重渲染：产品卡文案(visNotes/visCat)、日志芯片、快速记录按钮、日历标签都随开关变，
             // 旧版只重渲今晚+排班，其余要等下一次 renderAll 才跟上。
