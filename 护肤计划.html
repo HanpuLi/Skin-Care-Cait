@@ -2154,6 +2154,8 @@
                     <label class="set-row"><span>肤质副标题</span><input id="set-skintype" class="hf" style="max-width:190px" oninput="onProfileEdit()" placeholder="如：混油皮 · 屏障修护"></label>
                     <label class="set-row"><span>刮胡 · 排班与步骤含刮胡</span><input type="checkbox" id="set-shave" onchange="onProfileEdit()"></label>
                     <label class="set-row"><span>HRT · 显示激素相关内容</span><input type="checkbox" id="set-hrt" onchange="onProfileEdit()"></label>
+                    <label class="set-row"><span>刷酸时机</span><select id="set-acidtiming" class="hf" style="max-width:190px" onchange="onProfileEdit()"><option value="">自动（易泛红则避开洗澡夜）</option><option value="neutral">无所谓</option><option value="avoid">避开刚洗完热水澡</option><option value="prefer">优先安排在洗澡夜</option></select></label>
+                    <label class="set-row"><span>修护霜用法</span><select id="set-repairuse" class="hf" style="max-width:190px" onchange="onProfileEdit()"><option value="">自动（按屏障状态）</option><option value="full">全脸薄涂</option><option value="spot">仅点涂</option></select></label>
                 </div>
                 <p style="font-size:11px;color:var(--tx3);margin-top:8px">关掉某项只是隐藏对应界面，已记录的历史数据不会删除，可随时打开。</p>
                 <div class="sec-title" style="margin-top:1.25rem">需要避开的区域</div>
@@ -2166,7 +2168,7 @@
                 <button class="tpl-btn" style="margin-top:8px" onclick="showOnboarding()"><div class="tpl-n">✨ 做引导设置（生成方案）</div><div class="tpl-d">按肤质 + 诉求自动配一套起步方案</div></button>
             </div>
            <div class="alert info">
-                <div class="at">洗澡夜</div>洗澡后渗透性增强——酸类优先安排在洗澡夜。
+                <div class="at">洗澡夜与刷酸时机</div>热水澡后皮肤确实更"通透"，但那是屏障被短暂削弱的表现（研究显示水温 41°C 泡 10 分钟后经皮水分流失翻倍、泛红上升），并不等于"增效"。<b>易泛红／敏感的人建议避开刚洗完热水澡的时候刷酸</b>；不敏感的人这条影响不大。可在「个人设置 → 刷酸时机」里选。
             </div>
             <div class="alert info">
                 <div class="at">非洗澡夜</div>屏障修复主要时段，使用微温水或温和卸妆膏简单清洁，修护为主。
@@ -2177,7 +2179,7 @@
             <div class="section" style="margin-top:2rem">
                 <div class="sec-title">叠涂顺序口诀</div>
                 <div class="step"><div class="num pm">1</div><div class="sc"><div class="prod">稀薄到浓厚（晚间）</div><div class="how">酸类 → 精华 → 面霜/乳液 → 油（早晨最后加防晒）</div></div></div>
-                <div class="step"><div class="num pm">2</div><div class="sc"><div class="prod">酸类后等待3分钟</div><div class="how">让皮肤pH稳定后再叠后续步骤</div></div></div>
+                <div class="step"><div class="num pm">2</div><div class="sc"><div class="prod">酸类之后直接保湿</div><div class="how">不必等"pH 恢复"：皮肤自身缓冲很快，皮科指南建议去角质后立即保湿</div></div></div>
                 <div class="step"><div class="num pm">3</div><div class="sc"><div class="prod">修护霜最后封层</div><div class="how">大分子结构会阻碍后续成分渗透</div></div></div>
             </div>
             <div class="section feat-hrt">
@@ -2400,8 +2402,8 @@
                 <div class="step">
                     <div class="num pm">②</div>
                     <div class="sc">
-                        <div class="prod">酸类后等待3分钟</div>
-                        <div class="how">pH稳定后再叠后续步骤</div>
+                        <div class="prod">酸类之后直接保湿</div>
+                        <div class="how">不必"等 pH 恢复"——皮肤自己很快就把 pH 缓冲回去；皮科指南建议去角质后立即保湿</div>
                     </div>
                 </div>
                 <div class="step">
@@ -2748,6 +2750,20 @@
             return zs.length ? '　⚠️ 避开：' + zs.join('、') : '';
         }
         function isExcluded(p) { return !!p && (PROFILE.excluded || []).includes(p.id); }
+        // 刷酸时机偏好:'prefer' 洗澡夜优先 / 'neutral' 无所谓(默认) / 'avoid' 避开洗澡夜
+        // 未显式设置时,若用户标了关注区域或近期有泛红/敏感记录 → 自动倾向 avoid(热水后屏障通透性升高、刺激风险更大)
+        function acidTiming() {
+            if (PROFILE.acidTiming) return PROFILE.acidTiming;
+            const reactive = userZones().length > 0 ||
+                jrnlLastNDays(14).some(e => (e.status || []).some(s => s === '泛红' || s === '敏感'));
+            return reactive ? 'avoid' : 'neutral';
+        }
+        // 修护霜用法:'full' 全脸薄涂(默认,循证:屏障修复属基础治疗) / 'spot' 仅点涂
+        function repairUse() {
+            if (PROFILE.repairUse) return PROFILE.repairUse;
+            const b = barrierScore();
+            return (b !== null && b >= 70 && (PROFILE.skinType || '').includes('油')) ? 'spot' : 'full';
+        }
         function toggleExcluded(id) {
             const list = (PROFILE.excluded || []).slice();
             const i = list.indexOf(id);
@@ -2788,12 +2804,18 @@
             if (a) a.checked = !!PROFILE.shaving;
             if (b) b.checked = !!PROFILE.hrt;
             if (c) c.value = PROFILE.skinType || '';
+            const at = document.getElementById('set-acidtiming'), ru = document.getElementById('set-repairuse');
+            if (at) at.value = PROFILE.acidTiming || '';
+            if (ru) ru.value = PROFILE.repairUse || '';
         }
         function onProfileEdit() {
             const a = document.getElementById('set-shave'), b = document.getElementById('set-hrt'), c = document.getElementById('set-skintype');
             PROFILE.shaving = !!(a && a.checked);
             PROFILE.hrt     = !!(b && b.checked);
             PROFILE.skinType = c ? c.value.trim() : PROFILE.skinType;
+            const at = document.getElementById('set-acidtiming'), ru = document.getElementById('set-repairuse');
+            PROFILE.acidTiming = at ? at.value : PROFILE.acidTiming;
+            PROFILE.repairUse  = ru ? ru.value : PROFILE.repairUse;
             saveProfile(); applyProfileVisibility();
             // 全量重渲染：产品卡文案(visNotes/visCat)、日志芯片、快速记录按钮、日历标签都随开关变，
             // 旧版只重渲今晚+排班，其余要等下一次 renderAll 才跟上。
@@ -3634,7 +3656,9 @@
                 if (hasScheduledAcid) {
                     const ap = pd(schedAcid.id); const aName = ap ? ap.name : schedAcid.label;
                     steps.push({ p: aName, h: ((ap && hint(ap)) || '停留3–5分钟，无需冲洗') + zoneHintFor('acid') });
-                    steps.push({ p: '等待3分钟', h: 'pH稳定后再叠后续', t: 180 });
+                    // 【循证修正】"等 X 分钟让 pH 恢复"没有证据:皮肤自身 30 分钟内就把 pH4 配方缓冲上去 >0.5 单位
+                    // (PubMed 40481330);Franz cell 研究显示等 30 分钟也消不掉后续保湿的干扰,真正起作用的是**顺序**。
+                    // AAD 官方指南要求"去角质后立即保湿"。故取消等待步骤。
                     skips.push('修护精华（酸类夜跳过）', '视黄醇（酸类夜禁用）');
                 } else if (schedMask) {
                     const mp = pd(schedMask.id); if (mp && active(mp.id)) { steps.push({ p: mp.name, h: (hint(mp) || '敷10–15分钟后冲洗干净') + zoneHintFor('mask'), t: 900 }); skips.push('视黄醇（面膜夜不叠用）'); }
@@ -3646,7 +3670,8 @@
                 }
                 byRole('eye', true).forEach(p => steps.push({ p: p.name, h: hint(p) || '无名指轻拍眼眶骨' }));
                 byRole('moist', true).forEach(p => steps.push({ p: p.name, h: hasScheduledAcid ? '酸类夜首选封层' : (hint(p) || '全脸封层') }));
-                byRole('repair').forEach(p => steps.push({ p: p.name, h: hint(p) || '活跃痘痘处、口罩线点涂' }));
+                // 修护霜用法按档案:屏障修复是基础治疗、指南建议常规全脸使用;仅在屏障好且油皮时才点涂
+                byRole('repair').forEach(p => steps.push({ p: p.name, h: repairUse() === 'spot' ? '活跃痘痘处、口罩线点涂' : '全脸薄涂封层' }));
             }
             return { steps, skips };
         }
@@ -4021,10 +4046,14 @@
                         (x.products || []).some(t => getExfoliantTags().includes(t))).length
                         + assignedAcidDates.filter(d => d >= windowFrom && d <= fd.date).length;
                     if (inWindow >= maxAcid) continue;
-                    // 洗澡夜偏好必须压过"间隔更远"：旧版 +5 会被 minDist*10 淹没，
-                    // 结果洗澡夜排不到酸、今晚显示修护流程，用户得手动点才对（真实反馈的 bug）。
+                    // 【循证修正 2026-08】"酸优先洗澡夜"没有证据支持,方向反而可能有害:
+                    // 热水浸泡后 TEWL 翻倍、pH 升高、红斑增加(PMC8778033)——所谓"渗透增强"本身就是屏障受损的表现;
+                    // AAD 把 AHA 列入玫瑰痤疮者避免清单,中国玫瑰痤疮指南把冷热刺激列为诱发因素。
+                    // 因此改为**用户可选的时机偏好**,默认"无所谓";易泛红/有问题区域的人默认避开洗澡夜。
                     let score = minDist * 10;
-                    if (prod.schedule.preferShowerNight) score += fd.shower ? 60 : -30;
+                    const tim = acidTiming();
+                    if (tim === 'prefer' && prod.schedule.preferShowerNight) score += fd.shower ? 25 : -12;
+                    else if (tim === 'avoid') score += fd.shower ? -25 : 12;
                     if (score > bestScore) { bestScore = score; bestIdx = i; }
                 }
                 if (bestIdx >= 0) {
