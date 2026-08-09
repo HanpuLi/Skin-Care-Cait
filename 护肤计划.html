@@ -5177,6 +5177,27 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
 
         let _unsub = null;
         const UIDK = 'sk_uid';   // 记住上一个登录的 uid（不同步、仅本机用来判断"是否换了人"）
+        // ── 按账号自动匹配默认配置（与「健身计划」同一套思路：用邮箱认主账号，base64 只为不明文出现）──
+        // 主账号 = 完整模式（要数据、要打卡）；其他账号 = 极简模式（只看今晚做什么，不打卡不记录）。
+        // 只在该账号**第一次**登录时套用，之后手动改的设置一律不覆盖。
+        function isOwnerAccount() {
+            try { return !!(_user && _user.email && _user.email.toLowerCase() === atob('Y2FpdGx5ZUBnbWFpbC5jb20=')); }
+            catch (e) { return false; }
+        }
+        function autoMatchProfile(uid) {
+            if (!uid || PROFILE.autoMatched === uid) return false;
+            const owner = isOwnerAccount();
+            if (owner) {
+                Object.assign(PROFILE, { minimalMode: false, showJournal: true, shaving: true, hrt: false });
+            } else {
+                // 非主账号：默认极简。刮胡/HRT/日志一并关掉，省得「先关再开极简」的顺序坑。
+                Object.assign(PROFILE, { minimalMode: true, showJournal: false, shaving: false, hrt: false, useMakeupRemoval: false });
+            }
+            PROFILE.autoMatched = uid;
+            saveProfile();
+            applyProfileVisibility(); syncSettingsUI();
+            return true;
+        }
         // 只清「未加账号前缀的旧照片」：新照片按 uid 隔离，换账号不该删别人的
         function clearAllPhotos(cb, _retried) {
             // _idb 常常还没初始化(唯一常规初始化点在 renderAll)，旧版直接 return 会静默跳过清理
@@ -5227,6 +5248,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
                     }
                 }
                 localStorage.setItem(UIDK, user.uid);
+                autoMatchProfile(user.uid);   // 首次登录该账号时按身份套默认配置(之后不再覆盖)
                 setupRealtimeSync();
             } else {
                 // 登出保留本地缓存供离线使用；不清数据。换成别的账号登录时才清。
@@ -5254,7 +5276,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
             if (_unsub) _unsub();
             _unsub = _db.collection('users').doc(_user.uid).onSnapshot(doc => {
                 let isInit = !_unsub.initialized; _unsub.initialized = true;
-                if (!doc.exists) { if(isInit) { showSyncStatus('✓ 云端已连接(全新账号)'); if (!PROFILE.onboarded) showOnboarding(); } return; }
+                if (!doc.exists) { if(isInit) { showSyncStatus('✓ 云端已连接(全新账号)'); if (_user) autoMatchProfile(_user.uid); if (!PROFILE.onboarded && !PROFILE.minimalMode) showOnboarding(); } return; }
                 if (doc.metadata && doc.metadata.hasPendingWrites) return;   // 这是本机自己刚写的回声，别拿它覆盖自己
                 const cloudDoc = doc.data() || {};
                 // 版本判断：云端比本机最后一次成功推送更旧 → 说明本地有还没推上去的新改动，
@@ -5296,7 +5318,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
                         try { localStorage.setItem(k, cloudV); changed = true; } catch {}
                     }
                 });
-                if (changed) { renderAll(); showSyncStatus('☁ 已从云端更新'); }
+                if (changed) { if (_user) autoMatchProfile(_user.uid); renderAll(); showSyncStatus('☁ 已从云端更新'); }
                 else if (isInit) { showSyncStatus('✓ 云端已连接'); }
             }, e => console.warn('监听云端数据失败:', e));
         }
