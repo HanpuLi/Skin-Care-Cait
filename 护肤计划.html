@@ -2065,9 +2065,6 @@
       .assess-rec.warn{background:var(--am-bg)}
       .assess-rec.good{background:var(--gr-bg)}
       .assess-empty{font-size:12px;color:var(--tx3);padding:4px 0}
-      .todo-row{display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.5;padding:3px 0}
-      .todo-mark{flex:none;width:16px;text-align:center;color:var(--tx3);font-weight:700}
-      .todo-mark.ok{color:var(--gr)}
       .ob-q{font-size:12px;font-weight:600;margin:12px 0 6px}
       .ob-opts{display:flex;flex-wrap:wrap;gap:6px}
       .ob-opt{padding:7px 11px;border-radius:999px;border:1px solid rgba(128,128,128,.3);background:var(--sur2);color:var(--tx2);font-size:12px;cursor:pointer;font-family:inherit}
@@ -2105,27 +2102,12 @@
         <!-- ══ 今晚 ══ -->
 
         <div id="tonight" class="panel active">
-            <div id="daily-todo"></div>
             <div id="assess-card"></div>
             <div id="hrt-bnr"></div>
             <div id="barrier-limit-banner"></div>
             <div id="pao-alert-tn"></div>
-            <div id="tn-logged-badge"></div>
-            <div id="tn-meta-row" class="tn-meta"></div>
-            <div id="sync-note-area"></div>
-            <div style="margin-bottom:.75rem">
-                <div style="font-size:10px;font-family:var(--mono);color:var(--tx3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">今天的情况（可手动覆盖排班）</div>
-                <div class="tn-btns" style="margin-bottom:4px">
-                    <button class="tn-btn" id="tn-sh" onclick="toggleTn('shower')">🚿 今天洗澡</button>
-                    <button class="tn-btn feat-shave" id="tn-sv" onclick="toggleTn('shave')">✂️ 今天刮胡</button>
-                </div>
-                <button class="tn-reset" onclick="resetTnToSchedule()">↺ 重置为排班默认值</button>
-            </div>
-            <div class="tn-plan" id="tn-plan"></div>
-            <p style="font-size:11px;color:var(--tx3);font-family:var(--mono);margin-top:.75rem">点击步骤可打勾标记完成（跨切换持久保存）
-            </p>
-            <div style="background:var(--sur2);border-radius:var(--rs);padding:1rem;margin-top:1.5rem">
-                <div style="font-size:13px;font-weight:500;margin-bottom:8px">快速记录今日皮肤状态</div>
+            <div style="background:var(--sur2);border-radius:var(--rs);padding:1rem;margin-bottom:1rem">
+                <div style="font-size:13px;font-weight:500;margin-bottom:8px">今天皮肤怎么样？</div>
                 <div class="chips" id="tn-ql-chips">
                     <div class="chip" data-val="稳定" data-cls="s-ok" onclick="logTonightStatus('稳定')">✓ 稳定</div>
                     <div class="chip" data-val="出油" data-cls="s-warn" onclick="logTonightStatus('出油')">💧 出油</div>
@@ -2138,6 +2120,17 @@
                 </div>
                 <div id="tn-ql-msg" class="svm" style="margin-top:8px"></div>
             </div>
+            <div id="tn-logged-badge"></div>
+            <div id="tn-meta-row" class="tn-meta"></div>
+            <div id="sync-note-area"></div>
+            <div style="margin-bottom:.75rem">
+                <div class="tn-btns" style="margin-bottom:4px">
+                    <button class="tn-btn" id="tn-sh" onclick="toggleTn('shower')">🚿 今天洗澡</button>
+                    <button class="tn-btn feat-shave" id="tn-sv" onclick="toggleTn('shave')">✂️ 今天刮胡</button>
+                </div>
+                <button class="tn-reset" onclick="resetTnToSchedule()">↺ 重置为排班默认值</button>
+            </div>
+            <div class="tn-plan" id="tn-plan"></div>
         </div>
 
         <!-- 早晨面板已按用户要求移除（两人都不做早间流程）。renderAm 有 #am-plan 早退保护，调用点无需改动。 -->
@@ -2151,6 +2144,7 @@
                     <label class="set-row"><span>刮胡 · 排班与步骤含刮胡</span><input type="checkbox" id="set-shave" onchange="onProfileEdit()"></label>
                     <label class="set-row"><span>HRT · 显示激素相关内容</span><input type="checkbox" id="set-hrt" onchange="onProfileEdit()"></label>
                     <label class="set-row"><span>需要卸妆步骤</span><input type="checkbox" id="set-premakeup" onchange="onProfileEdit()"></label>
+                    <label class="set-row"><span>显示「日志」页</span><input type="checkbox" id="set-showjrnl" onchange="onProfileEdit()"></label>
                     <label class="set-row"><span>刷酸时机</span><select id="set-acidtiming" class="hf" style="max-width:190px" onchange="onProfileEdit()"><option value="">自动（易泛红则避开洗澡夜）</option><option value="neutral">无所谓</option><option value="avoid">避开刚洗完热水澡</option><option value="prefer">优先安排在洗澡夜</option></select></label>
                     <label class="set-row"><span>修护霜用法</span><select id="set-repairuse" class="hf" style="max-width:190px" onchange="onProfileEdit()"><option value="">自动（按屏障状态）</option><option value="full">全脸薄涂</option><option value="spot">仅点涂</option></select></label>
                 </div>
@@ -2285,7 +2279,7 @@
                     <div class="chip" data-val="敏感" data-cls="s-warn" onclick="toggleChip(this,'s')">⚠ 敏感</div>
                     <div class="chip" data-val="好转" data-cls="s-ok" onclick="toggleChip(this,'s')">↑ 好转</div>
                 </div>
-                <label class="jfl">今晚使用</label>
+                <label class="jfl">今晚使用<span style="font-weight:400;color:var(--tx3);font-size:11px">　· 在「今晚」页给步骤打勾会自动记录，这里一般不用动</span></label>
                 <!-- 由 renderProdChips() 按产品定义动态生成：写死的芯片会在改标签/加产品后与统计口径脱节 -->
                 <div class="chips" id="pc-chips"></div>
                 <label class="jfl feat-hrt">HRT / E2 阶段</label>
@@ -2803,6 +2797,15 @@
         function applyProfileVisibility() {
             document.body.classList.toggle('hide-shave', !PROFILE.shaving);
             document.body.classList.toggle('hide-hrt',   !PROFILE.hrt);
+            // 日志页可整体关闭(默认开)。关掉后皮肤状态仍可在「今晚」页快速记录,数据照常参与评估。
+            const showJ = PROFILE.showJournal !== false;
+            const jt = document.getElementById('tab-jrnl'), jp = document.getElementById('jrnl');
+            if (jt) jt.style.display = showJ ? '' : 'none';
+            if (!showJ && jp && jp.classList.contains('active')) {
+                const t0 = document.getElementById('tab-tonight');
+                if (t0) show('tonight', t0);
+            }
+            if (jp && !showJ) jp.classList.remove('active');
             const sub = document.getElementById('header-sub');
             if (sub) sub.textContent = PROFILE.skinType || '护肤计划';
         }
@@ -2832,6 +2835,8 @@
             const at = document.getElementById('set-acidtiming'), ru = document.getElementById('set-repairuse');
             const pm = document.getElementById('set-premakeup');
             if (pm) pm.checked = !!PROFILE.useMakeupRemoval;
+            const sj = document.getElementById('set-showjrnl');
+            if (sj) sj.checked = PROFILE.showJournal !== false;
             if (at) at.value = PROFILE.acidTiming || '';
             if (ru) ru.value = PROFILE.repairUse || '';
         }
@@ -2843,6 +2848,8 @@
             const at = document.getElementById('set-acidtiming'), ru = document.getElementById('set-repairuse');
             const pm = document.getElementById('set-premakeup');
             PROFILE.useMakeupRemoval = pm ? !!pm.checked : PROFILE.useMakeupRemoval;
+            const sj = document.getElementById('set-showjrnl');
+            if (sj) PROFILE.showJournal = !!sj.checked;
             PROFILE.acidTiming = at ? at.value : PROFILE.acidTiming;
             PROFILE.repairUse  = ru ? ru.value : PROFILE.repairUse;
             saveProfile(); applyProfileVisibility();
@@ -3334,29 +3341,10 @@
             const from = offsetDate(-6), to = today();
             return new Set((lg(K.jrnl) || []).filter(x => x && x.date && x.date >= from && x.date <= to && (x.status || []).length).map(x => x.date)).size;
         }
-        // 「今天要记什么」——真实反馈:用户不清楚每天该手动做哪些记录。这里明确列出、并显示完成状态。
-        function renderDailyTodo() {
-            const box = document.getElementById('daily-todo'); if (!box) return;
-            const t = today();
-            const entry = (lg(K.jrnl) || []).find(x => x.date === t) || {};
-            const hasStatus = (entry.status || []).length > 0;
-            const hasProds  = (entry.products || []).length > 0;
-            const doneTn = (loadDoneSteps('tn') || new Set()).size > 0;
-            const row = (ok, label, hintTxt) =>
-                `<div class="todo-row"><span class="todo-mark ${ok ? 'ok' : ''}">${ok ? '✓' : '○'}</span><span><b>${label}</b><span style="color:var(--tx3)"> — ${hintTxt}</span></span></div>`;
-            box.innerHTML = `<div class="assess-card2" style="margin-bottom:.75rem">
-                <div class="assess-hd"><span>今天要记的（就这几样）</span><span style="font-size:12px;color:var(--tx3)">${[hasStatus, hasProds, doneTn].filter(Boolean).length}/3</span></div>
-                ${row(hasStatus, '皮肤状态', '下面「快速记录」点一下就行，最影响计划')}
-                ${row(hasProds,  '今晚用了什么', '「日志」页勾选，用来算刷酸间隔')}
-                ${row(doneTn,    '护肤步骤打勾', '做一步点一下，纯粹给自己看')}
-                <div style="font-size:11px;color:var(--tx3);margin-top:8px">其它都不用管：排班、频率、评估都是自动算的。拍照可选。</div>
-            </div>`;
-        }
         function renderAssessment() {
-            renderDailyTodo();
             const box = document.getElementById('assess-card'); if (!box) return;
             const a = assessSkin();
-            if (a.overall === null) { box.innerHTML = `<div class="assess-empty">记一次今日皮肤状态，就能生成多维评估与建议。</div>`; return; }
+            if (a.overall === null) { box.innerHTML = ''; return; }
             const ov = barrierLabel(a.overall);
             const ovCol = a.overall >= 65 ? 'var(--gr)' : a.overall >= 45 ? 'var(--am)' : 'var(--rd)';
             const bars = a.axes.map(x => {
