@@ -3697,10 +3697,14 @@
                 const ctx = { shower: shower, acidTonight: hasScheduledAcid };
                 const cleanser = pickCleanser(byRole('cleanse'), ctx);
                 const pre = byRole('precleanse', true)[0];
-                if (pre) steps.push({ p: pre.name, h: hint(pre) || '化了妆或厚防晒时先卸' });
+                // 卸妆不该是每晚固定一步——App 无从知道今天有没有化妆/涂防晒。
+                // 改成挂在洁面步骤上的条件提示；完全不用的人把它标「我不用这个」就彻底消失。
                 if (cleanser) {
                     const why = cleanserReason(ctx);
-                    steps.push({ p: cleanser.name, h: (why ? why + '；' : '') + (cleanser.pmHint || '打圈30–60秒后温水洗净'), t: 60 });
+                    const preNote = pre ? `　（今天化了妆或涂了厚防晒，先用${pre.name}卸）` : '';
+                    steps.push({ p: cleanser.name, h: (why ? why + '；' : '') + (cleanser.pmHint || '打圈30–60秒后温水洗净') + preNote, t: 60 });
+                } else if (pre) {
+                    steps.push({ p: pre.name, h: hint(pre) || '化了妆或厚防晒时用' });
                 }
                 else steps.push({ p: '温水冲洗', h: '没有洁面产品时的兜底——建议在「产品」页加一支洁面' });
                 // 舒缓面膜:冲洗型,只在最近有泛红/敏感/刺痛时才提示,不占去角质额度
