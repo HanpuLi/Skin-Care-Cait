@@ -2056,6 +2056,14 @@
       body.minimal #tab-jrnl,
       body.minimal .set-row.adv,
       body.minimal #assess-card{display:none!important}
+      body.minimal .guide-adv{display:none!important}
+      body.minimal #guide-simple{display:block!important}
+      /* 设置块折叠成一行小字,需要时才展开(留给 Cait 帮她设置) */
+      body.minimal #settings-block{border:1px solid rgba(128,128,128,.25);border-radius:10px;padding:10px 12px}
+      body.minimal #settings-block > *:not(.sec-title){display:none}
+      body.minimal #settings-block.open > *{display:revert}
+      body.minimal #settings-block .sec-title{cursor:pointer;margin:0;font-size:12px;color:var(--tx3);font-weight:500}
+      body.minimal #settings-block .sec-title::after{content:'　▾'}
       body.minimal .tn-step{cursor:default}
       body.minimal .tn-step .tn-n{opacity:.55}
       .set-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px}
@@ -2155,8 +2163,25 @@
 
         <!-- ══ 使用指南 ══ -->
         <div id="guide" class="panel">
-           <div class="section" style="margin-bottom:1.25rem">
-                <div class="sec-title">个人设置</div>
+           <!-- 极简模式(如 Cici):指南只留这一段真正用得上的,其余全部折叠 -->
+           <div id="guide-simple" style="display:none">
+               <div class="alert info" style="margin-bottom:1rem">
+                   <div class="at">怎么用</div>照着「今晚」那一页做就行，不用打勾、不用记录。<br>
+                   皮肤有任何变化（长了什么、发红、刺痛、脱皮），直接告诉 Cait，她会调整计划。
+               </div>
+               <div class="alert warn" style="margin-bottom:1rem">
+                   <div class="at">这几件事别做</div>
+                   · 不要用力搓脸、不要用磨砂<br>
+                   · 皮肤刺痛/发红的时候，当天跳过酸类，只洗脸 + 保湿 + 修护<br>
+                   · 红疹那一块（人中/鼻下）不要涂酸
+               </div>
+               <div class="alert warn" style="margin-bottom:1rem">
+                   <div class="at">什么时候该看医生</div>嘴周/鼻下的红疹如果反复两三周不好、或越来越多，去看 GP。<br>
+                   这类问题往往<b>越折腾越糟</b>，不是靠多用产品能解决的。
+               </div>
+           </div>
+           <div class="section" id="settings-block" style="margin-bottom:1.25rem">
+                <div class="sec-title" onclick="if(PROFILE.minimalMode)this.parentElement.classList.toggle('open')">个人设置</div>
                 <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
                     <label class="set-row"><span>极简模式 · 只看今晚做什么，不打卡不记录</span><input type="checkbox" id="set-minimal" onchange="onProfileEdit()"></label>
                     <label class="set-row"><span>肤质副标题</span><input id="set-skintype" class="hf" style="max-width:190px" oninput="onProfileEdit()" placeholder="如：混油皮 · 屏障修护"></label>
@@ -2177,16 +2202,16 @@
                 <div id="plan-tpl-box" style="display:flex;flex-direction:column;gap:8px"></div>
                 <button class="tpl-btn" style="margin-top:8px" onclick="showOnboarding()"><div class="tpl-n">✨ 做引导设置（生成方案）</div><div class="tpl-d">按肤质 + 诉求自动配一套起步方案</div></button>
             </div>
-           <div class="alert info">
+           <div class="alert info guide-adv">
                 <div class="at">洗澡夜与刷酸时机</div>热水澡后皮肤确实更"通透"，但那是屏障被短暂削弱的表现（研究显示水温 41°C 泡 10 分钟后经皮水分流失翻倍、泛红上升），并不等于"增效"。<b>易泛红／敏感的人建议避开刚洗完热水澡的时候刷酸</b>；不敏感的人这条影响不大。可在「个人设置 → 刷酸时机」里选。
             </div>
-            <div class="alert info">
+            <div class="alert info guide-adv">
                 <div class="at">非洗澡夜</div>屏障修复主要时段，使用微温水或温和卸妆膏简单清洁，修护为主。
             </div>
             <div class="alert warn feat-shave">
                 <div class="at">刮胡 = 机械性去角质</div>刮胡日当晚必须跳过所有剥脱性酸类和视黄醇。刮胡后全脸薄涂修护霜是必须的动作。
             </div>
-            <div class="section" style="margin-top:2rem">
+            <div class="section guide-adv" style="margin-top:2rem">
                 <div class="sec-title">叠涂顺序口诀</div>
                 <div class="step"><div class="num pm">1</div><div class="sc"><div class="prod">稀薄到浓厚（晚间）</div><div class="how">酸类 → 精华 → 面霜/乳液 → 油（早晨最后加防晒）</div></div></div>
                 <div class="step"><div class="num pm">2</div><div class="sc"><div class="prod">酸类之后直接保湿</div><div class="how">不必等"pH 恢复"：皮肤自身缓冲很快，皮科指南建议去角质后立即保湿</div></div></div>
@@ -3143,7 +3168,7 @@
                 if (usageCountHtml) schedTags += `<div class="sched-info" style="margin-top:2px">${usageCountHtml}</div>`;
                 return `<div class="pc"><div class="pch" onclick="togglePCB('${def.id}')">
       <div class="pci">${def.icon}</div>
-      <div class="pci2"><div class="pcn"${isExcluded(def)?' style="opacity:.45;text-decoration:line-through"':''}>${esc(def.name)}</div><div class="pcc">${isExcluded(def)?'🚫 我不用 · ':''}${(!def.hidden && !isExcluded(def) && def.role && def.role!=='precleanse' && isSchedActive(def, PS[def.id]||def.statuses[0]) && usableOfRole(def.role).length===1)?'🔸唯一一件 · ':''}${esc(visCat(def))}${wo!==null?` · 开封${wo}周`:''}</div><div class="sched-info" style="margin-top:4px">${paoTag}</div>${schedTags}</div>
+      <div class="pci2"><div class="pcn"${isExcluded(def)?' style="opacity:.45;text-decoration:line-through"':''}>${esc(def.name)}</div><div class="pcc">${isExcluded(def)?'🚫 我不用 · ':''}${(!def.hidden && !isExcluded(def) && def.role && def.role!=='precleanse' && isSchedActive(def, PS[def.id]||def.statuses[0]) && ownedOfRole(def.role).length===1)?'🔸唯一一件 · ':''}${esc(visCat(def))}${wo!==null?` · 开封${wo}周`:''}</div><div class="sched-info" style="margin-top:4px">${paoTag}</div>${schedTags}</div>
       ${can?`<button class="pcp ${def.pillCls[s]}" onclick="cyclePS('${def.id}',event)">${def.labels[s]}</button>`:`<span class="pcp ${def.pillCls[s]}">${def.labels[s]}</span>`}
     </div><div class="pcb" id="pcb-${def.id}">
       <div style="margin-top:0">${notes}</div>
@@ -3161,14 +3186,18 @@
             });
             list.innerHTML = roles.map(r => {
                 const items = groups[r];
+                const owned  = items.filter(p => !isExcluded(p) && (PS[p.id] || p.statuses[0]) !== 'pending');
                 const usable = items.filter(p => !isExcluded(p) && isSchedActive(p, PS[p.id] || p.statuses[0]));
                 const label = ROLE_LABEL[r] || r;
                 let badge, warn = '';
-                if (usable.length === 0) { badge = `<span class="grp-count none">没有在用</span>`; }
-                else if (usable.length === 1 && r !== 'precleanse') {
+                if (owned.length === 0) { badge = `<span class="grp-count none">家里没有</span>`; }
+                else if (owned.length === 1 && r !== 'precleanse') {
                     badge = `<span class="grp-count sole">只有 1 件</span>`;
-                    warn = `<div class="grp-warn">🛒 用完「${esc(usable[0].name)}」就没有同类可换了 —— 记得提前补货</div>`;
-                } else { badge = `<span class="grp-count">${usable.length} 件在用</span>`; }
+                    warn = `<div class="grp-warn">🛒 用完「${esc(owned[0].name)}」就没有同类可换了 —— 记得提前补货</div>`;
+                } else {
+                    // 暂停的也算家里有,但要写清楚有几件在用
+                    badge = `<span class="grp-count">${owned.length} 件${usable.length !== owned.length ? `（${usable.length} 件在用）` : '在用'}</span>`;
+                }
                 return `<div class="prod-group"><div class="grp-hd">${esc(label)}${badge}</div>${warn}${items.map(cardOf).join('')}</div>`;
             }).join('') + `<button class="add-prod-btn" onclick="showProdModal()">+ 添加产品</button>`;
             if (PD.some(p=>p.hidden)) list.innerHTML += `<button class="prod-act" onclick="restoreBuiltins()" style="margin-top:8px">恢复已隐藏的内置产品</button>`;
@@ -3687,9 +3716,16 @@
         // ══ 「唯一一件」提醒:某个角色只剩这一件、用完没有同类替补 → 在刚开始用的时候就提醒补货 ══
         const ROLE_LABEL = { cleanse:'洁面', precleanse:'卸妆', acid:'去角质酸类', mask:'面膜/泥膜', retinol:'视黄醇',
                              serum:'精华', oil:'面油', eye:'眼部', moist:'保湿', repair:'修护', spf:'防晒', soothe:'舒缓面膜' };
+        // 「在用」:当前排进流程的(暂停的不算)
         function usableOfRole(role) {
             return PD.filter(p => !p.hidden && !isExcluded(p) && p.role === role &&
                 isSchedActive(p, PS[p.id] || p.statuses[0]));
+        }
+        // 「家里有的」:只要不是"待购入",暂停的也算——暂停只是现在不用,用完主力它还能顶上,
+        // 所以判断「有没有同类替补」要用这个,不能用 usableOfRole(真实反馈的误报)
+        function ownedOfRole(role) {
+            return PD.filter(p => !p.hidden && !isExcluded(p) && p.role === role &&
+                (PS[p.id] || p.statuses[0]) !== 'pending');
         }
         // 「真的在用」= 出现在今晚步骤里，或被排班引擎排进了未来 15 天。
         // 比只看状态准：状态是 active 但从来排不上的产品，不算在用。
@@ -3732,7 +3768,7 @@
                 if (!isSchedActive(p, PS[p.id] || p.statuses[0])) return false;
                 if (!p.role || p.role === 'precleanse') return false;
                 if (seen[p.role]) return false;
-                const list = usableOfRole(p.role);
+                const list = ownedOfRole(p.role);   // 暂停的也算替补
                 if (list.length !== 1) return false;
                 seen[p.role] = true;
                 return true;
