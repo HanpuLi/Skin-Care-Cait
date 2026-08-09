@@ -2698,22 +2698,22 @@
         // ══ Products ════════════════════════════════════════════════
         const DEFAULT_PD = [
             { id:'sunscreen',role:'spf',icon:'☀️',name:'Lancaster Sun Control SPF50 无油',cat:'防晒 · 每日必备',journalTag:'',statuses:['owned','pending'],labels:{owned:'已购入',pending:'待购入'},pillCls:{owned:'owned',pending:'pending'},notes:['无油款，适合油皮/敏感','用酸次日无防晒 = 加深痘印，必须足量'],schedule:{type:'daily',time:['am'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
-            { id:'goodGenes',icon:'🧪',name:'Sunday Riley Good Genes',cat:'去角质 · 乙醇酸',journalTag:'Good Genes',statuses:['paused','active'],labels:{paused:'暂缓使用',active:'可以使用'},pillCls:{paused:'paused',active:'active'},notes:['高酒精+乙醇酸，屏障稳定4周后再评估','使用时替换PC或Votary，不得叠用'],schedule:{type:'acid',time:['pm'],maxPerWeek:1,minDaysBetween:2,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:true,enableAutoSchedule:true},paoMonths:12,builtin:true },
-            { id:'pc',icon:'🧴',name:"Paula's Choice 6%杏仁酸+2%乳酸",cat:'去角质 · T区',journalTag:'PC酸',statuses:['active','paused'],labels:{active:'正常使用',paused:'暂停'},pillCls:{active:'active',paused:'paused'},notes:['T区主选：额头、鼻翼、下颌','停留3–5分钟，无需冲洗'],schedule:{type:'acid',time:['pm'],maxPerWeek:1,minDaysBetween:2,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:true,enableAutoSchedule:true},paoMonths:12,builtin:true },
-            { id:'votary',icon:'🧴',name:'Votary 10%乳酸',cat:'去角质 · 全脸',journalTag:'Votary酸',statuses:['active','paused'],labels:{active:'正常使用',paused:'暂停'},pillCls:{active:'active',paused:'paused'},notes:['全脸/两颊主选，保湿性更强','与PC交替，乳酸对屏障更温和'],schedule:{type:'acid',time:['pm'],maxPerWeek:1,minDaysBetween:2,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:true,enableAutoSchedule:true},paoMonths:6,builtin:true },
+            { id:'goodGenes',icon:'🧪',name:'Sunday Riley Good Genes',cat:'去角质 · 乙醇酸',journalTag:'Good Genes',statuses:['paused','active'],labels:{paused:'备用',active:'可以使用'},pillCls:{paused:'paused',active:'active'},notes:['高酒精+乙醇酸，屏障稳定4周后再评估','使用时替换PC或Votary，不得叠用'],schedule:{type:'acid',time:['pm'],maxPerWeek:1,minDaysBetween:2,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:true,enableAutoSchedule:true},paoMonths:12,builtin:true },
+            { id:'pc',icon:'🧴',name:"Paula's Choice 6%杏仁酸+2%乳酸",cat:'去角质 · T区',journalTag:'PC酸',statuses:['active','paused'],labels:{active:'正常使用',paused:'备用'},pillCls:{active:'active',paused:'paused'},notes:['T区主选：额头、鼻翼、下颌','停留3–5分钟，无需冲洗'],schedule:{type:'acid',time:['pm'],maxPerWeek:1,minDaysBetween:2,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:true,enableAutoSchedule:true},paoMonths:12,builtin:true },
+            { id:'votary',icon:'🧴',name:'Votary 10%乳酸',cat:'去角质 · 全脸',journalTag:'Votary酸',statuses:['active','paused'],labels:{active:'正常使用',paused:'备用'},pillCls:{active:'active',paused:'paused'},notes:['全脸/两颊主选，保湿性更强','与PC交替，乳酸对屏障更温和'],schedule:{type:'acid',time:['pm'],maxPerWeek:1,minDaysBetween:2,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:true,enableAutoSchedule:true},paoMonths:6,builtin:true },
             // ── 每晚固定护理品 ─────────────────────────────────────────
-            { id:'sebagh',icon:'💎',name:'Dr Sebagh Rose de Vie 精华',cat:'精华 · 修护',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['白天可代替面霜，晚上无酸夜使用','全脸3–4滴，轻拍至吸收'],schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:true,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
-            { id:'mzskin',icon:'👁',name:'MZ Skin Soothe & Smooth 眼部精华',cat:'眼部 · 护理',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['玻尿酸眼部精华，提亮眼周','无名指轻拍眼眶骨，不要触碰眼球'],schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
-            { id:'cicaplast',icon:'🩹',name:'Cicaplast B5 修护霜',cat:'修护 · 每晚',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['活跃痘痘处、口罩线点涂','刮胡后全脸薄涂修护微创口'],schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
-            { id:'avene',role:'soothe',icon:'🍃',name:'Avène Tolérance Extrême 舒缓面膜',cat:'面膜 · 舒缓（冲洗型）',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['敷约 5 分钟后用温水洗掉','泛红/刺痛/不舒服的时候用，不必天天'],pmHint:'敷约5分钟后洗掉',schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
-            { id:'clay',role:'mask',icon:'🫙',name:'IPSA 深层净化泥面膜',cat:'去角质 · 泥膜',journalTag:'泥面膜',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['1次/周，洗澡夜使用','使用当晚视为酸类占用','泛红/敏感期暂停'],schedule:{type:'mask',time:['pm'],maxPerWeek:1,minDaysBetween:0,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:false,enableAutoSchedule:true},paoMonths:6,builtin:true },
-            { id:'lancome',role:'cleanse',cleanseStrength:'strong',icon:'🧼',name:'Lancôme Clarifique 洁面泡沫',cat:'洁面 · 洗澡夜',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['洗澡夜使用，60秒按摩，T区多停留','替代温水冲洗，清洁力更强'],schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:true,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
+            { id:'sebagh',icon:'💎',name:'Dr Sebagh Rose de Vie 精华',cat:'精华 · 修护',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['白天可代替面霜，晚上无酸夜使用','全脸3–4滴，轻拍至吸收'],schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:true,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
+            { id:'mzskin',icon:'👁',name:'MZ Skin Soothe & Smooth 眼部精华',cat:'眼部 · 护理',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['玻尿酸眼部精华，提亮眼周','无名指轻拍眼眶骨，不要触碰眼球'],schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
+            { id:'cicaplast',icon:'🩹',name:'Cicaplast B5 修护霜',cat:'修护 · 每晚',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['活跃痘痘处、口罩线点涂','刮胡后全脸薄涂修护微创口'],schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
+            { id:'avene',role:'soothe',icon:'🍃',name:'Avène Tolérance Extrême 舒缓面膜',cat:'面膜 · 舒缓（冲洗型）',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['敷约 5 分钟后用温水洗掉','泛红/刺痛/不舒服的时候用，不必天天'],pmHint:'敷约5分钟后洗掉',schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
+            { id:'clay',role:'mask',icon:'🫙',name:'IPSA 深层净化泥面膜',cat:'去角质 · 泥膜',journalTag:'泥面膜',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['1次/周，洗澡夜使用','使用当晚视为酸类占用','泛红/敏感期暂停'],schedule:{type:'mask',time:['pm'],maxPerWeek:1,minDaysBetween:0,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:false,enableAutoSchedule:true},paoMonths:6,builtin:true },
+            { id:'lancome',role:'cleanse',cleanseStrength:'strong',icon:'🧼',name:'Lancôme Clarifique 洁面泡沫',cat:'洁面 · 洗澡夜',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['洗澡夜使用，60秒按摩，T区多停留','替代温水冲洗，清洁力更强'],schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:true,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
             // ── 2026-08-06 家中实拍库存新增（真实产品；排在已有产品之后，故各角色首位仍是既有主力，不打乱现有流程） ──
-            { id:'lacura',role:'cleanse',cleanseStrength:'gentle',icon:'🧼',name:'Lacura 温和洗面奶',cat:'洁面 · 温和无皂基',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['无皂基氨基酸洁面，敏感肌','出油也别用皂基/强力泡沫，越洗越油'],pmHint:'全脸打圈30秒后温水洗净',amHint:'温和洁面，30秒洗净',schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
-            { id:'wildsource',role:'precleanse',icon:'🧈',name:'Wild Source 卸妆膏',cat:'清洁 · 卸妆第一遍',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['晚间卸防晒/妆的第一遍','没妆没厚防晒可跳过'],pmHint:'干手打圈乳化后温水洗净',schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
-            { id:'toleriane',role:'moist',icon:'💧',name:'La Roche-Posay Toleriane Ultra Light',cat:'保湿 · 无油轻薄',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['无油轻薄乳，敏感/易泛红','油皮/混油首选，防晒前打底'],pmHint:'全脸薄涂封层',amHint:'全脸薄涂，防晒前打底',schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
-            { id:'drorganic',role:'mask',icon:'🍊',name:'dr.organic 葡萄柚水杨酸磨砂',cat:'去角质 · 磨砂（慎用）',journalTag:'磨砂',statuses:['paused','owned'],labels:{paused:'暂停',owned:'偶尔用'},pillCls:{paused:'paused',owned:'active'},notes:['物理颗粒+水杨酸，油痘肌','⚠️对泛红/红疹区偏刺激，最多两周1次、避开发红处'],pmHint:'湿脸轻打圈、避开红疹区，冲净',schedule:{type:'mask',time:['pm'],maxPerWeek:1,minDaysBetween:6,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
-            { id:'ren',role:'eye',icon:'👁',name:'REN 亮黑眼圈眼霜',cat:'眼部 · 提亮',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'暂停'},pillCls:{owned:'active',paused:'paused'},notes:['提亮黑眼圈','无名指轻拍眼周，避开眼球'],schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
+            { id:'lacura',role:'cleanse',cleanseStrength:'gentle',icon:'🧼',name:'Lacura 温和洗面奶',cat:'洁面 · 温和无皂基',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['无皂基氨基酸洁面，敏感肌','出油也别用皂基/强力泡沫，越洗越油'],pmHint:'全脸打圈30秒后温水洗净',amHint:'温和洁面，30秒洗净',schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
+            { id:'wildsource',role:'precleanse',icon:'🧈',name:'Wild Source 卸妆膏',cat:'清洁 · 卸妆第一遍',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['晚间卸防晒/妆的第一遍','没妆没厚防晒可跳过'],pmHint:'干手打圈乳化后温水洗净',schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
+            { id:'toleriane',role:'moist',icon:'💧',name:'La Roche-Posay Toleriane Ultra Light',cat:'保湿 · 无油轻薄',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['无油轻薄乳，敏感/易泛红','油皮/混油首选，防晒前打底'],pmHint:'全脸薄涂封层',amHint:'全脸薄涂，防晒前打底',schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
+            { id:'drorganic',role:'mask',icon:'🍊',name:'dr.organic 葡萄柚水杨酸磨砂',cat:'去角质 · 磨砂（慎用）',journalTag:'磨砂',statuses:['paused','owned'],labels:{paused:'备用',owned:'偶尔用'},pillCls:{paused:'paused',owned:'active'},notes:['物理颗粒+水杨酸，油痘肌','⚠️对泛红/红疹区偏刺激，最多两周1次、避开发红处'],pmHint:'湿脸轻打圈、避开红疹区，冲净',schedule:{type:'mask',time:['pm'],maxPerWeek:1,minDaysBetween:6,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
+            { id:'ren',role:'eye',icon:'👁',name:'REN 亮黑眼圈眼霜',cat:'眼部 · 提亮',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['提亮黑眼圈','无名指轻拍眼周，避开眼球'],schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
         ];
         // ── 角色系统：把产品归入护肤流程里的"角色"，渲染步骤时按角色通用取用，避免写死产品 id ──
         // 有映射就用映射，没有就按名称/类别自动推断——连用户自己新加的产品也能自动归位。
@@ -2947,7 +2947,7 @@
         }
         function applyPlanTemplate(tid) {
             const t = PLAN_TEMPLATES.find(x => x.id === tid); if (!t) return;
-            sysConfirm(`套用方案「${t.name}」到你当前账号？\n\n会按此方案设置：启用/暂停哪些产品、酸类频率、刮胡/HRT 开关、肤质副标题。只影响你自己的账号，套完可随时手动再调。`, () => {
+            sysConfirm(`套用方案「${t.name}」到你当前账号？\n\n会按此方案设置：哪些产品在用、哪些转为备用、酸类频率、刮胡/HRT 开关、肤质副标题。只影响你自己的账号，套完可随时手动再调。`, () => {
                 applyTemplateCore(t);
                 applyProfileVisibility(); syncSettingsUI(); invalidatePlanCache();
                 renderAll(); renderJrnl(); renderStats();
@@ -3116,7 +3116,7 @@
             } else {
                 const id = 'custom_'+Date.now();
                 // 新增也要立刻定 role，否则 role=undefined，byRole 严格比较永不匹配 → 加了产品却不进任何步骤
-                const np = {id,icon,name,cat,notes,journalTag,statuses:['active','paused'],labels:{active:'使用中',paused:'已暂停'},pillCls:{active:'active',paused:'paused'},schedule,paoMonths,builtin:false};
+                const np = {id,icon,name,cat,notes,journalTag,statuses:['active','paused'],labels:{active:'使用中',paused:'备用'},pillCls:{active:'active',paused:'paused'},schedule,paoMonths,builtin:false};
                 np.role = ROLE_MAP[id] || inferRole(np);
                 PD.push(np);
                 PS[id] = 'active'; ls(K.prods, PS);
@@ -3200,11 +3200,11 @@
                 const usable = items.filter(p => !isExcluded(p) && isSchedActive(p, PS[p.id] || p.statuses[0]));
                 let badge, warn = '';
                 if (owned.length === 0) { badge = `<span class="grp-count none">家里没有</span>`; }
-                else if (usable.length === 0) { badge = `<span class="grp-count none">${owned.length} 件 · 暂停中</span>`; }
+                else if (usable.length === 0) { badge = `<span class="grp-count none">${owned.length} 件 · 备用(没排进流程)</span>`; }
                 else { badge = `<span class="grp-count">${owned.length} 件${usable.length !== owned.length ? `（${usable.length} 件在用）` : '在用'}</span>`; }
                 // 警告不按件数,按「少了它流程会缺一环」
                 const crit = criticalMap[k];
-                if (crit) warn = `<div class="grp-warn">🛒 用完「${esc(crit.p.name)}」就没有能顶替的了，${esc(crit.lost.map(r => ROLE_STEP_LABEL[r] || r).join('、'))}这一步会空掉 —— 记得提前补货</div>`;
+                if (crit) warn = `<div class="grp-warn">🛒 用完「${esc(crit.p.name)}」就没有能顶替的了 —— ${esc(crit.lost.map(c => CAP_LABEL[c] || c).join('、'))}会断档,记得提前补货</div>`;
                 return `<div class="prod-group"><div class="grp-hd">${esc(name)}${badge}</div>${warn}${items.map(cardOf).join('')}</div>`;
             }).join('') + `<button class="add-prod-btn"  onclick="showProdModal()">+ 添加产品</button>`;
             if (PD.some(p=>p.hidden)) list.innerHTML += `<button class="prod-act" onclick="restoreBuiltins()" style="margin-top:8px">恢复已隐藏的内置产品</button>`;
@@ -3738,6 +3738,34 @@
             { key: 'spf',        name: '防晒',            roles: ['spf'] }
         ];
         function groupOfRole(role) { return ROLE_GROUPS.find(g => g.roles.includes(role)) || null; }
+
+        // ══ 能力模型:一件产品「能顶什么用」,而不是「属于哪一类」 ══════════════
+        // 真实反馈(Cici):「修护只剩一件,但修护也可以被别的顶替——你还在已有结构里修修补补」。
+        // 对:替代关系不是固定的分类树。这里改成按能力判断:
+        //   洗干净(clean)、洗完脸上有东西护着(hydrate)才是真必需;
+        //   去角质/眼部/面油都是可选或可被 hydrate 顶替,缺了不影响"计划能不能进行"。
+        const ROLE_CAPS = {
+            precleanse: ['clean'],
+            cleanse:    ['clean'],
+            acid:       ['exfoliate'],
+            mask:       ['exfoliate'],
+            retinol:    ['exfoliate'],
+            serum:      ['hydrate'],
+            moist:      ['hydrate'],
+            oil:        ['hydrate'],
+            soothe:     ['hydrate', 'calm'],
+            repair:     ['hydrate', 'calm'],
+            eye:        ['eye'],
+            spf:        ['spf']
+        };
+        const ESSENTIAL_CAPS = ['clean', 'hydrate'];
+        const CAP_LABEL = { clean: '洗脸', hydrate: '洗完脸上的护理(保湿/修护/舒缓都算)' };
+        function capsOf(p) { return (p && ROLE_CAPS[p.role]) || []; }
+        // 家里能提供某能力的产品(暂停的也算——启用一下就能顶上;待购入的不算)
+        function ownedProviders(cap) {
+            return PD.filter(p => !p.hidden && !isExcluded(p) &&
+                (PS[p.id] || p.statuses[0]) !== 'pending' && capsOf(p).includes(cap));
+        }
         // 同组内「家里有的」——判断有没有替补要用这个
         function ownedOfGroup(role) {
             const g = groupOfRole(role);
@@ -3831,18 +3859,16 @@
         }
         const ROLE_STEP_LABEL = { cleanse:'洗脸', precleanse:'卸妆', acid:'去角质', mask:'面膜', soothe:'舒缓面膜',
             retinol:'视黄醇', serum:'精华', oil:'面油', eye:'眼部护理', moist:'保湿', repair:'修护封层', spf:'防晒' };
-        // 返回:少了它就会让某个环节整个消失的产品
+        // 返回:少了它,某个**必需能力**就彻底没人提供了 —— 这才叫"计划跑不下去"
+        // (不看类别、不看件数:修护没了但还有保湿/舒缓能顶,就不算断)
         function planCriticalProducts() {
-            const base = coveredRoles();
             const using = inUseIds();
             const out = [];
             PD.forEach(p => {
                 if (p.hidden || isExcluded(p) || !using.has(p.id)) return;
                 if (!isSchedActive(p, PS[p.id] || p.statuses[0])) return;
-                _simExclude = p.id;
-                let after;
-                try { invalidatePlanCache(); after = coveredRoles(); } finally { _simExclude = null; invalidatePlanCache(); }
-                const lost = [...base].filter(r => !after.has(r));
+                const lost = ESSENTIAL_CAPS.filter(cap =>
+                    capsOf(p).includes(cap) && ownedProviders(cap).filter(q => q.id !== p.id).length === 0);
                 if (lost.length) out.push({ p, lost });
             });
             return out;
@@ -3864,10 +3890,10 @@
                 const backup = ownedOfGroup(x.p.role).filter(q => q.id !== x.p.id &&
                     !isSchedActive(q, PS[q.id] || q.statuses[0]));
                 const tail = backup.length
-                    ? `不过你还有暂停中的「${esc(backup[0].name)}」，到时候启用它就能顶上。`
+                    ? `不过你还有备用的「${esc(backup[0].name)}」，到时候启用它就能顶上。`
                     : `建议提前补货。`;
                 return `<div class="alert warn" style="margin-bottom:.75rem"><div class="at">🛒 少了它，流程会缺一环</div>
-                 「${esc(x.p.name)}」用完就没有能顶替的了，${esc(x.lost.map(r => ROLE_STEP_LABEL[r] || r).join('、'))}这一步会直接空掉。${tail}
+                 「${esc(x.p.name)}」用完就没有能顶替的了，${esc(x.lost.map(c => CAP_LABEL[c] || c).join('、'))}就没有任何东西能顶了。${tail}
                  <button class="prod-act" style="margin-top:6px" onclick="dismissSole('${x.p.id}')">知道了，不再提醒</button></div>`;
             }).join('');
         }
