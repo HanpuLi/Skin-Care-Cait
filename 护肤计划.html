@@ -2150,6 +2150,7 @@
                     <label class="set-row"><span>肤质副标题</span><input id="set-skintype" class="hf" style="max-width:190px" oninput="onProfileEdit()" placeholder="如：混油皮 · 屏障修护"></label>
                     <label class="set-row"><span>刮胡 · 排班与步骤含刮胡</span><input type="checkbox" id="set-shave" onchange="onProfileEdit()"></label>
                     <label class="set-row"><span>HRT · 显示激素相关内容</span><input type="checkbox" id="set-hrt" onchange="onProfileEdit()"></label>
+                    <label class="set-row"><span>需要卸妆步骤</span><input type="checkbox" id="set-premakeup" onchange="onProfileEdit()"></label>
                     <label class="set-row"><span>刷酸时机</span><select id="set-acidtiming" class="hf" style="max-width:190px" onchange="onProfileEdit()"><option value="">自动（易泛红则避开洗澡夜）</option><option value="neutral">无所谓</option><option value="avoid">避开刚洗完热水澡</option><option value="prefer">优先安排在洗澡夜</option></select></label>
                     <label class="set-row"><span>修护霜用法</span><select id="set-repairuse" class="hf" style="max-width:190px" onchange="onProfileEdit()"><option value="">自动（按屏障状态）</option><option value="full">全脸薄涂</option><option value="spot">仅点涂</option></select></label>
                 </div>
@@ -2829,6 +2830,8 @@
             if (b) b.checked = !!PROFILE.hrt;
             if (c) c.value = PROFILE.skinType || '';
             const at = document.getElementById('set-acidtiming'), ru = document.getElementById('set-repairuse');
+            const pm = document.getElementById('set-premakeup');
+            if (pm) pm.checked = !!PROFILE.useMakeupRemoval;
             if (at) at.value = PROFILE.acidTiming || '';
             if (ru) ru.value = PROFILE.repairUse || '';
         }
@@ -2838,6 +2841,8 @@
             PROFILE.hrt     = !!(b && b.checked);
             PROFILE.skinType = c ? c.value.trim() : PROFILE.skinType;
             const at = document.getElementById('set-acidtiming'), ru = document.getElementById('set-repairuse');
+            const pm = document.getElementById('set-premakeup');
+            PROFILE.useMakeupRemoval = pm ? !!pm.checked : PROFILE.useMakeupRemoval;
             PROFILE.acidTiming = at ? at.value : PROFILE.acidTiming;
             PROFILE.repairUse  = ru ? ru.value : PROFILE.repairUse;
             saveProfile(); applyProfileVisibility();
@@ -3699,11 +3704,13 @@
                 const pre = byRole('precleanse', true)[0];
                 // 卸妆不该是每晚固定一步——App 无从知道今天有没有化妆/涂防晒。
                 // 改成挂在洁面步骤上的条件提示；完全不用的人把它标「我不用这个」就彻底消失。
+                // 卸妆默认不出现（两位使用者都表示不需要）。要用的人在「个人设置 → 需要卸妆步骤」打开。
+                const wantPre = !!PROFILE.useMakeupRemoval;
                 if (cleanser) {
                     const why = cleanserReason(ctx);
-                    const preNote = pre ? `　（今天化了妆或涂了厚防晒，先用${pre.name}卸）` : '';
+                    const preNote = (wantPre && pre) ? `　（化了妆或涂了厚防晒，先用${pre.name}卸）` : '';
                     steps.push({ p: cleanser.name, h: (why ? why + '；' : '') + (cleanser.pmHint || '打圈30–60秒后温水洗净') + preNote, t: 60 });
-                } else if (pre) {
+                } else if (wantPre && pre) {
                     steps.push({ p: pre.name, h: hint(pre) || '化了妆或厚防晒时用' });
                 }
                 else steps.push({ p: '温水冲洗', h: '没有洁面产品时的兜底——建议在「产品」页加一支洁面' });
