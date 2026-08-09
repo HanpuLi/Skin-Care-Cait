@@ -2047,6 +2047,17 @@
     <style>
       body.hide-shave .feat-shave{display:none!important}
       body.hide-hrt .feat-hrt{display:none!important}
+      /* 极简模式:不打卡、不记录、只告诉今晚做什么。用不到的一律不显示。 */
+      body.minimal #tn-meta-row,
+      body.minimal #tn-logged-badge,
+      body.minimal #ql-block,
+      body.minimal #sync-note-area,
+      body.minimal .tn-skip,
+      body.minimal #tab-jrnl,
+      body.minimal .set-row.adv,
+      body.minimal #assess-card{display:none!important}
+      body.minimal .tn-step{cursor:default}
+      body.minimal .tn-step .tn-n{opacity:.55}
       .set-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px}
       .tpl-btn{text-align:left;padding:10px 12px;border:1px solid rgba(128,128,128,.25);border-radius:10px;background:var(--sur2);cursor:pointer;width:100%;font-family:inherit}
       .tpl-n{font-size:13px;font-weight:600;color:var(--tx)}
@@ -2106,7 +2117,8 @@
             <div id="hrt-bnr"></div>
             <div id="barrier-limit-banner"></div>
             <div id="pao-alert-tn"></div>
-            <div style="background:var(--sur2);border-radius:var(--rs);padding:1rem;margin-bottom:1rem">
+            <div id="sole-alert"></div>
+            <div id="ql-block" style="background:var(--sur2);border-radius:var(--rs);padding:1rem;margin-bottom:1rem">
                 <div style="font-size:13px;font-weight:500;margin-bottom:8px">今天皮肤怎么样？</div>
                 <div class="chips" id="tn-ql-chips">
                     <div class="chip" data-val="稳定" data-cls="s-ok" onclick="logTonightStatus('稳定')">✓ 稳定</div>
@@ -2140,11 +2152,12 @@
            <div class="section" style="margin-bottom:1.25rem">
                 <div class="sec-title">个人设置</div>
                 <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
+                    <label class="set-row"><span>极简模式 · 只看今晚做什么，不打卡不记录</span><input type="checkbox" id="set-minimal" onchange="onProfileEdit()"></label>
                     <label class="set-row"><span>肤质副标题</span><input id="set-skintype" class="hf" style="max-width:190px" oninput="onProfileEdit()" placeholder="如：混油皮 · 屏障修护"></label>
-                    <label class="set-row"><span>刮胡 · 排班与步骤含刮胡</span><input type="checkbox" id="set-shave" onchange="onProfileEdit()"></label>
-                    <label class="set-row"><span>HRT · 显示激素相关内容</span><input type="checkbox" id="set-hrt" onchange="onProfileEdit()"></label>
+                    <label class="set-row adv"><span>刮胡 · 排班与步骤含刮胡</span><input type="checkbox" id="set-shave" onchange="onProfileEdit()"></label>
+                    <label class="set-row adv"><span>HRT · 显示激素相关内容</span><input type="checkbox" id="set-hrt" onchange="onProfileEdit()"></label>
                     <label class="set-row"><span>需要卸妆步骤</span><input type="checkbox" id="set-premakeup" onchange="onProfileEdit()"></label>
-                    <label class="set-row"><span>显示「日志」页</span><input type="checkbox" id="set-showjrnl" onchange="onProfileEdit()"></label>
+                    <label class="set-row adv"><span>显示「日志」页</span><input type="checkbox" id="set-showjrnl" onchange="onProfileEdit()"></label>
                     <label class="set-row"><span>刷酸时机</span><select id="set-acidtiming" class="hf" style="max-width:190px" onchange="onProfileEdit()"><option value="">自动（易泛红则避开洗澡夜）</option><option value="neutral">无所谓</option><option value="avoid">避开刚洗完热水澡</option><option value="prefer">优先安排在洗澡夜</option></select></label>
                     <label class="set-row"><span>修护霜用法</span><select id="set-repairuse" class="hf" style="max-width:190px" onchange="onProfileEdit()"><option value="">自动（按屏障状态）</option><option value="full">全脸薄涂</option><option value="spot">仅点涂</option></select></label>
                 </div>
@@ -2797,6 +2810,7 @@
         function applyProfileVisibility() {
             document.body.classList.toggle('hide-shave', !PROFILE.shaving);
             document.body.classList.toggle('hide-hrt',   !PROFILE.hrt);
+            document.body.classList.toggle('minimal',    !!PROFILE.minimalMode);
             // 日志页可整体关闭(默认开)。关掉后皮肤状态仍可在「今晚」页快速记录,数据照常参与评估。
             const showJ = PROFILE.showJournal !== false;
             const jt = document.getElementById('tab-jrnl'), jp = document.getElementById('jrnl');
@@ -2837,6 +2851,8 @@
             if (pm) pm.checked = !!PROFILE.useMakeupRemoval;
             const sj = document.getElementById('set-showjrnl');
             if (sj) sj.checked = PROFILE.showJournal !== false;
+            const mn = document.getElementById('set-minimal');
+            if (mn) mn.checked = !!PROFILE.minimalMode;
             if (at) at.value = PROFILE.acidTiming || '';
             if (ru) ru.value = PROFILE.repairUse || '';
         }
@@ -2850,6 +2866,8 @@
             PROFILE.useMakeupRemoval = pm ? !!pm.checked : PROFILE.useMakeupRemoval;
             const sj = document.getElementById('set-showjrnl');
             if (sj) PROFILE.showJournal = !!sj.checked;
+            const mn = document.getElementById('set-minimal');
+            if (mn) PROFILE.minimalMode = !!mn.checked;
             PROFILE.acidTiming = at ? at.value : PROFILE.acidTiming;
             PROFILE.repairUse  = ru ? ru.value : PROFILE.repairUse;
             saveProfile(); applyProfileVisibility();
@@ -3117,7 +3135,7 @@
                 if (usageCountHtml) schedTags += `<div class="sched-info" style="margin-top:2px">${usageCountHtml}</div>`;
                 return `<div class="pc"><div class="pch" onclick="togglePCB('${def.id}')">
       <div class="pci">${def.icon}</div>
-      <div class="pci2"><div class="pcn"${isExcluded(def)?' style="opacity:.45;text-decoration:line-through"':''}>${esc(def.name)}</div><div class="pcc">${isExcluded(def)?'🚫 我不用 · ':''}${esc(visCat(def))}${wo!==null?` · 开封${wo}周`:''}</div><div class="sched-info" style="margin-top:4px">${paoTag}</div>${schedTags}</div>
+      <div class="pci2"><div class="pcn"${isExcluded(def)?' style="opacity:.45;text-decoration:line-through"':''}>${esc(def.name)}</div><div class="pcc">${isExcluded(def)?'🚫 我不用 · ':''}${(!def.hidden && !isExcluded(def) && def.role && def.role!=='precleanse' && isSchedActive(def, PS[def.id]||def.statuses[0]) && usableOfRole(def.role).length===1)?'🔸唯一一件 · ':''}${esc(visCat(def))}${wo!==null?` · 开封${wo}周`:''}</div><div class="sched-info" style="margin-top:4px">${paoTag}</div>${schedTags}</div>
       ${can?`<button class="pcp ${def.pillCls[s]}" onclick="cyclePS('${def.id}',event)">${def.labels[s]}</button>`:`<span class="pcp ${def.pillCls[s]}">${def.labels[s]}</span>`}
     </div><div class="pcb" id="pcb-${def.id}">
       <div style="margin-top:0">${notes}</div>
@@ -3599,6 +3617,7 @@
         }
 
         function toggleStep(el) {
+            if (PROFILE.minimalMode) return;   // 极简模式:不打卡、不勾选
             const prodName = el.dataset.prod;
             const panel = el.closest('#am-plan') ? 'am' : 'tn';
             const done = loadDoneSteps(panel);
@@ -3636,6 +3655,50 @@
                     meta.innerHTML = `<div class="tn-meta-item ${cls}">近7天去角质 ${acidCnt}/${maxAcid} 次</div><div class="tn-meta-item">${dslaStr}</div>`;
                 }
             }
+        }
+
+        // ══ 「唯一一件」提醒:某个角色只剩这一件、用完没有同类替补 → 在刚开始用的时候就提醒补货 ══
+        const ROLE_LABEL = { cleanse:'洁面', precleanse:'卸妆', acid:'去角质酸类', mask:'面膜/泥膜', retinol:'视黄醇',
+                             serum:'精华', oil:'面油', eye:'眼部', moist:'保湿', repair:'修护', spf:'防晒', soothe:'舒缓面膜' };
+        function usableOfRole(role) {
+            return PD.filter(p => !p.hidden && !isExcluded(p) && p.role === role &&
+                isSchedActive(p, PS[p.id] || p.statuses[0]));
+        }
+        // 返回「该角色只有这一件」的在用产品
+        function soleRoleProducts() {
+            const seen = {};
+            return PD.filter(p => {
+                if (p.hidden || isExcluded(p)) return false;
+                if (!isSchedActive(p, PS[p.id] || p.statuses[0])) return false;
+                if (!p.role || p.role === 'precleanse') return false;
+                if (seen[p.role]) return false;
+                const list = usableOfRole(p.role);
+                if (list.length !== 1) return false;
+                seen[p.role] = true;
+                return true;
+            });
+        }
+        // 「刚开始用」= 还没填开封日期,或开封在 30 天以内
+        function recentlyStarted(p) {
+            const d = POPEN[p.id];
+            if (!d) return true;
+            const days = Math.floor((new Date(today() + 'T12:00:00') - new Date(d + 'T12:00:00')) / 86400000);
+            return days >= 0 && days <= 30;
+        }
+        function renderSoleAlerts() {
+            const box = document.getElementById('sole-alert'); if (!box) return;
+            const dismissed = PROFILE.soleDismissed || [];
+            const list = soleRoleProducts().filter(p => recentlyStarted(p) && !dismissed.includes(p.id));
+            box.innerHTML = list.map(p =>
+                `<div class="alert warn" style="margin-bottom:.75rem"><div class="at">🛒 ${esc(ROLE_LABEL[p.role] || p.role)}只有这一件</div>
+                 用完「${esc(p.name)}」就没有同类可换了 —— 趁现在把下一支加进购物清单，别等断档。
+                 <button class="prod-act" style="margin-top:6px" onclick="dismissSole('${p.id}')">知道了，不再提醒</button></div>`
+            ).join('');
+        }
+        function dismissSole(id) {
+            const list = (PROFILE.soleDismissed || []).slice();
+            if (!list.includes(id)) list.push(id);
+            PROFILE.soleDismissed = list; saveProfile(); renderSoleAlerts();
         }
 
         // PAO 预警提前量：统一为"总时长的 15%，最多 4 周"，且保证不会在开封第 0 周就报警。
@@ -3733,6 +3796,7 @@
             const shave = !!TN.shave && !!PROFILE.shaving;   // 同上：门控收口
             updatePhase();
             renderAssessment();
+            renderSoleAlerts();
             const sBtn = document.getElementById('tn-sh'), vBtn = document.getElementById('tn-sv');
             if (sBtn) sBtn.className = 'tn-btn' + (shower ? ' on-shower' : '');
             // 必须保留 feat-shave：整体覆盖 className 会把门控 class 冲掉，
