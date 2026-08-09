@@ -2916,8 +2916,8 @@
                 name: '抗闭口 · 油痘微敏',
                 desc: '杏仁酸每周2次为主力、严格防晒、修护为主；适合易闭口 / 毛孔粗大 / 局部泛红。刮胡关、HRT关',
                 profile: { shaving: false, hrt: false, skinType: '油偏混 · 抗闭口' },
-                on:  ['sunscreen','lacura','wildsource','toleriane','pc','cicaplast','avene','mzskin'],
-                off: ['lancome','goodGenes','votary','clay','drorganic','sebagh','ren'],
+                on:  ['sunscreen','lacura','lancome','toleriane','pc','cicaplast','avene','mzskin'],
+                off: ['goodGenes','votary','clay','drorganic','sebagh','ren'],
                 freq: { pc: { maxPerWeek: 2, minDaysBetween: 2, enableAutoSchedule: true } }
             },
             {
@@ -2926,7 +2926,7 @@
                 desc: '洁面 + 保湿 + 防晒，酸类每周1次起步。适合刚开始或皮肤敏感的人',
                 profile: { shaving: false, hrt: false, skinType: '温和基础' },
                 on:  ['sunscreen','lacura','toleriane','cicaplast'],
-                off: ['lancome','wildsource','goodGenes','votary','clay','drorganic','sebagh','avene','mzskin','ren'],
+                off: ['wildsource','goodGenes','votary','clay','drorganic','sebagh','avene','mzskin','ren'],
                 freq: { pc: { maxPerWeek: 1, minDaysBetween: 3, enableAutoSchedule: true } }
             }
         ];
@@ -3192,8 +3192,12 @@
                 let badge, warn = '';
                 if (owned.length === 0) { badge = `<span class="grp-count none">家里没有</span>`; }
                 else if (owned.length === 1 && r !== 'precleanse') {
-                    badge = `<span class="grp-count sole">只有 1 件</span>`;
-                    warn = `<div class="grp-warn">🛒 用完「${esc(owned[0].name)}」就没有同类可换了 —— 记得提前补货</div>`;
+                    if (usable.length) {
+                        badge = `<span class="grp-count sole">只有 1 件</span>`;
+                        warn = `<div class="grp-warn">🛒 用完「${esc(owned[0].name)}」就没有同类可换了 —— 记得提前补货</div>`;
+                    } else {
+                        badge = `<span class="grp-count none">1 件 · 暂停中</span>`;   // 没在用就别催买
+                    }
                 } else {
                     // 暂停的也算家里有,但要写清楚有几件在用
                     badge = `<span class="grp-count">${owned.length} 件${usable.length !== owned.length ? `（${usable.length} 件在用）` : '在用'}</span>`;
