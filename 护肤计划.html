@@ -2076,6 +2076,12 @@
       .assess-rec.warn{background:var(--am-bg)}
       .assess-rec.good{background:var(--gr-bg)}
       .assess-empty{font-size:12px;color:var(--tx3);padding:4px 0}
+      .prod-group{margin-bottom:1.1rem}
+      .grp-hd{display:flex;align-items:baseline;gap:8px;font-size:13px;font-weight:600;margin:0 0 6px;padding-bottom:5px;border-bottom:1px solid rgba(128,128,128,.2)}
+      .grp-count{font-size:11px;font-weight:500;color:var(--tx3);font-family:var(--mono)}
+      .grp-count.sole{color:var(--am)}
+      .grp-count.none{color:var(--tx3);opacity:.6}
+      .grp-warn{font-size:11px;line-height:1.5;color:var(--am);background:var(--am-bg);border-radius:8px;padding:6px 9px;margin-bottom:8px}
       .ob-q{font-size:12px;font-weight:600;margin:12px 0 6px}
       .ob-opts{display:flex;flex-wrap:wrap;gap:6px}
       .ob-opt{padding:7px 11px;border-radius:999px;border:1px solid rgba(128,128,128,.3);background:var(--sur2);color:var(--tx2);font-size:12px;cursor:pointer;font-family:inherit}
@@ -3100,10 +3106,12 @@
         }
         function restoreBuiltins() { PD.forEach(p=>{if(p.builtin)delete p.hidden}); ls(K.prodDefs,PD); renderProds(); }
 
+        // 产品页按「大类」分组：一眼看清每类有几件、哪类只剩一件
+        const ROLE_ORDER = ['precleanse','cleanse','acid','mask','soothe','retinol','serum','oil','eye','moist','repair','spf'];
         function renderProds() {
             const list = document.getElementById('prod-list'); if (!list) return;
             const visiblePD = PD.filter(p => !p.hidden);
-            list.innerHTML = visiblePD.map(def => {
+            const cardOf = def => {
                 const s = PS[def.id] || def.statuses[0];
                 const can = def.statuses.length > 1;
                 const notes = visNotes(def).map(n => `<div class="pcni">· ${esc(n)}</div>`).join('');
@@ -3143,6 +3151,25 @@
       <div class="prod-acts"><button class="prod-act" onclick="showProdModal('${def.id}')">✏️ 编辑</button><button class="prod-act" onclick="toggleExcluded('${def.id}')">${isExcluded(def)?'↩︎ 取消不用':'🚫 我不用这个'}</button><button class="prod-act del" onclick="deleteProd('${def.id}')">${def.builtin?'👁 隐藏':'🗑 删除'}</button></div>
       ${can?`<div class="pch2">点击状态循环切换 → ${def.statuses.map(s2=>def.labels[s2]).join(' → ')}</div>`:''}
     </div></div>`;
+            };
+            // 按大类分组 + 每类给出「在用几件」，只剩一件的直接在分组标题上提醒
+            const groups = {};
+            visiblePD.forEach(p => { const r = p.role || 'other'; (groups[r] = groups[r] || []).push(p); });
+            const roles = Object.keys(groups).sort((a, b) => {
+                const ia = ROLE_ORDER.indexOf(a), ib = ROLE_ORDER.indexOf(b);
+                return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+            });
+            list.innerHTML = roles.map(r => {
+                const items = groups[r];
+                const usable = items.filter(p => !isExcluded(p) && isSchedActive(p, PS[p.id] || p.statuses[0]));
+                const label = ROLE_LABEL[r] || r;
+                let badge, warn = '';
+                if (usable.length === 0) { badge = `<span class="grp-count none">没有在用</span>`; }
+                else if (usable.length === 1 && r !== 'precleanse') {
+                    badge = `<span class="grp-count sole">只有 1 件</span>`;
+                    warn = `<div class="grp-warn">🛒 用完「${esc(usable[0].name)}」就没有同类可换了 —— 记得提前补货</div>`;
+                } else { badge = `<span class="grp-count">${usable.length} 件在用</span>`; }
+                return `<div class="prod-group"><div class="grp-hd">${esc(label)}${badge}</div>${warn}${items.map(cardOf).join('')}</div>`;
             }).join('') + `<button class="add-prod-btn" onclick="showProdModal()">+ 添加产品</button>`;
             if (PD.some(p=>p.hidden)) list.innerHTML += `<button class="prod-act" onclick="restoreBuiltins()" style="margin-top:8px">恢复已隐藏的内置产品</button>`;
             const pend = PD.filter(d => !d.hidden && PS[d.id] === 'pending');
@@ -3743,18 +3770,12 @@
                 }
                 unknown.push(p);
             });
-            let html = urgent.slice(0, 2).map(x =>
+            // 产品页已按大类清楚标出「只有 1 件」，这里只保留真正有时效的「快到期」，不再刷屏
+            let html = urgent.filter(x => x.why === '快到期').slice(0, 2).map(x =>
                 `<div class="alert warn" style="margin-bottom:.75rem"><div class="at">🛒 ${esc(ROLE_LABEL[x.p.role] || x.p.role)}只有这一件（${x.why}）</div>
                  用完「${esc(x.p.name)}」就没有同类可换了 —— 建议现在就把下一支加进购物清单。
                  <button class="prod-act" style="margin-top:6px" onclick="dismissSole('${x.p.id}')">知道了，不再提醒</button></div>`
             ).join('');
-            // 没填开封日期的:合并成一句轻提示,不逐条刷屏
-            if (!PROFILE.soleSummaryDismissed && unknown.length) {
-                html += `<div class="assess-rec info" style="margin-bottom:.75rem">🛒 <b>这些类别各只有一件，用完没有同类替补：</b><br>
-                 ${unknown.map(p => esc(ROLE_LABEL[p.role] || p.role) + '（' + esc(p.name) + '）').join('<br>')}
-                 <br><span style="color:var(--tx3)">这些都是排进了你现有计划、确实在用的。之后新加的产品一开始用，我会单独提醒。</span>
-                 <button class="prod-act" style="margin-top:6px" onclick="PROFILE.soleSummaryDismissed=true;saveProfile();renderSoleAlerts();">不用提醒</button></div>`;
-            }
             box.innerHTML = html;
         }
         function dismissSole(id) {
