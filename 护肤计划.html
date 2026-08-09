@@ -2050,7 +2050,6 @@
       /* 极简模式:不打卡、不记录、只告诉今晚做什么。用不到的一律不显示。 */
       body.minimal #tn-meta-row,
       body.minimal #tn-logged-badge,
-      body.minimal #ql-block,
       body.minimal #sync-note-area,
       body.minimal .tn-skip,
       body.minimal #tab-jrnl,
@@ -2784,7 +2783,8 @@
             const zs = zonesAvoiding(type);
             return zs.length ? '　⚠️ 避开：' + zs.join('、') : '';
         }
-        function isExcluded(p) { return !!p && (PROFILE.excluded || []).includes(p.id); }
+        let _simExclude = null;   // 仅用于"少了它计划还跑得动吗"的模拟,不落盘
+        function isExcluded(p) { return !!p && ((PROFILE.excluded || []).includes(p.id) || _simExclude === p.id); }
         // 洁面强度:有多支洁面时按当晚情况自动选。产品可显式标 cleanseStrength，否则按名称/分类推断。
         function cleanseStrength(p) {
             if (p && p.cleanseStrength) return p.cleanseStrength;
@@ -3184,6 +3184,11 @@
                 const key = g ? g.key : (p.role || 'other');
                 (bucket[key] = bucket[key] || { name: g ? g.name : (ROLE_LABEL[p.role] || p.role || '其它'), items: [] }).items.push(p);
             });
+            const criticalMap = {};
+            planCriticalProducts().forEach(x => {
+                const g = groupOfRole(x.p.role); const kk = g ? g.key : x.p.role;
+                if (!criticalMap[kk]) criticalMap[kk] = x;
+            });
             const orderKeys = ROLE_GROUPS.map(g => g.key);
             const keys = Object.keys(bucket).sort((a, b) => {
                 const ia = orderKeys.indexOf(a), ib = orderKeys.indexOf(b);
@@ -3195,16 +3200,11 @@
                 const usable = items.filter(p => !isExcluded(p) && isSchedActive(p, PS[p.id] || p.statuses[0]));
                 let badge, warn = '';
                 if (owned.length === 0) { badge = `<span class="grp-count none">家里没有</span>`; }
-                else if (owned.length === 1 && k !== 'precleanse') {
-                    if (usable.length) {
-                        badge = `<span class="grp-count sole">只有 1 件</span>`;
-                        warn = `<div class="grp-warn">🛒 用完「${esc(owned[0].name)}」这一类就没有可换的了 —— 记得提前补货</div>`;
-                    } else {
-                        badge = `<span class="grp-count none">1 件 · 暂停中</span>`;
-                    }
-                } else {
-                    badge = `<span class="grp-count">${owned.length} 件${usable.length !== owned.length ? `（${usable.length} 件在用）` : '在用'}</span>`;
-                }
+                else if (usable.length === 0) { badge = `<span class="grp-count none">${owned.length} 件 · 暂停中</span>`; }
+                else { badge = `<span class="grp-count">${owned.length} 件${usable.length !== owned.length ? `（${usable.length} 件在用）` : '在用'}</span>`; }
+                // 警告不按件数,按「少了它流程会缺一环」
+                const crit = criticalMap[k];
+                if (crit) warn = `<div class="grp-warn">🛒 用完「${esc(crit.p.name)}」就没有能顶替的了，${esc(crit.lost.map(r => ROLE_STEP_LABEL[r] || r).join('、'))}这一步会空掉 —— 记得提前补货</div>`;
                 return `<div class="prod-group"><div class="grp-hd">${esc(name)}${badge}</div>${warn}${items.map(cardOf).join('')}</div>`;
             }).join('') + `<button class="add-prod-btn"  onclick="showProdModal()">+ 添加产品</button>`;
             if (PD.some(p=>p.hidden)) list.innerHTML += `<button class="prod-act" onclick="restoreBuiltins()" style="margin-top:8px">恢复已隐藏的内置产品</button>`;
@@ -3804,6 +3804,50 @@
                 return true;
             });
         }
+        // ══ 计划断点分析:少了这件产品,整套流程还跑得动吗 ══════════════════
+        // 真实反馈(Cici):「不是给产品分类管理,而是——如果失去这个产品、用剩下的东西整个护肤计划就没法进行,提前告诉我」。
+        // 做法:逐件模拟移除,重算各种夜晚的步骤,看是否有某个环节彻底消失。
+        function _nightScenarios() {
+            const t = today();
+            const slot = (function () { try { return computePlanRolling().find(d => d.date === t) || { items: [] }; } catch (e) { return { items: [] }; } })();
+            const acidSlot = { items: [{ type: 'acid', id: (PD.find(p => p.role === 'acid') || {}).id }] };
+            const cases = [[true, false, slot], [false, false, slot], [false, false, acidSlot]];
+            if (PROFILE.shaving) cases.push([false, true, slot]);
+            return cases;
+        }
+        // 当前流程实际覆盖了哪些环节(用产品撑起来的步骤,按角色归类)
+        function coveredRoles() {
+            const byName = {}; PD.forEach(p => { byName[p.name] = p; });
+            const set = new Set();
+            _nightScenarios().forEach(([sh, sv, slot]) => {
+                try {
+                    buildNightSteps(sh, sv, slot).steps.forEach(s => {
+                        const p = byName[s.p];
+                        if (p && p.role) set.add(p.role);
+                    });
+                } catch (e) {}
+            });
+            return set;
+        }
+        const ROLE_STEP_LABEL = { cleanse:'洗脸', precleanse:'卸妆', acid:'去角质', mask:'面膜', soothe:'舒缓面膜',
+            retinol:'视黄醇', serum:'精华', oil:'面油', eye:'眼部护理', moist:'保湿', repair:'修护封层', spf:'防晒' };
+        // 返回:少了它就会让某个环节整个消失的产品
+        function planCriticalProducts() {
+            const base = coveredRoles();
+            const using = inUseIds();
+            const out = [];
+            PD.forEach(p => {
+                if (p.hidden || isExcluded(p) || !using.has(p.id)) return;
+                if (!isSchedActive(p, PS[p.id] || p.statuses[0])) return;
+                _simExclude = p.id;
+                let after;
+                try { invalidatePlanCache(); after = coveredRoles(); } finally { _simExclude = null; invalidatePlanCache(); }
+                const lost = [...base].filter(r => !after.has(r));
+                if (lost.length) out.push({ p, lost });
+            });
+            return out;
+        }
+
         // 开封天数(没填开封日期返回 null —— 不能当成"刚开始用",否则所有产品会同时报警)
         function openedDays(p) {
             const d = POPEN[p.id];
@@ -3814,35 +3858,18 @@
         function renderSoleAlerts() {
             const box = document.getElementById('sole-alert'); if (!box) return;
             const dismissed = PROFILE.soleDismissed || [];
-            const using = inUseIds();
-            const fs = touchFirstSeen([...using]);
-            // 只看「真的排进计划、真的在用」的那些；没在用的产品用不完，不需要提醒
-            const sole = soleRoleProducts().filter(p => !dismissed.includes(p.id) && using.has(p.id));
-            const urgent = [], unknown = [];
-            sole.forEach(p => {
-                const seen = fs[p.id];
-                const d = openedDays(p);           // 填了开封日期就优先用它
-                const limit = (p.paoMonths || 0) * 4.345;
-                if (d !== null) {
-                    const wk = Math.floor(d / 7);
-                    if (d <= 14) { urgent.push({ p, why: '刚开封' }); return; }
-                    if (limit && wk >= limit - paoLead(limit)) { urgent.push({ p, why: '快到期' }); return; }
-                    return;
-                }
-                // 没填开封日期：用「第一次进入计划」的自动记录
-                if (seen && seen !== 'legacy') {
-                    const days = Math.floor((new Date(today() + 'T12:00:00') - new Date(seen + 'T12:00:00')) / 86400000);
-                    if (days <= 14) { urgent.push({ p, why: '刚开始用' }); return; }
-                }
-                unknown.push(p);
-            });
-            // 产品页已按大类清楚标出「只有 1 件」，这里只保留真正有时效的「快到期」，不再刷屏
-            let html = urgent.filter(x => x.why === '快到期').slice(0, 2).map(x =>
-                `<div class="alert warn" style="margin-bottom:.75rem"><div class="at">🛒 ${esc(ROLE_LABEL[x.p.role] || x.p.role)}只有这一件（${x.why}）</div>
-                 用完「${esc(x.p.name)}」就没有同类可换了 —— 建议现在就把下一支加进购物清单。
-                 <button class="prod-act" style="margin-top:6px" onclick="dismissSole('${x.p.id}')">知道了，不再提醒</button></div>`
-            ).join('');
-            box.innerHTML = html;
+            const critical = planCriticalProducts().filter(x => !dismissed.includes(x.p.id));
+            box.innerHTML = critical.map(x => {
+                // 家里还有同组但被暂停的 → 那不算真断,提示可以启用它顶上
+                const backup = ownedOfGroup(x.p.role).filter(q => q.id !== x.p.id &&
+                    !isSchedActive(q, PS[q.id] || q.statuses[0]));
+                const tail = backup.length
+                    ? `不过你还有暂停中的「${esc(backup[0].name)}」，到时候启用它就能顶上。`
+                    : `建议提前补货。`;
+                return `<div class="alert warn" style="margin-bottom:.75rem"><div class="at">🛒 少了它，流程会缺一环</div>
+                 「${esc(x.p.name)}」用完就没有能顶替的了，${esc(x.lost.map(r => ROLE_STEP_LABEL[r] || r).join('、'))}这一步会直接空掉。${tail}
+                 <button class="prod-act" style="margin-top:6px" onclick="dismissSole('${x.p.id}')">知道了，不再提醒</button></div>`;
+            }).join('');
         }
         function dismissSole(id) {
             const list = (PROFILE.soleDismissed || []).slice();
