@@ -3664,6 +3664,39 @@
             return PD.filter(p => !p.hidden && !isExcluded(p) && p.role === role &&
                 isSchedActive(p, PS[p.id] || p.statuses[0]));
         }
+        // 「真的在用」= 出现在今晚步骤里，或被排班引擎排进了未来 15 天。
+        // 比只看状态准：状态是 active 但从来排不上的产品，不算在用。
+        function inUseIds() {
+            const set = new Set();
+            try {
+                // ① 常规护理品(base/daily):每晚/每天按角色使用 → 只要启用就算在用
+                PD.forEach(p => {
+                    if (p.hidden || isExcluded(p)) return;
+                    if (!isSchedActive(p, PS[p.id] || p.statuses[0])) return;
+                    const t = p.schedule && p.schedule.type;
+                    if (t === 'base' || t === 'daily') set.add(p.id);
+                });
+                // ② 活性类(酸/膜/视黄醇):必须真的被排班引擎排进未来 15 天才算在用
+                //    ——「状态是启用但从来排不上」的不该算,这正是用「是否排进计划」判断的意义
+                computePlanRolling().forEach(d => (d.items || []).forEach(it => { if (it.id) set.add(it.id); }));
+            } catch (e) {}
+            return set;
+        }
+        // 自动记录「这支产品第一次进入计划」的日期——不需要用户填开封日期。
+        // 首次初始化时把当前在用的全部记为 legacy（否则老产品会集体触发"刚开始用"）。
+        function touchFirstSeen(ids) {
+            const fs = PROFILE.firstSeen || {};
+            const init = !PROFILE.firstSeenInit;
+            let changed = false;
+            ids.forEach(id => {
+                if (fs[id]) return;
+                fs[id] = init ? 'legacy' : today();
+                changed = true;
+            });
+            if (init) { PROFILE.firstSeenInit = today(); changed = true; }
+            if (changed) { PROFILE.firstSeen = fs; saveProfile(); }
+            return fs;
+        }
         // 返回「该角色只有这一件」的在用产品
         function soleRoleProducts() {
             const seen = {};
@@ -3688,15 +3721,27 @@
         function renderSoleAlerts() {
             const box = document.getElementById('sole-alert'); if (!box) return;
             const dismissed = PROFILE.soleDismissed || [];
-            const sole = soleRoleProducts().filter(p => !dismissed.includes(p.id));
+            const using = inUseIds();
+            const fs = touchFirstSeen([...using]);
+            // 只看「真的排进计划、真的在用」的那些；没在用的产品用不完，不需要提醒
+            const sole = soleRoleProducts().filter(p => !dismissed.includes(p.id) && using.has(p.id));
             const urgent = [], unknown = [];
             sole.forEach(p => {
-                const d = openedDays(p);
-                if (d === null) { unknown.push(p); return; }
-                const limit = (p.paoMonths || 0) * 4.345;           // PAO 周数
-                const wk = Math.floor(d / 7);
-                if (d <= 14) urgent.push({ p, why: '刚开封' });
-                else if (limit && wk >= limit - paoLead(limit)) urgent.push({ p, why: '快到期' });
+                const seen = fs[p.id];
+                const d = openedDays(p);           // 填了开封日期就优先用它
+                const limit = (p.paoMonths || 0) * 4.345;
+                if (d !== null) {
+                    const wk = Math.floor(d / 7);
+                    if (d <= 14) { urgent.push({ p, why: '刚开封' }); return; }
+                    if (limit && wk >= limit - paoLead(limit)) { urgent.push({ p, why: '快到期' }); return; }
+                    return;
+                }
+                // 没填开封日期：用「第一次进入计划」的自动记录
+                if (seen && seen !== 'legacy') {
+                    const days = Math.floor((new Date(today() + 'T12:00:00') - new Date(seen + 'T12:00:00')) / 86400000);
+                    if (days <= 14) { urgent.push({ p, why: '刚开始用' }); return; }
+                }
+                unknown.push(p);
             });
             let html = urgent.slice(0, 2).map(x =>
                 `<div class="alert warn" style="margin-bottom:.75rem"><div class="at">🛒 ${esc(ROLE_LABEL[x.p.role] || x.p.role)}只有这一件（${x.why}）</div>
@@ -3707,7 +3752,7 @@
             if (!PROFILE.soleSummaryDismissed && unknown.length) {
                 html += `<div class="assess-rec info" style="margin-bottom:.75rem">🛒 <b>这些类别各只有一件，用完没有同类替补：</b><br>
                  ${unknown.map(p => esc(ROLE_LABEL[p.role] || p.role) + '（' + esc(p.name) + '）').join('<br>')}
-                 <br><span style="color:var(--tx3)">填上开封日期，我就能在快用完前提前提醒你补货。</span>
+                 <br><span style="color:var(--tx3)">这些都是排进了你现有计划、确实在用的。之后新加的产品一开始用，我会单独提醒。</span>
                  <button class="prod-act" style="margin-top:6px" onclick="PROFILE.soleSummaryDismissed=true;saveProfile();renderSoleAlerts();">不用提醒</button></div>`;
             }
             box.innerHTML = html;
