@@ -3168,7 +3168,7 @@
                 if (usageCountHtml) schedTags += `<div class="sched-info" style="margin-top:2px">${usageCountHtml}</div>`;
                 return `<div class="pc"><div class="pch" onclick="togglePCB('${def.id}')">
       <div class="pci">${def.icon}</div>
-      <div class="pci2"><div class="pcn"${isExcluded(def)?' style="opacity:.45;text-decoration:line-through"':''}>${esc(def.name)}</div><div class="pcc">${isExcluded(def)?'🚫 我不用 · ':''}${(!def.hidden && !isExcluded(def) && def.role && def.role!=='precleanse' && isSchedActive(def, PS[def.id]||def.statuses[0]) && ownedOfRole(def.role).length===1)?'🔸唯一一件 · ':''}${esc(visCat(def))}${wo!==null?` · 开封${wo}周`:''}</div><div class="sched-info" style="margin-top:4px">${paoTag}</div>${schedTags}</div>
+      <div class="pci2"><div class="pcn"${isExcluded(def)?' style="opacity:.45;text-decoration:line-through"':''}>${esc(def.name)}</div><div class="pcc">${isExcluded(def)?'🚫 我不用 · ':''}${(!def.hidden && !isExcluded(def) && def.role && def.role!=='precleanse' && isSchedActive(def, PS[def.id]||def.statuses[0]) && ownedOfGroup(def.role).length===1)?'🔸唯一一件 · ':''}${esc(visCat(def))}${wo!==null?` · 开封${wo}周`:''}</div><div class="sched-info" style="margin-top:4px">${paoTag}</div>${schedTags}</div>
       ${can?`<button class="pcp ${def.pillCls[s]}" onclick="cyclePS('${def.id}',event)">${def.labels[s]}</button>`:`<span class="pcp ${def.pillCls[s]}">${def.labels[s]}</span>`}
     </div><div class="pcb" id="pcb-${def.id}">
       <div style="margin-top:0">${notes}</div>
@@ -3177,33 +3177,36 @@
       ${can?`<div class="pch2">点击状态循环切换 → ${def.statuses.map(s2=>def.labels[s2]).join(' → ')}</div>`:''}
     </div></div>`;
             };
-            // 按大类分组 + 每类给出「在用几件」，只剩一件的直接在分组标题上提醒
-            const groups = {};
-            visiblePD.forEach(p => { const r = p.role || 'other'; (groups[r] = groups[r] || []).push(p); });
-            const roles = Object.keys(groups).sort((a, b) => {
-                const ia = ROLE_ORDER.indexOf(a), ib = ROLE_ORDER.indexOf(b);
+            // 按「可替代角色组」分组:能互相顶替的合并成一类(如 保湿/精华/舒缓)
+            const bucket = {};
+            visiblePD.forEach(p => {
+                const g = groupOfRole(p.role);
+                const key = g ? g.key : (p.role || 'other');
+                (bucket[key] = bucket[key] || { name: g ? g.name : (ROLE_LABEL[p.role] || p.role || '其它'), items: [] }).items.push(p);
+            });
+            const orderKeys = ROLE_GROUPS.map(g => g.key);
+            const keys = Object.keys(bucket).sort((a, b) => {
+                const ia = orderKeys.indexOf(a), ib = orderKeys.indexOf(b);
                 return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
             });
-            list.innerHTML = roles.map(r => {
-                const items = groups[r];
+            list.innerHTML = keys.map(k => {
+                const { name, items } = bucket[k];
                 const owned  = items.filter(p => !isExcluded(p) && (PS[p.id] || p.statuses[0]) !== 'pending');
                 const usable = items.filter(p => !isExcluded(p) && isSchedActive(p, PS[p.id] || p.statuses[0]));
-                const label = ROLE_LABEL[r] || r;
                 let badge, warn = '';
                 if (owned.length === 0) { badge = `<span class="grp-count none">家里没有</span>`; }
-                else if (owned.length === 1 && r !== 'precleanse') {
+                else if (owned.length === 1 && k !== 'precleanse') {
                     if (usable.length) {
                         badge = `<span class="grp-count sole">只有 1 件</span>`;
-                        warn = `<div class="grp-warn">🛒 用完「${esc(owned[0].name)}」就没有同类可换了 —— 记得提前补货</div>`;
+                        warn = `<div class="grp-warn">🛒 用完「${esc(owned[0].name)}」这一类就没有可换的了 —— 记得提前补货</div>`;
                     } else {
-                        badge = `<span class="grp-count none">1 件 · 暂停中</span>`;   // 没在用就别催买
+                        badge = `<span class="grp-count none">1 件 · 暂停中</span>`;
                     }
                 } else {
-                    // 暂停的也算家里有,但要写清楚有几件在用
                     badge = `<span class="grp-count">${owned.length} 件${usable.length !== owned.length ? `（${usable.length} 件在用）` : '在用'}</span>`;
                 }
-                return `<div class="prod-group"><div class="grp-hd">${esc(label)}${badge}</div>${warn}${items.map(cardOf).join('')}</div>`;
-            }).join('') + `<button class="add-prod-btn" onclick="showProdModal()">+ 添加产品</button>`;
+                return `<div class="prod-group"><div class="grp-hd">${esc(name)}${badge}</div>${warn}${items.map(cardOf).join('')}</div>`;
+            }).join('') + `<button class="add-prod-btn"  onclick="showProdModal()">+ 添加产品</button>`;
             if (PD.some(p=>p.hidden)) list.innerHTML += `<button class="prod-act" onclick="restoreBuiltins()" style="margin-top:8px">恢复已隐藏的内置产品</button>`;
             const pend = PD.filter(d => !d.hidden && PS[d.id] === 'pending');
             const sp = document.getElementById('shop-pending');
@@ -3720,6 +3723,28 @@
         // ══ 「唯一一件」提醒:某个角色只剩这一件、用完没有同类替补 → 在刚开始用的时候就提醒补货 ══
         const ROLE_LABEL = { cleanse:'洁面', precleanse:'卸妆', acid:'去角质酸类', mask:'面膜/泥膜', retinol:'视黄醇',
                              serum:'精华', oil:'面油', eye:'眼部', moist:'保湿', repair:'修护', spf:'防晒', soothe:'舒缓面膜' };
+        // ══ 可替代角色组:能互相顶替的算同一类 ══════════════════════════
+        // 真实反馈:「保湿/舒缓/精华在我这儿是一类,保湿用完可能拿精华顶」——
+        // 所以判断"有没有同类替补"不能只看严格相同的 role。产品页也按这个分组显示。
+        const ROLE_GROUPS = [
+            { key: 'precleanse', name: '卸妆',            roles: ['precleanse'] },
+            { key: 'cleanse',    name: '洁面',            roles: ['cleanse'] },
+            { key: 'exfoliate',  name: '去角质（酸类 / 面膜）', roles: ['acid', 'mask'] },
+            { key: 'retinol',    name: '视黄醇',          roles: ['retinol'] },
+            { key: 'hydrate',    name: '保湿 / 精华 / 舒缓', roles: ['moist', 'serum', 'soothe'] },
+            { key: 'oil',        name: '面油',            roles: ['oil'] },
+            { key: 'eye',        name: '眼部',            roles: ['eye'] },
+            { key: 'repair',     name: '修护',            roles: ['repair'] },
+            { key: 'spf',        name: '防晒',            roles: ['spf'] }
+        ];
+        function groupOfRole(role) { return ROLE_GROUPS.find(g => g.roles.includes(role)) || null; }
+        // 同组内「家里有的」——判断有没有替补要用这个
+        function ownedOfGroup(role) {
+            const g = groupOfRole(role);
+            const roles = g ? g.roles : [role];
+            return PD.filter(p => !p.hidden && !isExcluded(p) && roles.includes(p.role) &&
+                (PS[p.id] || p.statuses[0]) !== 'pending');
+        }
         // 「在用」:当前排进流程的(暂停的不算)
         function usableOfRole(role) {
             return PD.filter(p => !p.hidden && !isExcluded(p) && p.role === role &&
@@ -3771,10 +3796,11 @@
                 if (p.hidden || isExcluded(p)) return false;
                 if (!isSchedActive(p, PS[p.id] || p.statuses[0])) return false;
                 if (!p.role || p.role === 'precleanse') return false;
-                if (seen[p.role]) return false;
-                const list = ownedOfRole(p.role);   // 暂停的也算替补
+                const g = groupOfRole(p.role), key = g ? g.key : p.role;
+                if (seen[key]) return false;
+                const list = ownedOfGroup(p.role);   // 暂停的算替补;能互相顶替的算同一类
                 if (list.length !== 1) return false;
-                seen[p.role] = true;
+                seen[key] = true;
                 return true;
             });
         }
