@@ -3678,22 +3678,39 @@
                 return true;
             });
         }
-        // 「刚开始用」= 还没填开封日期,或开封在 30 天以内
-        function recentlyStarted(p) {
+        // 开封天数(没填开封日期返回 null —— 不能当成"刚开始用",否则所有产品会同时报警)
+        function openedDays(p) {
             const d = POPEN[p.id];
-            if (!d) return true;
-            const days = Math.floor((new Date(today() + 'T12:00:00') - new Date(d + 'T12:00:00')) / 86400000);
-            return days >= 0 && days <= 30;
+            if (!d) return null;
+            return Math.floor((new Date(today() + 'T12:00:00') - new Date(d + 'T12:00:00')) / 86400000);
         }
+        // 只在"确实刚开封"(≤14 天)或"快到期"时才单独提醒；没填开封日期的合并成一行,不刷屏
         function renderSoleAlerts() {
             const box = document.getElementById('sole-alert'); if (!box) return;
             const dismissed = PROFILE.soleDismissed || [];
-            const list = soleRoleProducts().filter(p => recentlyStarted(p) && !dismissed.includes(p.id));
-            box.innerHTML = list.map(p =>
-                `<div class="alert warn" style="margin-bottom:.75rem"><div class="at">🛒 ${esc(ROLE_LABEL[p.role] || p.role)}只有这一件</div>
-                 用完「${esc(p.name)}」就没有同类可换了 —— 趁现在把下一支加进购物清单，别等断档。
-                 <button class="prod-act" style="margin-top:6px" onclick="dismissSole('${p.id}')">知道了，不再提醒</button></div>`
+            const sole = soleRoleProducts().filter(p => !dismissed.includes(p.id));
+            const urgent = [], unknown = [];
+            sole.forEach(p => {
+                const d = openedDays(p);
+                if (d === null) { unknown.push(p); return; }
+                const limit = (p.paoMonths || 0) * 4.345;           // PAO 周数
+                const wk = Math.floor(d / 7);
+                if (d <= 14) urgent.push({ p, why: '刚开封' });
+                else if (limit && wk >= limit - paoLead(limit)) urgent.push({ p, why: '快到期' });
+            });
+            let html = urgent.slice(0, 2).map(x =>
+                `<div class="alert warn" style="margin-bottom:.75rem"><div class="at">🛒 ${esc(ROLE_LABEL[x.p.role] || x.p.role)}只有这一件（${x.why}）</div>
+                 用完「${esc(x.p.name)}」就没有同类可换了 —— 建议现在就把下一支加进购物清单。
+                 <button class="prod-act" style="margin-top:6px" onclick="dismissSole('${x.p.id}')">知道了，不再提醒</button></div>`
             ).join('');
+            // 没填开封日期的:合并成一句轻提示,不逐条刷屏
+            if (!PROFILE.soleSummaryDismissed && unknown.length) {
+                html += `<div class="assess-rec info" style="margin-bottom:.75rem">🛒 <b>这些类别各只有一件，用完没有同类替补：</b><br>
+                 ${unknown.map(p => esc(ROLE_LABEL[p.role] || p.role) + '（' + esc(p.name) + '）').join('<br>')}
+                 <br><span style="color:var(--tx3)">填上开封日期，我就能在快用完前提前提醒你补货。</span>
+                 <button class="prod-act" style="margin-top:6px" onclick="PROFILE.soleSummaryDismissed=true;saveProfile();renderSoleAlerts();">不用提醒</button></div>`;
+            }
+            box.innerHTML = html;
         }
         function dismissSole(id) {
             const list = (PROFILE.soleDismissed || []).slice();
