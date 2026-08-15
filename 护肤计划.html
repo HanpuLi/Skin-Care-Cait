@@ -2575,7 +2575,8 @@
             amsteps: 'sk_amsteps1',
             prodDefs: 'sk_proddefs1',
             preset: 'sk_preset1', // new for feature 6
-            profile: 'sk_profile1' // 每人档案：刮胡/HRT/肤质
+            profile: 'sk_profile1', // 每人档案：刮胡/HRT/肤质
+            planday: 'sk_planday1' // 最近一次算出的「今天该做什么活性」——极简模式跨天后据此推定已执行
         };
         // One-time migration from old keys
         (function migrate() {
@@ -4268,11 +4269,36 @@
             renderWk();
         }
 
+        // 极简模式（零记录）的引擎失忆症补丁：昨天(或最后一次打开那天)计划里排了酸/泥膜/视黄醇、
+        // 而那天没有任何真实记录 → 按「已按计划执行」推定写入日志。极简用户看着计划做但从不打卡,
+        // 不推定的话排班引擎永远以为"从没用过酸",天天把酸排在今晚。
+        // 只在 minimalMode 下生效;完整模式(会打卡)的空白日按"没做"处理,不推定。
+        function absorbPrescribedHistory() {
+            try {
+                if (!PROFILE.minimalMode) return false;
+                const pd = lg(K.planday);
+                if (!pd || !pd.date || pd.date >= today() || !(pd.items || []).length) return false;
+                const e = lg(K.jrnl) || [];
+                let entry = e.find(x => x.date === pd.date);
+                if (entry && (entry.products || []).length) return false;   // 那天已有真实产品记录，不覆盖
+                if (!entry) { entry = { date: pd.date, status: [], products: [], note: '', phase: '' }; e.push(entry); }
+                entry.products = pd.items.map(it => it.tag).filter(Boolean);
+                entry.auto = true;
+                if (!entry.note) entry.note = '（按当日计划自动推定）';
+                e.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+                ls(K.jrnl, e.slice(0, 365));
+                return true;
+            } catch (err) { return false; }
+        }
+
         // computePlanRolling: builds plan for a 15-day rolling window.
         // Cached per render cycle to avoid recomputing 3× (renderTn + renderWk + showDayDetail).
         let _planCache = null, _planCacheKey = '';
         function invalidatePlanCache() { _planCache = null; _planCacheKey = ''; }
         function computePlanRolling() {
+            // 必须在读日志/建缓存键之前吸收历史处方(见 absorbPrescribedHistory 注释):
+            // 它一旦写入,下方的 jrStr/种子/额度统计都会自动把"推定已刷酸"算进去。
+            absorbPrescribedHistory();
             // Cache key: today + wk data content hash + jrnl length + product states
             // 缓存 key 必须覆盖所有会改变排班结果的输入。
             // 旧 key 不含 PD，日志只看条数 —— 于是改完产品的"每周上限"点保存，排班纹丝不动（看起来像没保存）；
@@ -4497,6 +4523,22 @@
                 p.retinol = p.items.some(i => i.type === 'retinol');
                 p.avene = p.items.some(i => i.type === 'support');
             });
+
+            // 把「今天计划给了哪些活性」持久化(sk_planday1)。极简模式(零记录)的用户跨天后由
+            // absorbPrescribedHistory() 把它推定为"已执行"写进日志——否则引擎每天失忆:
+            // exfoliantCountInLastNDays 永远是 0、lastAcidDate 永远是 null,"每周1次"的额度每天重置,
+            // 酸永远排在"今晚"(Cici 连刷三天酸的事故根因)。
+            try {
+                const tSlot = days.find(d => d.isToday);
+                if (tSlot) {
+                    const acts = tSlot.items
+                        .filter(it => ['acid', 'mask', 'retinol'].includes(it.type))
+                        .map(it => { const p = PD.find(x => x.id === it.id); return { type: it.type, tag: p ? (p.journalTag || p.name) : it.label }; });
+                    const prev = lg(K.planday);
+                    if (!prev || prev.date !== t || JSON.stringify(prev.items || []) !== JSON.stringify(acts))
+                        ls(K.planday, { date: t, items: acts });
+                }
+            } catch (e) {}
 
             _planCache = days; _planCacheKey = ckey;
             return days;
@@ -5359,13 +5401,27 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
             applyDateMax();
             renderAll(); renderJrnl(); renderStats(); updateCd();
         }
-        document.addEventListener('visibilitychange', () => { if (!document.hidden) checkDayRollover(); });
+        // 切后台/关页面时立即冲刷待推送的改动：手机 PWA 一进后台 setTimeout 就冻结，
+        // 2 秒防抖里攒着的"最后几下勾选"永远推不出去——这是"每天的记录都会消失"的另一半根因。
+        // (即使这里的异步写没来得及完成,重开时 setupRealtimeSync 的 <= 守卫也会把本机较新数据补推,双保险)
+        function flushPendingPush() {
+            if (!_db || !_user) return;
+            if (_pushTimer || _pushDirty) { clearTimeout(_pushTimer); _pushTimer = null; pushToCloud(); }
+        }
+        document.addEventListener('visibilitychange', () => { if (document.hidden) flushPendingPush(); else checkDayRollover(); });
+        window.addEventListener('pagehide', flushPendingPush);
         window.addEventListener('focus', checkDayRollover);
         setInterval(checkDayRollover, 60000);
 
         // ══ Firebase 云同步 ═══════════════════════════════════
-        const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_amsteps1','sk_proddefs1','sk_profile1','sk_preset1'];
+        const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_amsteps1','sk_proddefs1','sk_profile1','sk_preset1','sk_planday1'];
         let _db = null, _user = null, _pushTimer = null, _pushing = false, _pushDirty = false;
+        // 递归按键名排序的序列化——只用于云/本地数据的等价比较
+        function _stableStr(v) {
+            if (v === null || typeof v !== 'object') return JSON.stringify(v);
+            if (Array.isArray(v)) return '[' + v.map(_stableStr).join(',') + ']';
+            return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + _stableStr(v[k])).join(',') + '}';
+        }
 
         function initFirebase() {
             const cfg = typeof FIREBASE_CONFIG !== 'undefined' && FIREBASE_CONFIG;
@@ -5417,6 +5473,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
         function clearLocalUserData() {
             CLOUD_KEYS.forEach(k => localStorage.removeItem(k));
             localStorage.removeItem(K.preset);
+            localStorage.removeItem('sk_lastpush');   // 推送时间戳属于上一个账号，留着会让新账号的云端被误判"不比本机新"
             clearAllPhotos();
             PROFILE = { shaving: false, hrt: false, skinType: '', name: '', onboarded: false, phase: 'repair', phaseStart: '' };
             try { localStorage.setItem(K.profile, JSON.stringify(PROFILE)); localStorage.setItem('__profile_owner_seeded__', '1'); } catch {}
@@ -5485,9 +5542,30 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
                 // 不能让旧云覆盖(这正是"改动没推成→下次打开被旧云盖掉"的丢数据主因),反过来把本地推上去。
                 const cloudAt = Number(cloudDoc._updatedAt || 0);
                 const lastPush = Number(localStorage.getItem('sk_lastpush') || 0);
-                if (lastPush && cloudAt && cloudAt < lastPush) {
-                    showSyncStatus('↑ 本机数据较新，正在上传…', 'syncing');
-                    clearTimeout(_pushTimer); _pushTimer = setTimeout(pushToCloud, 200);
+                // 注意是 <= 不是 <（丢记录事故根因）：手机 PWA 上"最后几下勾选"常因 2 秒防抖没推完就被切后台,
+                // 下次冷启动时 cloudAt 恰好等于上次成功推送的时间戳,旧版 < 判断放行,旧云把昨晚的记录整个抹掉。
+                // 云端不比本机上次推送新 ⇒ 本机任何差异都只可能是还没推上去的新改动,应该上传,绝不能下载覆盖。
+                if (lastPush && cloudAt && cloudAt <= lastPush) {
+                    let dirty = false, pulled = false;
+                    CLOUD_KEYS.forEach(k => {
+                        const localV = localStorage.getItem(k);
+                        if (localV === null) {
+                            // 本机缺、云端有 → 补拉。没有这条,换账号/自己刚推送过之后,
+                            // 时间戳相等会拦住整个应用云端的分支,新账号的日志/产品永远载入不了。
+                            if (k in cloudDoc) { try { localStorage.setItem(k, JSON.stringify(cloudDoc[k])); pulled = true; } catch {} }
+                            return;
+                        }
+                        if (!(k in cloudDoc)) { dirty = true; return; }   // 本机有、云端缺 → 该上传
+                        let lv; try { lv = JSON.parse(localV); } catch { lv = localV; }
+                        // 键序无关比较：Firestore 回来的 map 键序和本地 JSON 不同，比原串会永远"脏"→无限互推
+                        if (_stableStr(lv) !== _stableStr(cloudDoc[k])) dirty = true;
+                    });
+                    if (pulled) { if (_user) autoMatchProfile(_user.uid); renderAll(); }
+                    if (dirty) {
+                        showSyncStatus('↑ 本机数据较新，正在上传…', 'syncing');
+                        clearTimeout(_pushTimer); _pushTimer = setTimeout(pushToCloud, 200);
+                    } else if (pulled) showSyncStatus('☁ 已从云端更新');
+                    else if (isInit) showSyncStatus('✓ 云端已连接');
                     return;
                 }
                 let changed = false;
@@ -5534,6 +5612,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
 
         async function pushToCloud() {
             if (!_db || !_user) return;
+            _pushTimer = null;   // 计时器已触发/被冲刷,清掉句柄,否则 flushPendingPush 每次切后台都误判有待推改动
             if (_pushing) { _pushDirty = true; return; }   // 别丢掉推送中到来的改动
             _pushing = true; _pushDirty = false;
             const data = {};
