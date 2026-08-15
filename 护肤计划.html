@@ -2048,11 +2048,10 @@
       body.hide-shave .feat-shave{display:none!important}
       body.hide-hrt .feat-hrt{display:none!important}
       /* 极简模式:不打卡、不记录、只告诉今晚做什么。用不到的一律不显示。 */
-      body.minimal #tn-meta-row,
-      body.minimal #tn-logged-badge,
+      /* 2026-08-15 起极简模式=「精简界面 + 完整记录」：打卡/计数/记录提醒/日志开关都保留,
+         只藏进阶内容(评估卡/跳过清单/刮胡·HRT 设置)。日志 tab 交给「显示日志页」开关控制 */
       body.minimal #sync-note-area,
       body.minimal .tn-skip,
-      body.minimal #tab-jrnl,
       body.minimal .set-row.adv,
       body.minimal #assess-card{display:none!important}
       body.minimal .guide-adv{display:none!important}
@@ -2063,8 +2062,6 @@
       body.minimal #settings-block.open > *{display:revert}
       body.minimal #settings-block .sec-title{cursor:pointer;margin:0;font-size:12px;color:var(--tx3);font-weight:500}
       body.minimal #settings-block .sec-title::after{content:'　▾'}
-      body.minimal .tn-step{cursor:default}
-      body.minimal .tn-step .tn-n{opacity:.55}
       .set-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px}
       .tpl-btn{text-align:left;padding:10px 12px;border:1px solid rgba(128,128,128,.25);border-radius:10px;background:var(--sur2);cursor:pointer;width:100%;font-family:inherit}
       .tpl-n{font-size:13px;font-weight:600;color:var(--tx)}
@@ -2182,12 +2179,12 @@
            <div class="section" id="settings-block" style="margin-bottom:1.25rem">
                 <div class="sec-title" onclick="if(PROFILE.minimalMode)this.parentElement.classList.toggle('open')">个人设置</div>
                 <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
-                    <label class="set-row"><span>极简模式 · 只看今晚做什么，不打卡不记录</span><input type="checkbox" id="set-minimal" onchange="onProfileEdit()"></label>
+                    <label class="set-row"><span>极简模式 · 精简界面（打卡与记录保留）</span><input type="checkbox" id="set-minimal" onchange="onProfileEdit()"></label>
                     <label class="set-row"><span>肤质副标题</span><input id="set-skintype" class="hf" style="max-width:190px" oninput="onProfileEdit()" placeholder="如：混油皮 · 屏障修护"></label>
                     <label class="set-row adv"><span>刮胡 · 排班与步骤含刮胡</span><input type="checkbox" id="set-shave" onchange="onProfileEdit()"></label>
                     <label class="set-row adv"><span>HRT · 显示激素相关内容</span><input type="checkbox" id="set-hrt" onchange="onProfileEdit()"></label>
                     <label class="set-row"><span>需要卸妆步骤</span><input type="checkbox" id="set-premakeup" onchange="onProfileEdit()"></label>
-                    <label class="set-row adv"><span>显示「日志」页</span><input type="checkbox" id="set-showjrnl" onchange="onProfileEdit()"></label>
+                    <label class="set-row"><span>显示「日志」页</span><input type="checkbox" id="set-showjrnl" onchange="onProfileEdit()"></label>
                     <label class="set-row"><span>刷酸时机</span><select id="set-acidtiming" class="hf" style="max-width:190px" onchange="onProfileEdit()"><option value="">自动（易泛红则避开洗澡夜）</option><option value="neutral">无所谓</option><option value="avoid">避开刚洗完热水澡</option><option value="prefer">优先安排在洗澡夜</option></select></label>
                     <label class="set-row"><span>修护霜用法</span><select id="set-repairuse" class="hf" style="max-width:190px" onchange="onProfileEdit()"><option value="">自动（按屏障状态）</option><option value="full">全脸薄涂</option><option value="spot">仅点涂</option></select></label>
                 </div>
@@ -3681,7 +3678,7 @@
         }
 
         function toggleStep(el) {
-            if (PROFILE.minimalMode) return;   // 极简模式:不打卡、不勾选
+            // 2026-08-15:极简模式也开放打卡(Cici 需要记录)——记录是排班引擎的记忆来源,不能闸
             const prodName = el.dataset.prod;
             const panel = el.closest('#am-plan') ? 'am' : 'tn';
             const done = loadDoneSteps(panel);
@@ -4269,10 +4266,11 @@
             renderWk();
         }
 
-        // 极简模式（零记录）的引擎失忆症补丁：昨天(或最后一次打开那天)计划里排了酸/泥膜/视黄醇、
-        // 而那天没有任何真实记录 → 按「已按计划执行」推定写入日志。极简用户看着计划做但从不打卡,
-        // 不推定的话排班引擎永远以为"从没用过酸",天天把酸排在今晚。
-        // 只在 minimalMode 下生效;完整模式(会打卡)的空白日按"没做"处理,不推定。
+        // 极简模式的引擎失忆症兜底：昨天(或最后一次打开那天)计划里排了酸/泥膜/视黄醇、
+        // 而那天没有任何产品记录 → 按「已按计划执行」推定写入日志(auto:true)。
+        // 2026-08-15 起极简模式也能打卡了,打了卡的日子以真实记录为准,这里只兜底完全空白的日子——
+        // 宁可把下一次酸排远一点,也不能像事故里那样每天失忆、天天排酸。
+        // 完整模式(Cait)的空白日仍按"没做"处理,不推定。
         function absorbPrescribedHistory() {
             try {
                 if (!PROFILE.minimalMode) return false;
@@ -4320,20 +4318,26 @@
             const maskTags   = PD.filter(p => !p.hidden && p.schedule && p.schedule.type === 'mask').map(p => p.journalTag || p.name);
 
             days.forEach(day => {
-                if (day.isPast) {
+                // 今天也要回填：今晚勾掉酸类步骤会写进日志,若不回填,重算时今天的酸槽被间隔规则跳过,
+                // 刚勾的步骤就从「今晚」列表凭空消失(只剩 meta 行的"今天已用酸")。回填后它占住今天的槽位。
+                if (day.isPast || day.isToday) {
                     const entry = jrnl.find(e => e.date === day.date);
                     if (entry) {
                         const prods = entry.products || [];
                         prods.forEach(tag => {
-                            if (acidTags.includes(tag))    day.items.push({ id: null, type: 'acid', label: tag });
-                            if (retinolTags.includes(tag)) day.items.push({ id: null, type: 'retinol', label: tag });
-                            if (maskTags.includes(tag))    day.items.push({ id: null, type: 'mask', label: tag });
+                            // 尽量解析回真实产品 id：今天的槽位会进 buildNightSteps,
+                            // id 为 null 时步骤名会退化成 journalTag,勾选状态就对不上号
+                            const rp = PD.find(p => (p.journalTag || p.name) === tag);
+                            const pid = rp ? rp.id : null, plabel = rp ? rp.name : tag;
+                            if (acidTags.includes(tag))    day.items.push({ id: pid, type: 'acid', label: plabel });
+                            if (retinolTags.includes(tag)) day.items.push({ id: pid, type: 'retinol', label: plabel });
+                            if (maskTags.includes(tag))    day.items.push({ id: pid, type: 'mask', label: plabel });
                         });
                     }
                     // Derive acid/clay/retinol props for rendering
                     const ai = day.items.find(it => it.type === 'acid');
-                    day.acid = ai ? ai.label : null;
-                    day.acidLabel = ai ? ai.label : null;
+                    day.acid = ai ? ((PD.find(d => d.id === ai.id) || {}).journalTag || ai.label) : null;
+                    day.acidLabel = day.acid;
                     day.clay = day.items.some(it => it.type === 'mask');
                     day.retinol = day.items.some(it => it.type === 'retinol');
                     day.avene = false;
@@ -5436,7 +5440,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
         let _unsub = null;
         const UIDK = 'sk_uid';   // 记住上一个登录的 uid（不同步、仅本机用来判断"是否换了人"）
         // ── 按账号自动匹配默认配置（与「健身计划」同一套思路：用邮箱认主账号，base64 只为不明文出现）──
-        // 主账号 = 完整模式（要数据、要打卡）；其他账号 = 极简模式（只看今晚做什么，不打卡不记录）。
+        // 主账号 = 完整模式；其他账号 = 极简模式（精简界面，打卡与记录保留；日志页默认收起可自行打开）。
         // 只在该账号**第一次**登录时套用，之后手动改的设置一律不覆盖。
         function isOwnerAccount() {
             try { return !!(_user && _user.email && _user.email.toLowerCase() === atob('Y2FpdGx5ZUBnbWFpbC5jb20=')); }
