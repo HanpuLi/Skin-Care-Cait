@@ -4266,10 +4266,10 @@
             renderWk();
         }
 
-        // 极简模式的引擎失忆症兜底：昨天(或最后一次打开那天)计划里排了酸/泥膜/视黄醇、
-        // 而那天没有任何产品记录 → 按「已按计划执行」推定写入日志(auto:true)。
-        // 2026-08-15 起极简模式也能打卡了,打了卡的日子以真实记录为准,这里只兜底完全空白的日子——
-        // 宁可把下一次酸排远一点,也不能像事故里那样每天失忆、天天排酸。
+        // 极简模式的核心语义(Cait 2026-08-15 定)：「app 说用什么她就用什么，排上的默认用了」。
+        // 昨天(或最后一次打开那天)计划里的酸/泥膜/视黄醇 → 按「已执行」推定并入当天日志(auto:true)。
+        // 是**合并**不是跳过：她哪天随手勾过一个步骤,那天的酸也不能因此漏记——
+        // 手动记录原样保留,只补处方里缺的活性。宁可把下一次酸排远一点,也不能每天失忆、天天排酸。
         // 完整模式(Cait)的空白日仍按"没做"处理,不推定。
         function absorbPrescribedHistory() {
             try {
@@ -4278,9 +4278,11 @@
                 if (!pd || !pd.date || pd.date >= today() || !(pd.items || []).length) return false;
                 const e = lg(K.jrnl) || [];
                 let entry = e.find(x => x.date === pd.date);
-                if (entry && (entry.products || []).length) return false;   // 那天已有真实产品记录，不覆盖
                 if (!entry) { entry = { date: pd.date, status: [], products: [], note: '', phase: '' }; e.push(entry); }
-                entry.products = pd.items.map(it => it.tag).filter(Boolean);
+                entry.products = entry.products || [];
+                const missing = pd.items.map(it => it.tag).filter(t => t && !entry.products.includes(t));
+                if (!missing.length) return false;   // 处方活性都已在记录里(手动勾过或已推定),无事可做
+                missing.forEach(t => entry.products.push(t));
                 entry.auto = true;
                 if (!entry.note) entry.note = '（按当日计划自动推定）';
                 e.sort((a, b) => String(b.date).localeCompare(String(a.date)));
