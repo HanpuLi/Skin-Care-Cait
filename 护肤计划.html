@@ -4696,8 +4696,10 @@
                 if (p.avene)  tags += `<span class="dpt av">Avène</span>`;
                 if (!p.shave && !p.acid && !p.clay && !p.retinol) {
                     if (isPast) {
-                        // Has shower/shave stored → show "已过"; nothing stored → "无记录"
-                        tags += `<span class="dpt re" style="opacity:.7">${(p.shower || p.shave) ? '已过' : '无记录'}</span>`;
+                        // 同上:记了皮肤状态也算有记录,别把她认真记的日子标成"无记录"
+                        const _je = (lg(K.jrnl) || []).find(x => x.date === p.date);
+                        const _hasLog = !!(_je && ((_je.status || []).length || (_je.products || []).length));
+                        tags += `<span class="dpt re" style="opacity:.7">${(p.shower || p.shave) ? '已过' : (_hasLog ? '已记录' : '无记录')}</span>`;
                     } else {
                         tags += `<span class="dpt re">修护</span>`;
                     }
@@ -5201,7 +5203,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
                 for (let i = 0; i < 14; i++) {
                     const ds = offsetDate(i - 13);
                     const entry = e.find(x => x.date === ds);
-                    let color = 'var(--sur2)', tip = '无记录';
+                    let color = 'var(--sur2)', tip = '那天没记';
                     if (entry) {
                         const s = entry.status || [];
                         if (s.includes('爆痘') || s.includes('泛红')) { color = 'var(--rd)'; tip = s.join('、'); }
