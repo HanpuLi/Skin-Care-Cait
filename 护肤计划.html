@@ -3476,6 +3476,16 @@
                 if (s < 45) limit = 0;  // repair mode: no acid
                 else if (s < 65) limit = 1;  // caution: max 1
             }
+            // 「持续但没恶化」不该无限期停酸——那是死胡同:主诉是闭口的人,停光去角质闭口不会好。
+            // 只要不是在**明确恶化**、且手上有温和的酸(杏仁酸/乳酸这类),保留每周 1 次的维持量。
+            // 真的在变差(记了「比昨天差」)、或最近三天新出现炎症,才彻底停。
+            if (limit === 0) {
+                const worsening = jrnlLastNDays(4).some(e => (e.status || []).includes('变差'));
+                const gentleAcid = PD.some(p => !p.hidden && !isExcluded(p) && p.role === 'acid' &&
+                    isSchedActive(p, PS[p.id] || p.statuses[0]) &&
+                    /杏仁酸|乳酸|mandelic|lactic|PHA|葡糖酸/i.test((p.name || '') + (p.cat || '')));
+                if (!worsening && gentleAcid) limit = 1;
+            }
             
             // Check HRT phases in past 5 days（按日期窗口，不是"最近5条"——否则几个月前的一条能永久压低上限）
             const recent = jrnlLastNDays(5);
@@ -3500,7 +3510,12 @@
         function barrierModeText() {
             const s = barrierScore();
             if (s === null) return null;
-            if (s < 45) return { cls: 'repair-mode', txt: `🛑 屏障健康分 ${s} · 修护模式：本周暂停酸类、泥膜与视黄醇，专注屏障修复` };
+            if (s < 45) {
+                const cap = maxAcidPerWeek();
+                return cap > 0
+                    ? { cls: 'repair-mode', txt: `🛑 屏障健康分 ${s} · 修护模式：泥膜与视黄醇已停；温和酸类保留 ${cap} 次/周做维持（避开发红处），状态若再变差会自动停掉` }
+                    : { cls: 'repair-mode', txt: `🛑 屏障健康分 ${s} · 修护模式：本周暂停酸类、泥膜与视黄醇，专注屏障修复` };
+            }
             if (s < 65) return { cls: '', txt: `⚠️ 屏障健康分 ${s} · 谨慎模式：本周酸类限 1 次，暂停视黄醇` };
             return null;
         }
