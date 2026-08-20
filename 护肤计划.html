@@ -2128,6 +2128,7 @@
             <div id="barrier-limit-banner"></div>
             <div id="pao-alert-tn"></div>
             <div id="sole-alert"></div>
+            <div id="safety-alert"></div>
             <div id="ql-block" style="background:var(--sur2);border-radius:var(--rs);padding:1rem;margin-bottom:1rem">
                 <div style="font-size:13px;font-weight:500;margin-bottom:8px">今天皮肤怎么样？</div>
                 <div class="chips" id="tn-ql-chips">
@@ -2135,10 +2136,11 @@
                     <div class="chip" data-val="出油" data-cls="s-warn" onclick="logTonightStatus('出油')">💧 出油</div>
                     <div class="chip" data-val="闭口" data-cls="s-warn" onclick="logTonightStatus('闭口')">🌾 闭口</div>
                     <div class="chip" data-val="干燥" data-cls="s-warn" onclick="logTonightStatus('干燥')">🏜 干燥</div>
-                    <div class="chip" data-val="爆痘" data-cls="s-bad" onclick="logTonightStatus('爆痘')">⚡ 爆痘</div>
+                    <div class="chip" data-val="爆痘" data-cls="s-bad" onclick="logTonightStatus('爆痘')">⚡ 有痘</div>
                     <div class="chip" data-val="泛红" data-cls="s-bad" onclick="logTonightStatus('泛红')">🔴 泛红</div>
                     <div class="chip" data-val="敏感" data-cls="s-warn" onclick="logTonightStatus('敏感')">⚠ 敏感</div>
-                    <div class="chip" data-val="好转" data-cls="s-ok" onclick="logTonightStatus('好转')">↑ 好转</div>
+                    <div class="chip" data-val="好转" data-cls="s-ok" onclick="logTonightStatus('好转')">↑ 比昨天好</div>
+                    <div class="chip" data-val="变差" data-cls="s-bad" onclick="logTonightStatus('变差')">↓ 比昨天差</div>
                 </div>
                 <div id="tn-ql-msg" class="svm" style="margin-top:8px"></div>
             </div>
@@ -2315,9 +2317,10 @@
                     <div class="chip" data-val="闭口" data-cls="s-warn" onclick="toggleChip(this,'s')">🌾 闭口</div>
                     <div class="chip" data-val="干燥" data-cls="s-warn" onclick="toggleChip(this,'s')">🏜 干燥</div>
                     <div class="chip" data-val="泛红" data-cls="s-bad" onclick="toggleChip(this,'s')">🔴 泛红</div>
-                    <div class="chip" data-val="爆痘" data-cls="s-bad" onclick="toggleChip(this,'s')">⚡ 爆痘</div>
+                    <div class="chip" data-val="爆痘" data-cls="s-bad" onclick="toggleChip(this,'s')">⚡ 有痘</div>
                     <div class="chip" data-val="敏感" data-cls="s-warn" onclick="toggleChip(this,'s')">⚠ 敏感</div>
-                    <div class="chip" data-val="好转" data-cls="s-ok" onclick="toggleChip(this,'s')">↑ 好转</div>
+                    <div class="chip" data-val="好转" data-cls="s-ok" onclick="toggleChip(this,'s')">↑ 比昨天好</div>
+                    <div class="chip" data-val="变差" data-cls="s-bad" onclick="toggleChip(this,'s')">↓ 比昨天差</div>
                 </div>
                 <label class="jfl">今晚使用<span style="font-weight:400;color:var(--tx3);font-size:11px">　· 在「今晚」页给步骤打勾会自动记录，这里一般不用动</span></label>
                 <!-- 由 renderProdChips() 按产品定义动态生成：写死的芯片会在改标签/加产品后与统计口径脱节 -->
@@ -3166,7 +3169,7 @@
                 if (usageCountHtml) schedTags += `<div class="sched-info" style="margin-top:2px">${usageCountHtml}</div>`;
                 return `<div class="pc"><div class="pch" onclick="togglePCB('${def.id}')">
       <div class="pci">${def.icon}</div>
-      <div class="pci2"><div class="pcn"${isExcluded(def)?' style="opacity:.45;text-decoration:line-through"':''}>${esc(def.name)}</div><div class="pcc">${isExcluded(def)?'🚫 我不用 · ':''}${(!def.hidden && !isExcluded(def) && def.role && def.role!=='precleanse' && isSchedActive(def, PS[def.id]||def.statuses[0]) && ownedOfGroup(def.role).length===1)?'🔸唯一一件 · ':''}${esc(visCat(def))}${wo!==null?` · 开封${wo}周`:''}</div><div class="sched-info" style="margin-top:4px">${paoTag}</div>${schedTags}</div>
+      <div class="pci2"><div class="pcn"${isExcluded(def)?' style="opacity:.45;text-decoration:line-through"':''}>${esc(def.name)}</div><div class="pcc">${isExcluded(def)?'🚫 我不用 · ':''}${(_critIds && _critIds.has(def.id))?'🔸没有能顶替的 · ':''}${esc(visCat(def))}${wo!==null?` · 开封${wo}周`:''}</div><div class="sched-info" style="margin-top:4px">${paoTag}</div>${schedTags}</div>
       ${can?`<button class="pcp ${def.pillCls[s]}" onclick="cyclePS('${def.id}',event)">${def.labels[s]}</button>`:`<span class="pcp ${def.pillCls[s]}">${def.labels[s]}</span>`}
     </div><div class="pcb" id="pcb-${def.id}">
       <div style="margin-top:0">${notes}</div>
@@ -3182,8 +3185,10 @@
                 const key = g ? g.key : (p.role || 'other');
                 (bucket[key] = bucket[key] || { name: g ? g.name : (ROLE_LABEL[p.role] || p.role || '其它'), items: [] }).items.push(p);
             });
+            const _critList = planCriticalProducts();
+            const _critIds = new Set(_critList.map(x => x.p.id));
             const criticalMap = {};
-            planCriticalProducts().forEach(x => {
+            _critList.forEach(x => {
                 const g = groupOfRole(x.p.role); const kk = g ? g.key : x.p.role;
                 if (!criticalMap[kk]) criticalMap[kk] = x;
             });
@@ -3235,7 +3240,7 @@
         // 归一化的理由：旧版是累加，记得越勤分越极端 —— 7 天全"稳定"=100，2 天全"稳定"=76，
         // 同样的皮肤只因记录频率不同就差 24 分，且停止记录后分数会永久冻结在最后几条上。
         // 返回 null 表示窗口内无数据。该分数直接驱动酸类/视黄醇上限。
-        const BARRIER_W = { '爆痘': -10, '泛红': -7, '敏感': -5, '干燥': -3, '出油': -2, '稳定': 8, '好转': 12 };
+        const BARRIER_W = { '变差': -10, '爆痘': -6, '泛红': -7, '敏感': -5, '干燥': -3, '出油': -2, '稳定': 8, '好转': 12 };
         const BARRIER_GAIN = 3.5;   // 平均权重 → 分数的放大倍数
         const BARRIER_FULL_N = 4;   // 记录满 4 天才给满信度，不足则向 60 收敛
         function calcScore(entries) {
@@ -3278,7 +3283,8 @@
             '干燥': { barrier: -3 },
             '敏感': { barrier: -5, calm: -4 },
             '泛红': { barrier: -7, calm: -8 },
-            '爆痘': { barrier: -10, congestion: -4, calm: -12 },
+            '爆痘': { barrier: -6, congestion: -4, calm: -8 },
+            '变差': { barrier: -10, congestion: -6, calm: -10 },
             '闭口': { congestion: -10 },
             '粗糙': { congestion: -6 }
         };
@@ -3308,17 +3314,24 @@
             return sum / entries.length;
         }
         function axisTrend(key) {
-            const recentEntries = jrnlLastNDays(3);
-            const from = offsetDate(-8), to = offsetDate(-4), seen = new Set();
-            const priorEntries = (lg(K.jrnl) || [])
-                .filter(x => x && x.date && x.date >= from && x.date <= to)
-                .sort((a, b) => b.date.localeCompare(a.date))
-                .filter(x => { if (seen.has(x.date)) return false; seen.add(x.date); return true; });
-            if (recentEntries.length < 2 || priorEntries.length < 2) return { dir: 'flat', delta: 0, enough: false };
-            const recent = axisAvg(key, recentEntries), prior = axisAvg(key, priorEntries);
-            if (recent === null || prior === null) return { dir: 'flat', delta: 0, enough: false };
-            const d = (recent - prior) * BARRIER_GAIN;   // 换算回"分"的量纲，阈值仍用 ±6
-            return { dir: d >= 6 ? 'up' : d <= -6 ? 'down' : 'flat', delta: d, enough: true };
+            // 方向只认**明确的变化信号**(比昨天好/比昨天差),不再拿状态标签的均值波动去猜。
+            // 原因(真实反馈):她每天记「有痘」是说"痘还在",不是"今天又新爆了";
+            //   某天少勾一个标签就被算成"好转",甚至把就医红线吞掉。持续状态 ≠ 在变化。
+            const recent = jrnlLastNDays(4);
+            if (!recent.length) return { dir: 'flat', delta: 0, enough: false };
+            const better = recent.filter(e => (e.status || []).includes('好转')).length;
+            const worse  = recent.filter(e => (e.status || []).includes('变差')).length;
+            if (better || worse) {
+                const d = (better - worse) * 8;
+                return { dir: d >= 6 ? 'up' : d <= -6 ? 'down' : 'flat', delta: d, enough: true };
+            }
+            // 没有明确变化信号:看该轴的负向状态是否已经消失/出现(消失=好转,新出现=变差)
+            const neg = es => es.some(e => (e.status || []).some(t => (AX_W[t] && AX_W[t][key]) < 0));
+            const nowBad = neg(jrnlLastNDays(2));
+            const wasBad = neg((lg(K.jrnl) || []).filter(x => x && x.date && x.date >= offsetDate(-6) && x.date <= offsetDate(-3)));
+            if (wasBad && !nowBad) return { dir: 'up', delta: 8, enough: true };
+            if (!wasBad && nowBad) return { dir: 'down', delta: -8, enough: true };
+            return { dir: 'flat', delta: 0, enough: recent.length >= 2 };
         }
         function trendArrow(t) { return t.dir === 'up' ? '↗' : t.dir === 'down' ? '↘' : '→'; }
         function assessSkin() {
@@ -3353,7 +3366,10 @@
             if (goalConcern && CONCERN_ADVICE[goalConcern]) recs.push({ level: 'info', text: CONCERN_ADVICE[goalConcern] });
             const inflamDays = jrnlLastNDays(14).filter(e => (e.status || []).some(s => s === '泛红' || s === '爆痘')).length;
             const barrier = ax('barrier').score, cong = ax('congestion').score, oil = ax('oil').score;
-            if (inflamDays >= 5 && ax('calm').trend && ax('calm').trend.dir !== 'up') {
+            // 就医红线不能挂在"趋势"上:趋势可能因标签多寡误判成"好转"而把这条吞掉(真实事故)。
+            // 改为看硬事实:近14天炎症天数,且最近3天仍在发炎。
+            const stillInflamed = jrnlLastNDays(3).some(e => (e.status || []).some(s => s === '泛红' || s === '爆痘'));
+            if (inflamDays >= 5 && stillInflamed) {
                 recs.push({ level: 'safety', text: `近两周有 ${inflamDays} 天泛红/爆痘、且未见好转。若集中在口鼻/嘴周且久不消，可能是口周皮炎(越刷酸越糟)——建议看 GP / 皮肤科。` });
             }
             if (barrier !== null && barrier < 45) recs.push({ level: 'warn', text: '屏障偏弱：本周已自动停酸、暂停视黄醇/泥膜，专注修护封层。' });
@@ -3438,6 +3454,12 @@
             const goalHtml = g ? `<div class="assess-goal">🎯 ${esc(g.concern.split('/')[0])} ${g.startScore}→${g.cur === null ? '—' : g.cur}<span style="color:var(--tx3)"> / 目标 ${g.target}</span><span class="goal-pct">${g.pct}%</span></div>` : '';
             const streak = logStreak(), wk = weekLoggedCount();
             const streakHtml = `<div class="assess-streak">${streak > 0 ? `🔥 连续记录 ${streak} 天 · ` : ''}本周 ${wk}/7 天</div>`;
+            // safety 级(就医红线)必须无条件显示——极简模式会隐藏整张评估卡,不能把它一起藏了
+            const safetyBox = document.getElementById('safety-alert');
+            if (safetyBox) {
+                const sf = a.recs.filter(r => r.level === 'safety');
+                safetyBox.innerHTML = sf.map(r => `<div class="alert danger" style="margin-bottom:.75rem"><div class="at">⚠️ 建议去看医生</div>${esc(r.text)}</div>`).join('');
+            }
             box.innerHTML = `<div class="assess-card2">
                 <div class="assess-hd"><span>今日评估</span><span style="font-size:13px;color:${ovCol}">${a.overall} · ${ov.label}${a.sampleN < 4 ? ` <span style="color:var(--tx3);font-weight:400">(记${a.sampleN}天)</span>` : ''}</span></div>
                 <div class="ax-list">${bars}</div>
@@ -4568,7 +4590,10 @@
                 }
                 const icon = both ? '🚿✂️' : day.shower ? '🚿' : day.shave ? '✂️' : '·';
                 const sv2  = day.shave && PROFILE.shaving;
-                const lbl  = (day.shower && sv2) ? '洗+刮' : day.shower ? '已洗澡' : sv2 ? '已刮胡' : '无记录';
+                // 「无记录」只该用于真的什么都没有的日子:她记了皮肤状态就算有记录(真实反馈)
+                const jEntry = (lg(K.jrnl) || []).find(e => e.date === day.date);
+                const hasLog = !!(jEntry && ((jEntry.status || []).length || (jEntry.products || []).length));
+                const lbl  = (day.shower && sv2) ? '洗+刮' : day.shower ? '已洗澡' : sv2 ? '已刮胡' : (hasLog ? '已记录' : '无记录');
                 const label = `<div class="dn">${day.dayName}${day.isToday ? '·今' : ''}<br><span style="font-size:9px">${day.shortDate}</span></div>`;
                 if (day.isPast) {
                     // Past: non-interactive div showing stored history
