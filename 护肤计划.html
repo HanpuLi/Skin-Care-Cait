@@ -2058,10 +2058,13 @@
       body.minimal #guide-simple{display:block!important}
       /* 设置块折叠成一行小字,需要时才展开(留给 Cait 帮她设置) */
       body.minimal #settings-block{border:1px solid rgba(128,128,128,.25);border-radius:10px;padding:10px 12px}
-      body.minimal #settings-block > *:not(.sec-title){display:none}
+      /* 折叠时只留第一个标题「个人设置」——旧版留了所有 .sec-title,
+         于是「需要避开的区域」这种标题露在外面却点不动(真实反馈) */
+      body.minimal #settings-block > *:not(:first-child){display:none}
       body.minimal #settings-block.open > *{display:revert}
       body.minimal #settings-block .sec-title{cursor:pointer;margin:0;font-size:12px;color:var(--tx3);font-weight:500}
-      body.minimal #settings-block .sec-title::after{content:'　▾'}
+      body.minimal #settings-block > .sec-title:first-child::after{content:'　▾ 点这里展开'}
+      body.minimal #settings-block.open > .sec-title:first-child::after{content:'　▴ 收起'}
       .set-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px}
       .tpl-btn{text-align:left;padding:10px 12px;border:1px solid rgba(128,128,128,.25);border-radius:10px;background:var(--sur2);cursor:pointer;width:100%;font-family:inherit}
       .tpl-n{font-size:13px;font-weight:600;color:var(--tx)}
