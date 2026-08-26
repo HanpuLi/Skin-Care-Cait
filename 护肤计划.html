@@ -2874,9 +2874,19 @@
                 jrnlLastNDays(14).some(e => (e.status || []).some(s => s === '泛红' || s === '敏感'));
             return reactive ? 'avoid' : 'neutral';
         }
-        // 修护霜用法:'full' 全脸薄涂(默认,循证:屏障修复属基础治疗) / 'spot' 仅点涂
+        // 修护霜用法:'full' 全脸薄涂 / 'spot' 仅点涂
+        // 🔴 2026-08-26 改(Cait 拍板)。旧版是 `分数>=70 && skinType 含"油"` 才点涂,三个洞:
+        //   ① `skinType` 是 autoMatchProfile **从不设置**的字段 → 非主账号(Cici)永远是空字符串
+        //      → `.includes('油')` 恒 false → **永远走 full**,那个"油皮→点涂"的出口她根本够不着;
+        //   ② 完全不看闭口。而 App 自己的建议引擎里写着「闭口……磨砂和厚重面霜先放一边」——
+        //      同一个 App 一边这么说,一边每晚让她把 Cicaplast **Baume**(封闭性膏体)全脸涂;
+        //   ③ 屏障分越低越 full → 她每天记闭口/爆痘 → 分更低 → 更全脸涂,是个正反馈环。
+        // 现在先看硬事实(和"就医红线只看硬事实"同一条纪律),再退回旧判据。
+        // ⚠️ 8/08 那条"修护品常规全脸"的依据是 AAD 讲**痤疮外用药**(BPO/维A酸)全脸薄涂,
+        //    迁移到"修护膏"是错的类比;CLAUDE.md 也标了那批结论属未经对抗核证的单源结论。
         function repairUse() {
             if (PROFILE.repairUse) return PROFILE.repairUse;
+            if (jrnlLastNDays(14).some(e => (e.status || []).some(s => s === '闭口' || s === '爆痘'))) return 'spot';
             const b = barrierScore();
             return (b !== null && b >= 70 && (PROFILE.skinType || '').includes('油')) ? 'spot' : 'full';
         }
@@ -4157,8 +4167,10 @@
                 //    涂法仍旧由 repairUse() 决定,这里只补一句"最近在泛红"。
                 const needCalm = irritated && !soothers.length;
                 const spotUse = repairUse() === 'spot';
+                const clogged = jrnlLastNDays(14).some(e => (e.status || []).some(s => s === '闭口' || s === '爆痘'));
                 byRole('repair').forEach(p => steps.push({ p: p.name, h:
-                    (spotUse ? '活跃痘痘处、口罩线点涂' : '全脸薄涂封层') +
+                    (spotUse ? ('活跃痘痘处、口罩线点涂' + (clogged && !PROFILE.repairUse ? '（近期有闭口/痘 → 先别全脸厚涂）' : ''))
+                             : '全脸薄涂封层') +
                     (needCalm ? '（手边没有舒缓面膜了;最近有泛红/不适,泛红处多带一下）' : '') }));
             }
             return { steps, skips };
