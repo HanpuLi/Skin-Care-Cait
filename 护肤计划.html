@@ -2402,6 +2402,11 @@
                 <div id="shop-pending"></div>
                 <button class="cpb" id="cpb" onclick="copyShop()">📋 复制购物清单</button>
             </div>
+            <div class="section" style="margin-top:1.5rem">
+                <div class="sec-title">空瓶记录</div>
+                <p style="font-size:12px;color:var(--tx3);margin:-4px 0 8px">用完一支就记一笔:开封多久、累计用过多少次 —— 下次就知道一支能撑多久、该提前多久补。</p>
+                <div id="empty-log"></div>
+            </div>
 
             <!-- Backup -->
 
@@ -2580,7 +2585,8 @@
             preset: 'sk_preset1', // new for feature 6
             profile: 'sk_profile1', // 每人档案：刮胡/HRT/肤质
             planday: 'sk_planday1', // 最近一次算出的「今天该做什么活性」——极简模式跨天后据此推定已执行
-            mig: 'sk_mig1'          // 已跑过的「货架迁移」id;进 CLOUD_KEYS 跟着云端走(见 applyShelfMigrations)
+            mig: 'sk_mig1',         // 已跑过的「货架迁移」id;进 CLOUD_KEYS 跟着云端走(见 applyShelfMigrations)
+            empty: 'sk_empty1'      // 空瓶记录:{产品id: [{date, weeks, uses}]}——「用完了」是事件,要留痕
         };
         // One-time migration from old keys
         (function migrate() {
@@ -3077,10 +3083,76 @@
             const def = PD.find(d => d.id === id); if (!def) return;
             const cur = PS[id] || def.statuses[0];
             const idx = def.statuses.indexOf(cur);
-            PS[id] = def.statuses[(idx + 1) % def.statuses.length];
-            ls(K.prods, PS); renderProds(); updateProdUI(); renderWk(); renderTn();
+            const next = def.statuses[(idx + 1) % def.statuses.length];
+            // 「用完了」不是普通的状态切换,是一个要留痕的事件 → 交给 markRunOut(记日期/开封时长/累计次数)
+            if (next === 'pending' && cur !== 'pending') { markRunOut(id); return; }
+            // 从「用完了」切回来 = 补货了 → 自动把开封日记成今天(卡片里能改);没有它 PAO 和累计次数都不显示
+            if (cur === 'pending' && next !== 'pending' && !POPEN[id]) { POPEN[id] = today(); ls(K.popen, POPEN); }
+            PS[id] = next;
+            ls(K.prods, PS); invalidatePlanCache(); renderProds(); updateProdUI(); renderWk(); renderTn(); renderAm();
         }
         function saveOpenDate(id, val) { POPEN[id] = val; ls(K.popen, POPEN); renderProds(); }
+
+        // ══ 空瓶记录:「用完了」是个有日期的事件,不是一个状态 ═════════════════════
+        // Cait 2026-08-26:「用完了应该有记录用完了的功能,不是傻子一样点『我不用』」。对 —— 这是三件事:
+        //   备用 = 家里还有、暂时不用  |  🚫我不用这个 = 我不要它  |  用完了 = 家里没有了。
+        // 记下来还有用:开封多久、累计用了多少次 → 下次知道一支能撑多久、该提前多久补。
+        let EMPTIES = lg(K.empty) || {};
+        function prodUsageCount(def) {
+            const key = def.journalTag || def.name;
+            return (lg(K.jrnl) || []).filter(e => (e.products || []).includes(key)).length;
+        }
+        // 同品类里「家里还有的下一支」:同角色 → 同可替代组(保湿/精华/舒缓算一类) → 同能力。
+        // 在用的优先;只剩备用的也要说出来(点一下就能顶上),别让用户自己去猜谁能替。
+        function pickReplacement(def) {
+            const g = groupOfRole(def.role), caps = capsOf(def);
+            // 打分而不是分层筛:分层会犯"舒缓面膜用完 → 拿精华顶"的错 —— 精华和面膜同属
+            // 「保湿/精华/舒缓」组,但它只有 hydrate;真正对症的 B5 还带 calm(镇静)。
+            // 所以**能力重合度**要压过分组:同角色 100 > 每项重合能力 10 > 同组 3 > 在用 1。
+            const st = x => PS[x.id] || x.statuses[0];
+            const score = x => (x.role === def.role ? 100 : 0)
+                + capsOf(x).filter(c => caps.includes(c)).length * 10
+                + ((g && g.roles.includes(x.role)) ? 3 : 0)
+                + (isSchedActive(x, st(x)) ? 1 : 0);
+            const ranked = PD
+                .filter(x => x.id !== def.id && !x.hidden && !isExcluded(x) && st(x) !== 'pending')
+                .map(x => ({ x: x, s: score(x) }))
+                .filter(o => o.s >= 3)            // 至少要同组、同能力或同角色,不然不算"能顶"
+                .sort((a, b) => b.s - a.s);
+            if (!ranked.length) return null;
+            const top = ranked[0].x;
+            return { p: top, needEnable: !isSchedActive(top, st(top)) };
+        }
+        function replacementText(def) {
+            const r = pickReplacement(def);
+            if (!r) return '⚠️ 同类里家里没有别的了 —— 这一档会断档,记得补货';
+            return r.needEnable
+                ? `接下来由「${r.p.name}」顶上 —— 它现在是「备用」,点一下改成「正常使用」就会排进流程`
+                : `接下来由「${r.p.name}」顶上(已经在流程里了)`;
+        }
+        function markRunOut(id, e) {
+            if (e) e.stopPropagation();
+            const def = PD.find(d => d.id === id); if (!def) return;
+            const rec = { date: today(), weeks: weeksOpen(id), uses: prodUsageCount(def) };
+            (EMPTIES[id] = EMPTIES[id] || []).push(rec);
+            ls(K.empty, EMPTIES);
+            PS[id] = 'pending'; ls(K.prods, PS);
+            delete POPEN[id]; ls(K.popen, POPEN);   // 补货后要重记开封日;旧的那次已经留在空瓶记录里了
+            invalidatePlanCache();
+            renderProds(); renderWk(); renderTn(); renderAm();
+            const life = rec.weeks !== null ? `开封 ${rec.weeks} 周、` : '';
+            sysAlert(`已记下:「${def.name}」用完了(${life}累计用过 ${rec.uses} 次)。\n\n` +
+                     `它已进待购清单、不会再排进今晚的流程。\n\n${replacementText(def)}`);
+        }
+        function _lastEmpty(id) { const l = EMPTIES[id]; return (l && l.length) ? l[l.length - 1] : null; }
+        function emptyLogRows() {
+            const rows = [];
+            Object.entries(EMPTIES).forEach(([id, list]) => {
+                const d = PD.find(x => x.id === id);
+                (list || []).forEach(r => rows.push(Object.assign({ id: id, name: d ? d.name : id }, r)));
+            });
+            return rows.sort((a, b) => (a.date < b.date ? 1 : -1));
+        }
         function togglePCB(id) { const el = document.getElementById('pcb-' + id); if (el) el.classList.toggle('open') }
         function weeksOpen(id) { if (!POPEN[id]) return null; return Math.floor(Math.floor((new Date() - new Date(POPEN[id])) / 86400000) / 7); }
 
@@ -3215,12 +3287,14 @@
                 if (usageCountHtml) schedTags += `<div class="sched-info" style="margin-top:2px">${usageCountHtml}</div>`;
                 return `<div class="pc"><div class="pch" onclick="togglePCB('${def.id}')">
       <div class="pci">${def.icon}</div>
-      <div class="pci2"><div class="pcn"${isExcluded(def)?' style="opacity:.45;text-decoration:line-through"':''}>${esc(def.name)}</div><div class="pcc">${isExcluded(def)?'🚫 我不用 · ':''}${(_critIds && _critIds.has(def.id))?'🔸没有能顶替的 · ':''}${esc(visCat(def))}${wo!==null?` · 开封${wo}周`:''}</div><div class="sched-info" style="margin-top:4px">${paoTag}</div>${schedTags}</div>
+      <div class="pci2"><div class="pcn"${isExcluded(def)?' style="opacity:.45;text-decoration:line-through"':''}>${esc(def.name)}</div><div class="pcc">${isExcluded(def)?'🚫 我不用 · ':''}${(_critIds && _critIds.has(def.id))?'🔸没有能顶替的 · ':''}${esc(visCat(def))}${wo!==null?` · 开封${wo}周`:''}</div>${s==='pending'&&_lastEmpty(def.id)?`<div class="pcc" style="color:var(--am)">🫗 ${esc(_lastEmpty(def.id).date)} 用完${_lastEmpty(def.id).weeks!==null?` · 开封${_lastEmpty(def.id).weeks}周`:''} · 累计${_lastEmpty(def.id).uses}次</div><div class="pcc">↪︎ ${esc(replacementText(def).replace(/^接下来由/,'由'))}</div>`:''}<div class="sched-info" style="margin-top:4px">${paoTag}</div>${schedTags}</div>
       ${can?`<button class="pcp ${def.pillCls[s]}" onclick="cyclePS('${def.id}',event)">${def.labels[s]}</button>`:`<span class="pcp ${def.pillCls[s]}">${def.labels[s]}</span>`}
     </div><div class="pcb" id="pcb-${def.id}">
       <div style="margin-top:0">${notes}</div>
       <div class="popen"><label>开封日期：</label><input type="date" value="${POPEN[def.id]||''}" onchange="saveOpenDate('${def.id}',this.value)">${woHtml}</div>
-      <div class="prod-acts"><button class="prod-act" onclick="showProdModal('${def.id}')">✏️ 编辑</button><button class="prod-act" onclick="toggleExcluded('${def.id}')">${isExcluded(def)?'↩︎ 取消不用':'🚫 我不用这个'}</button><button class="prod-act del" onclick="deleteProd('${def.id}')">${def.builtin?'👁 隐藏':'🗑 删除'}</button></div>
+      <div class="prod-acts"><button class="prod-act" onclick="showProdModal('${def.id}')">✏️ 编辑</button>${s==='pending'
+          ? `<button class="prod-act" onclick="cyclePS('${def.id}',event)">🛍 补货了</button>`
+          : `<button class="prod-act" onclick="markRunOut('${def.id}',event)">🫗 用完了</button>`}<button class="prod-act" onclick="toggleExcluded('${def.id}')">${isExcluded(def)?'↩︎ 取消不用':'🚫 我不用这个'}</button><button class="prod-act del" onclick="deleteProd('${def.id}')">${def.builtin?'👁 隐藏':'🗑 删除'}</button></div>
       ${can?`<div class="pch2">点击状态循环切换 → ${def.statuses.map(s2=>def.labels[s2]).join(' → ')}</div>`:''}
     </div></div>`;
             };
@@ -3259,7 +3333,14 @@
             if (PD.some(p=>p.hidden)) list.innerHTML += `<button class="prod-act" onclick="restoreBuiltins()" style="margin-top:8px">恢复已隐藏的内置产品</button>`;
             const pend = PD.filter(d => !d.hidden && PS[d.id] === 'pending');
             const sp = document.getElementById('shop-pending');
-            if (sp) sp.innerHTML = pend.length ? pend.map((d, i) => `<div class="shop-item"><div class="shop-pri ${i===0?'p1':'p2'}">0${i+1}</div><div class="si"><div class="sn2">${esc(d.name)}</div><div class="sw">${esc(d.notes[0]||'')}</div></div></div>`).join('') : '<div style="font-size:12px;color:var(--tx3);font-family:var(--mono);padding:8px 0">所有产品均已购入 ✓</div>';
+            if (sp) sp.innerHTML = pend.length ? pend.map((d, i) => `<div class="shop-item"><div class="shop-pri ${i===0?'p1':'p2'}">0${i+1}</div><div class="si"><div class="sn2">${esc(d.name)}</div><div class="sw">${esc(replacementText(d))}</div></div></div>`).join('') : '<div style="font-size:12px;color:var(--tx3);font-family:var(--mono);padding:8px 0">所有产品均已购入 ✓</div>';
+            const elog = document.getElementById('empty-log');
+            if (elog) {
+                const rows = emptyLogRows();
+                elog.innerHTML = rows.length
+                    ? rows.map(r => `<div class="shop-item"><div class="si"><div class="sn2">${esc(r.name)}</div><div class="sw">🫗 ${esc(r.date)} 用完${r.weeks !== null && r.weeks !== undefined ? ` · 开封 ${r.weeks} 周` : ''} · 累计用过 ${r.uses} 次</div></div></div>`).join('')
+                    : '<div style="font-size:12px;color:var(--tx3);font-family:var(--mono);padding:8px 0">还没有用完的产品</div>';
+            }
         }
 
         // 已废弃：早期用来更新写死的 Cait 静态步骤（对应 DOM id 均已不存在，恒为空操作）。留空桩，免改所有调用点。
@@ -4070,12 +4151,15 @@
                 byRole('eye', true).forEach(p => steps.push({ p: p.name, h: hint(p) || '无名指轻拍眼眶骨' }));
                 byRole('moist', true).forEach(p => steps.push({ p: p.name, h: hasScheduledAcid ? '酸类夜首选封层' : (hint(p) || '全脸封层') }));
                 // 修护霜用法按档案:屏障修复是基础治疗、指南建议常规全脸使用;仅在屏障好且油皮时才点涂
-                // 手边没有舒缓面膜了(Avène 用完),不能让"最近在泛红"这条线索跟着一起消失 ——
-                // 修护霜本来就是每晚一步,泛红时把它的用法从"点涂"提到"全脸薄涂"顶上来。
+                // 手边没有舒缓面膜了(Avène 用完),不能让"最近在泛红"这条线索跟着一起消失。
+                // ⚠️ 但也不能借机把修护霜改成全脸厚涂:近期有闭口/爆痘的人全脸涂封闭性膏体
+                //    正是闷出闭口的经典路子(App 自己在建议里也写着"厚重面霜先放一边")。
+                //    涂法仍旧由 repairUse() 决定,这里只补一句"最近在泛红"。
                 const needCalm = irritated && !soothers.length;
-                byRole('repair').forEach(p => steps.push({ p: p.name, h: needCalm
-                    ? '最近有泛红/不适——今晚全脸薄涂一层修护（手边没有舒缓面膜了）'
-                    : (repairUse() === 'spot' ? '活跃痘痘处、口罩线点涂' : '全脸薄涂封层') }));
+                const spotUse = repairUse() === 'spot';
+                byRole('repair').forEach(p => steps.push({ p: p.name, h:
+                    (spotUse ? '活跃痘痘处、口罩线点涂' : '全脸薄涂封层') +
+                    (needCalm ? '（手边没有舒缓面膜了;最近有泛红/不适,泛红处多带一下）' : '') }));
             }
             return { steps, skips };
         }
@@ -5513,7 +5597,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
         setInterval(checkDayRollover, 60000);
 
         // ══ Firebase 云同步 ═══════════════════════════════════
-        const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_amsteps1','sk_proddefs1','sk_profile1','sk_preset1','sk_planday1','sk_mig1'];
+        const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_amsteps1','sk_proddefs1','sk_profile1','sk_preset1','sk_planday1','sk_mig1','sk_empty1'];
         let _db = null, _user = null, _pushTimer = null, _pushing = false, _pushDirty = false;
         // 递归按键名排序的序列化——只用于云/本地数据的等价比较
         function _stableStr(v) {
