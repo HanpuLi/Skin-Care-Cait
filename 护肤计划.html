@@ -3265,7 +3265,9 @@
         function emptyLogRows() {
             const rows = [];
             Object.entries(EMPTIES).forEach(([id, list]) => {
-                const d = PD.find(x => x.id === id);
+                // 用完的产品已经从货架删掉了 → PD 里找不到,得回 DEFAULT_PD 拿名字,
+                // 否则空瓶记录里显示的是产品 id(在 Cici 账号上就看到过一行光秃秃的 "avene")。
+                const d = PD.find(x => x.id === id) || DEFAULT_PD.find(x => x.id === id);
                 (list || []).forEach(r => rows.push(Object.assign({ id: id, name: d ? d.name : id }, r)));
             });
             return rows.sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -3437,7 +3439,8 @@
                 const owned  = items.filter(p => !isExcluded(p));   // 用完的已经从货架删掉了,还在列表里的就是家里有的
                 const usable = items.filter(p => !isExcluded(p) && isSchedActive(p, PS[p.id] || p.statuses[0]));
                 let badge, warn = '';
-                if (owned.length === 0) { badge = `<span class="grp-count none">家里没有</span>`; }
+                // 全组都被标了「我不用」≠ 家里没有 —— 措辞要分清(Cici 把卸妆膏标了不用)
+                if (owned.length === 0) { badge = `<span class="grp-count none">${items.length ? '你标了不用' : '家里没有'}</span>`; }
                 else if (usable.length === 0) { badge = `<span class="grp-count none">${owned.length} 件 · 备用(没排进流程)</span>`; }
                 else { badge = `<span class="grp-count">${owned.length} 件${usable.length !== owned.length ? `（${usable.length} 件在用）` : '在用'}</span>`; }
                 // 警告不按件数,按「少了它流程会缺一环」
