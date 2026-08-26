@@ -2579,7 +2579,8 @@
             prodDefs: 'sk_proddefs1',
             preset: 'sk_preset1', // new for feature 6
             profile: 'sk_profile1', // 每人档案：刮胡/HRT/肤质
-            planday: 'sk_planday1' // 最近一次算出的「今天该做什么活性」——极简模式跨天后据此推定已执行
+            planday: 'sk_planday1', // 最近一次算出的「今天该做什么活性」——极简模式跨天后据此推定已执行
+            mig: 'sk_mig1'          // 已跑过的「货架迁移」id;进 CLOUD_KEYS 跟着云端走(见 applyShelfMigrations)
         };
         // One-time migration from old keys
         (function migrate() {
@@ -2709,7 +2710,7 @@
             { id:'sebagh',icon:'💎',name:'Dr Sebagh Rose de Vie 精华',cat:'精华 · 修护',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['白天可代替面霜，晚上无酸夜使用','全脸3–4滴，轻拍至吸收'],schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:true,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
             { id:'mzskin',icon:'👁',name:'MZ Skin Soothe & Smooth 眼部精华',cat:'眼部 · 护理',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['玻尿酸眼部精华，提亮眼周','无名指轻拍眼眶骨，不要触碰眼球'],schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
             { id:'cicaplast',icon:'🩹',name:'Cicaplast B5 修护霜',cat:'修护 · 每晚',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['活跃痘痘处、口罩线点涂','刮胡后全脸薄涂修护微创口'],schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
-            { id:'avene',role:'soothe',icon:'🍃',name:'Avène Tolérance Extrême 舒缓面膜',cat:'面膜 · 舒缓（冲洗型）',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['敷约 5 分钟后用温水洗掉','泛红/刺痛/不舒服的时候用，不必天天'],pmHint:'敷约5分钟后洗掉',schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
+            { id:'avene',role:'soothe',icon:'🍃',name:'Avène Tolérance Extrême 舒缓面膜',cat:'面膜 · 舒缓（冲洗型）',journalTag:'',statuses:['pending','owned','paused'],labels:{pending:'用完了 · 待补货',owned:'正常使用',paused:'备用'},pillCls:{pending:'pending',owned:'active',paused:'paused'},notes:['敷约 5 分钟后用温水洗掉','泛红/刺痛/不舒服的时候用，不必天天'],pmHint:'敷约5分钟后洗掉',schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
             { id:'clay',role:'mask',icon:'🫙',name:'IPSA 深层净化泥面膜',cat:'去角质 · 泥膜',journalTag:'泥面膜',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['1次/周，洗澡夜使用','使用当晚视为酸类占用','泛红/敏感期暂停'],schedule:{type:'mask',time:['pm'],maxPerWeek:1,minDaysBetween:0,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:false,enableAutoSchedule:true},paoMonths:6,builtin:true },
             { id:'lancome',role:'cleanse',cleanseStrength:'strong',icon:'🧼',name:'Lancôme Clarifique 洁面泡沫',cat:'洁面 · 洗澡夜',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['洗澡夜使用，60秒按摩，T区多停留','替代温水冲洗，清洁力更强'],schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:true,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
             // ── 2026-08-06 家中实拍库存新增（真实产品；排在已有产品之后，故各角色首位仍是既有主力，不打乱现有流程） ──
@@ -2743,6 +2744,22 @@
         // 不刮胡的用户(如 Cici)会在产品卡和步骤提示里看到。这里按档案过滤/改写。
         function visNotes(p) { const n = (p && p.notes) || []; return PROFILE.shaving ? n : n.filter(x => !/刮胡/.test(x)); }
         function visCat(p) { const c = (p && p.cat) || ''; return PROFILE.shaving ? c : c.replace(/\s*[·・]\s*刮胡后\s*/, ' · 舒缓').replace(/刮胡/g, '').trim(); }
+        // ══ 「用完了」:每件产品都要能标 ══════════════════════════════
+        // 2026-08-26 Avène 舒缓面膜用完才发现:只有防晒带 pending(待购入)这个状态,
+        // 别的产品用完了在 App 里根本没法表达 —— 既进不了购物清单,排班照排,
+        // 极简模式还会把"排上了"当成"用了"自动补记(见 CLAUDE.md「状态≠事件」)。
+        // ⚠️ 必须对两条路径都做:loadPD 遇到存档只补**新产品**、不更新老产品的定义,
+        //    所以光改 DEFAULT_PD 对已经存过 sk_proddefs1 的账号(Cait)完全无效。
+        function ensureRunOutStatus(list) {
+            list.forEach(p => {
+                if (!Array.isArray(p.statuses) || !p.statuses.length) p.statuses = ['owned', 'paused'];
+                if (!p.statuses.includes('pending')) p.statuses.push('pending');
+                // 已有的文案优先(防晒本来就叫「待购入」),只补缺的
+                p.labels  = Object.assign({ pending: '用完了' },   p.labels  || {});
+                p.pillCls = Object.assign({ pending: 'pending' }, p.pillCls || {});
+            });
+            return list;
+        }
         function loadPD() {
             const saved = lg(K.prodDefs);
             if (saved) {
@@ -2760,14 +2777,40 @@
                 DEFAULT_PD.filter(d => d.builtin).forEach(def => {
                     if (!saved.find(s => s.id === def.id)) saved.push(JSON.parse(JSON.stringify(def)));
                 });
-                return assignRoles(saved);
+                return assignRoles(ensureRunOutStatus(saved));
             }
-            return assignRoles(JSON.parse(JSON.stringify(DEFAULT_PD)));
+            return assignRoles(ensureRunOutStatus(JSON.parse(JSON.stringify(DEFAULT_PD))));
         }
         let PD = loadPD();
         // 新用户不再灌 Cait 的写死状态；无存档时留空，每个产品各自用 statuses[0] 作默认（见 cyclePS/renderTn 的 `PS[id] || def.statuses[0]`）
         let PS = lg(K.prods) || {};
         let POPEN = lg(K.popen) || {};
+
+        // ══ 货架迁移:家里实际没有的东西,要落到**每个账号**的货架上 ═══════════════
+        // 为什么不用 RETIRED:那是"永久删除、别再种回来",不适合"用完了、可能补货"。
+        // 这里把状态推到 pending(待购入)——排班不再排它、进购物清单、随时能改回「正常使用」。
+        // 🔴 为什么标记要进 CLOUD_KEYS:只记在本机的话,云端那份旧 sk_prods1 一同步下来
+        //    就把改动盖回去,而本机因为"已经跑过"再也不会重来 → 改动静默消失。
+        // 🔴 为什么不能只靠我在浏览器里点一下:两个账号(uid)各有各的云端货架,
+        //    而 Cici 的极简模式是「排上了 = 默认用了」——排一件家里没有的东西,会被自动记成用过。
+        const SHELF_MIGRATIONS = [
+            // 2026-08-26 Cait:Avène Tolérance Extrême 舒缓面膜(5ml)用完了
+            { id: 'avene-run-out-2026-08-26', prod: 'avene', to: 'pending' }
+        ];
+        function applyShelfMigrations() {
+            const done = lg(K.mig) || [];
+            let changed = false, marked = false;
+            SHELF_MIGRATIONS.forEach(m => {
+                if (done.includes(m.id)) return;
+                const def = PD.find(p => p.id === m.prod);
+                if (def && (PS[m.prod] || def.statuses[0]) !== m.to) { PS[m.prod] = m.to; changed = true; }
+                done.push(m.id); marked = true;
+            });
+            if (changed) ls(K.prods, PS);
+            if (marked)  ls(K.mig, done);
+            return changed;
+        }
+        applyShelfMigrations();
 
         // ══ 私人化层:关注区域(分区护理) + 硬性排除清单 + 诉求建议 ══════════════
         // 都是 per-user 数据，不写死任何人的情况。
@@ -4006,9 +4049,9 @@
                 }
                 else steps.push({ p: '温水冲洗', h: '没有洁面产品时的兜底——建议在「产品」页加一支洁面' });
                 // 舒缓面膜:冲洗型,只在最近有泛红/敏感/刺痛时才提示,不占去角质额度
-                if (jrnlLastNDays(3).some(e => (e.status || []).some(s => s === '泛红' || s === '敏感' || s === '爆痘'))) {
-                    byRole('soothe').forEach(p => steps.push({ p: p.name, h: (hint(p) || '敷约5分钟后洗掉') + '（最近有泛红/不适才建议用）', t: 300 }));
-                }
+                const irritated = jrnlLastNDays(3).some(e => (e.status || []).some(s => s === '泛红' || s === '敏感' || s === '爆痘'));
+                const soothers = irritated ? byRole('soothe') : [];
+                soothers.forEach(p => steps.push({ p: p.name, h: (hint(p) || '敷约5分钟后洗掉') + '（最近有泛红/不适才建议用）', t: 300 }));
                 if (hasScheduledAcid) {
                     const ap = pd(schedAcid.id); const aName = ap ? ap.name : schedAcid.label;
                     steps.push({ p: aName, h: ((ap && hint(ap)) || '停留3–5分钟，无需冲洗') + zoneHintFor('acid') });
@@ -4027,7 +4070,12 @@
                 byRole('eye', true).forEach(p => steps.push({ p: p.name, h: hint(p) || '无名指轻拍眼眶骨' }));
                 byRole('moist', true).forEach(p => steps.push({ p: p.name, h: hasScheduledAcid ? '酸类夜首选封层' : (hint(p) || '全脸封层') }));
                 // 修护霜用法按档案:屏障修复是基础治疗、指南建议常规全脸使用;仅在屏障好且油皮时才点涂
-                byRole('repair').forEach(p => steps.push({ p: p.name, h: repairUse() === 'spot' ? '活跃痘痘处、口罩线点涂' : '全脸薄涂封层' }));
+                // 手边没有舒缓面膜了(Avène 用完),不能让"最近在泛红"这条线索跟着一起消失 ——
+                // 修护霜本来就是每晚一步,泛红时把它的用法从"点涂"提到"全脸薄涂"顶上来。
+                const needCalm = irritated && !soothers.length;
+                byRole('repair').forEach(p => steps.push({ p: p.name, h: needCalm
+                    ? '最近有泛红/不适——今晚全脸薄涂一层修护（手边没有舒缓面膜了）'
+                    : (repairUse() === 'spot' ? '活跃痘痘处、口罩线点涂' : '全脸薄涂封层') }));
             }
             return { steps, skips };
         }
@@ -5465,7 +5513,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
         setInterval(checkDayRollover, 60000);
 
         // ══ Firebase 云同步 ═══════════════════════════════════
-        const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_amsteps1','sk_proddefs1','sk_profile1','sk_preset1','sk_planday1'];
+        const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_amsteps1','sk_proddefs1','sk_profile1','sk_preset1','sk_planday1','sk_mig1'];
         let _db = null, _user = null, _pushTimer = null, _pushing = false, _pushDirty = false;
         // 递归按键名排序的序列化——只用于云/本地数据的等价比较
         function _stableStr(v) {
@@ -5575,6 +5623,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
             renderPlanTemplates();
             renderBarrierBadge();
             PD = loadPD(); PS = lg(K.prods) || PS;
+            applyShelfMigrations();   // 云端刚盖过来的可能还是旧货架
             initPhotoDB(() => {
                 if (document.getElementById('jrnl').classList.contains('active')) renderJrnl();
             });
