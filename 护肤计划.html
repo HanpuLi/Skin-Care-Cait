@@ -4287,7 +4287,9 @@
             const out = [];
             const cap = maxAcidPerWeek(), b = barrierScore();
             const planIds = new Set();
-            try { computePlanRolling().forEach(d => (d.items || []).forEach(it => { if (it.id) planIds.add(it.id); })); } catch (e) {}
+            // ⚠️ 只看**未来**排上没有:过去的日志里出现过一次(哪怕是极简模式推定的)也会让它
+            //    看起来"排上了",于是这一版明明不排它,却不出现在「先不排」里(在 Cici 账号上实测到)。
+            try { computePlanRolling().forEach(d => { if (d.isPast) return; (d.items || []).forEach(it => { if (it.id) planIds.add(it.id); }); }); } catch (e) {}
             activeProducts().forEach(p => {
                 const t = p.schedule && p.schedule.type;
                 if (!(t === 'acid' || t === 'mask' || t === 'retinol')) return;
