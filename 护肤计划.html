@@ -2097,6 +2097,25 @@
       .assess-goal{display:flex;align-items:center;gap:6px;font-size:12px;margin-top:6px}
       .goal-pct{margin-left:auto;font-family:var(--mono);font-weight:600;color:var(--gr)}
       .assess-streak{font-size:11px;color:var(--tx3);margin-top:9px;text-align:right}
+      /* ══ 当前方案卡(今晚页最上面) ══ */
+      .rg-card{background:var(--sur);border:1px solid var(--bd);border-left:3px solid var(--bl);border-radius:var(--r);padding:14px 16px;margin-bottom:1rem}
+      .rg-hd{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}
+      .rg-t{font-size:15px;font-weight:600;color:var(--tx)}
+      .rg-v{font-family:var(--mono);font-size:11px;color:var(--tx3)}
+      .rg-why{font-size:12px;color:var(--tx2);margin-top:2px;line-height:1.5}
+      .rg-skin{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0 8px}
+      .rg-tag{font-size:11px;font-family:var(--mono);background:var(--sur2);color:var(--tx2);border-radius:99px;padding:2px 8px}
+      .rg-tag.bad{background:var(--rd-bg);color:var(--rd)}
+      .rg-tag.ok{background:var(--gr-bg);color:var(--gr)}
+      .rg-rules{list-style:none;margin:0;padding:0}
+      .rg-rules li{font-size:13px;line-height:1.65;color:var(--tx)}
+      .rg-gap{margin-top:10px;background:var(--am-bg);border:1px solid var(--am-br);border-radius:var(--rs);padding:8px 10px;font-size:12.5px;line-height:1.6;color:var(--tx)}
+      .rg-more{margin-top:10px;background:none;border:1px solid var(--bd2);color:var(--tx2);border-radius:var(--rs);padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit}
+      .rg-detail{margin-top:10px;border-top:1px dashed var(--bd);padding-top:10px}
+      .rg-sub{font-size:11px;font-family:var(--mono);color:var(--tx3);letter-spacing:.04em;margin:10px 0 4px}
+      .rg-step{font-size:12.5px;line-height:1.55;color:var(--tx2);margin-bottom:4px}
+      .rg-step b{color:var(--tx);font-weight:500}
+      .rg-hist{font-size:12px;color:var(--tx2);line-height:1.55;margin-bottom:3px}
     </style>
     <div class="wrap">
         <div class="header">
@@ -2126,6 +2145,7 @@
         <!-- ══ 今晚 ══ -->
 
         <div id="tonight" class="panel active">
+            <div id="regimen-card"></div>
             <div id="assess-card"></div>
             <div id="hrt-bnr"></div>
             <div id="barrier-limit-banner"></div>
@@ -2398,7 +2418,8 @@
             <p style="font-size:12px;color:var(--tx3);margin-bottom:1rem">点击状态按钮循环切换；点击产品行展开详情。</p>
             <div id="prod-list"></div>
             <div class="section" style="margin-top:1.5rem">
-                <div class="sec-title">待购清单</div>
+                <div class="sec-title">要不要买新的</div>
+                <p style="font-size:12px;color:var(--tx3);margin:-4px 0 8px">不按"某一类只剩几件"判断,而是看:照你现在的皮肤状况,一套能起作用的方案需要哪几件事 —— 家里剩下的东西全办不了的那一项,才需要买。</p>
                 <div id="shop-pending"></div>
                 <button class="cpb" id="cpb" onclick="copyShop()">📋 复制购物清单</button>
             </div>
@@ -2586,7 +2607,9 @@
             profile: 'sk_profile1', // 每人档案：刮胡/HRT/肤质
             planday: 'sk_planday1', // 最近一次算出的「今天该做什么活性」——极简模式跨天后据此推定已执行
             mig: 'sk_mig1',         // 已跑过的「货架迁移」id;进 CLOUD_KEYS 跟着云端走(见 applyShelfMigrations)
-            empty: 'sk_empty1'      // 空瓶记录:{产品id: [{date, weeks, uses}]}——「用完了」是事件,要留痕
+            empty: 'sk_empty1',     // 空瓶记录:{产品id: [{date, weeks, uses}]}——「用完了」是事件,要留痕
+            gone:  'sk_gone1',      // 家里已经没有了、已从货架删掉的产品 id(用完即删,不进待买清单)
+            regimen: 'sk_regimen1'  // 方案版本历史:皮肤状况或货架一变就重出一版(见 syncRegimen)
         };
         // One-time migration from old keys
         (function migrate() {
@@ -2745,24 +2768,41 @@
             if (/精华|serum|安瓶/i.test(s)) return 'serum';
             return 'moist';
         }
-        function assignRoles(list) { list = list.filter(p => !RETIRED.includes(p.id)); list.forEach(p => { if (!p.role) p.role = ROLE_MAP[p.id] || inferRole(p); }); return list; }
+        function assignRoles(list) { list = list.filter(p => !RETIRED.includes(p.id) && !isGone(p.id)); list.forEach(p => { if (!p.role) p.role = ROLE_MAP[p.id] || inferRole(p); }); return list; }
         // 数据层的刮胡过滤：产品 notes / 分类里写着"刮胡后…"这类文字，CSS 门控管不了，
         // 不刮胡的用户(如 Cici)会在产品卡和步骤提示里看到。这里按档案过滤/改写。
         function visNotes(p) { const n = (p && p.notes) || []; return PROFILE.shaving ? n : n.filter(x => !/刮胡/.test(x)); }
         function visCat(p) { const c = (p && p.cat) || ''; return PROFILE.shaving ? c : c.replace(/\s*[·・]\s*刮胡后\s*/, ' · 舒缓').replace(/刮胡/g, '').trim(); }
-        // ══ 「用完了」:每件产品都要能标 ══════════════════════════════
-        // 2026-08-26 Avène 舒缓面膜用完才发现:只有防晒带 pending(待购入)这个状态,
-        // 别的产品用完了在 App 里根本没法表达 —— 既进不了购物清单,排班照排,
-        // 极简模式还会把"排上了"当成"用了"自动补记(见 CLAUDE.md「状态≠事件」)。
-        // ⚠️ 必须对两条路径都做:loadPD 遇到存档只补**新产品**、不更新老产品的定义,
-        //    所以光改 DEFAULT_PD 对已经存过 sk_proddefs1 的账号(Cait)完全无效。
-        function ensureRunOutStatus(list) {
+        // ══ 「用完了 = 从货架删掉」(2026-08-26 晚 Cait 定的规矩) ═══════════════
+        // 上一版把用完的东西留在货架上标成 pending(待购入)。Cait 的反馈很直接:
+        // **用完了就直接删掉,别再出现在产品清单里、也别自动进待买清单。**
+        // 这条是对的:留着它只会让人每天看见一件家里没有的东西;而"要不要买"本来就不该由
+        // "这件用完了"来决定 —— 该由「剩下的东西还能不能凑出一套对**当前皮肤**起作用的方案」
+        // 来决定(见 regimenNeeds/regimenGaps)。所以完整链路是:
+        //   用完 → 记一笔空瓶记录(留痕) → 从货架删除 → 立刻重出一版方案 → 方案有缺口才提示买什么。
+        // 🔴 GONE 必须进 CLOUD_KEYS:两个账号各有各的云端货架,只记本机会被云端旧数据盖回来。
+        let GONE = lg(K.gone) || [];
+        function isGone(id) { return GONE.indexOf(id) >= 0; }
+        // 产品状态只保留两态:正常使用 / 备用。pending(待购入 / 用完了)整个退役 ——
+        // 家里没有的东西不该在货架上还有个状态,它应该已经被删掉了。
+        function normalizeStatuses(list) {
             list.forEach(p => {
                 if (!Array.isArray(p.statuses) || !p.statuses.length) p.statuses = ['owned', 'paused'];
-                if (!p.statuses.includes('pending')) p.statuses.push('pending');
-                // 已有的文案优先(防晒本来就叫「待购入」),只补缺的
-                p.labels  = Object.assign({ pending: '用完了' },   p.labels  || {});
-                p.pillCls = Object.assign({ pending: 'pending' }, p.pillCls || {});
+                p.statuses = p.statuses.filter(x => x !== 'pending');
+                if (!p.statuses.length) p.statuses = ['owned', 'paused'];
+                p.labels  = Object.assign({}, p.labels  || {});
+                p.pillCls = Object.assign({}, p.pillCls || {});
+                p.statuses.forEach(x => {
+                    if (!p.labels[x])  p.labels[x]  = (x === 'paused' ? '备用' : '正常使用');
+                    if (!p.pillCls[x]) p.pillCls[x] = (x === 'paused' ? 'paused' : 'active');
+                });
+                // 防晒原来叫「已购入」——它现在就在家里、就在用,文案跟其它产品统一
+                // 「已购入」「偶尔用」「可以使用」都是同一档,统一叫「正常使用」——
+                // Cait:所有产品都调整为正常使用状态。某件今晚用不用由方案决定,不靠状态文案暗示。
+                ['owned', 'active'].forEach(x => {
+                    if (p.labels[x] && p.labels[x] !== '备用') { p.labels[x] = '正常使用'; p.pillCls[x] = 'active'; }
+                });
+                delete p.labels.pending; delete p.pillCls.pending;
             });
             return list;
         }
@@ -2783,40 +2823,80 @@
                 DEFAULT_PD.filter(d => d.builtin).forEach(def => {
                     if (!saved.find(s => s.id === def.id)) saved.push(JSON.parse(JSON.stringify(def)));
                 });
-                return assignRoles(ensureRunOutStatus(saved));
+                return assignRoles(normalizeStatuses(saved));
             }
-            return assignRoles(ensureRunOutStatus(JSON.parse(JSON.stringify(DEFAULT_PD))));
+            return assignRoles(normalizeStatuses(JSON.parse(JSON.stringify(DEFAULT_PD))));
         }
         let PD = loadPD();
         // 新用户不再灌 Cait 的写死状态；无存档时留空，每个产品各自用 statuses[0] 作默认（见 cyclePS/renderTn 的 `PS[id] || def.statuses[0]`）
         let PS = lg(K.prods) || {};
         let POPEN = lg(K.popen) || {};
 
-        // ══ 货架迁移:家里实际没有的东西,要落到**每个账号**的货架上 ═══════════════
-        // 为什么不用 RETIRED:那是"永久删除、别再种回来",不适合"用完了、可能补货"。
-        // 这里把状态推到 pending(待购入)——排班不再排它、进购物清单、随时能改回「正常使用」。
+        // ══ 货架迁移:家里实际有什么,要落到**每个账号**的货架上 ═══════════════
+        // 🔴 为什么不能只靠我在浏览器里点一下:两个账号(uid)各有各的云端货架,Cici 那份我碰不到。
         // 🔴 为什么标记要进 CLOUD_KEYS:只记在本机的话,云端那份旧 sk_prods1 一同步下来
         //    就把改动盖回去,而本机因为"已经跑过"再也不会重来 → 改动静默消失。
-        // 🔴 为什么不能只靠我在浏览器里点一下:两个账号(uid)各有各的云端货架,
-        //    而 Cici 的极简模式是「排上了 = 默认用了」——排一件家里没有的东西,会被自动记成用过。
+        // 跑过就不再管,所以之后手动改回来的状态不会被推翻。
         const SHELF_MIGRATIONS = [
-            // 2026-08-26 Cait:Avène Tolérance Extrême 舒缓面膜(5ml)用完了
-            { id: 'avene-run-out-2026-08-26', prod: 'avene', to: 'pending' }
+            // 2026-08-26 Avène Tolérance Extrême 舒缓面膜(5ml)用完了。
+            // 上一版把它留在货架上标 pending(待补货);Cait 的新规矩是**用完直接删掉**,不进待买清单。
+            { id: 'avene-remove-2026-08-26', type: 'remove', prod: 'avene', date: '2026-08-26' },
+            // 2026-08-26 Cait:「所有产品都调整为正常使用状态」。
+            // 「备用 / 待购入」这类历史状态一次清零 —— 家里有的就是在用的;
+            // 某件今晚到底用不用,由方案按当前皮肤状况决定(buildRegimen),不再靠产品状态去表达。
+            { id: 'all-normal-2026-08-26', type: 'all-normal' }
         ];
+        // 一件产品的「正常使用」状态叫什么(内置产品有的叫 active、有的叫 owned)
+        function normalStatusOf(def) { return (def.statuses || []).find(x => x !== 'paused') || (def.statuses || ['owned'])[0]; }
         function applyShelfMigrations() {
             const done = lg(K.mig) || [];
-            let changed = false, marked = false;
+            let changed = false, marked = false, goneChanged = false;
             SHELF_MIGRATIONS.forEach(m => {
                 if (done.includes(m.id)) return;
-                const def = PD.find(p => p.id === m.prod);
-                if (def && (PS[m.prod] || def.statuses[0]) !== m.to) { PS[m.prod] = m.to; changed = true; }
+                if (m.type === 'remove') {
+                    if (!isGone(m.prod)) {
+                        const def = PD.find(p => p.id === m.prod);
+                        // 补一笔空瓶记录,别让"它去哪了"变成无头案(⚠️ 这里不能用 EMPTIES 变量:
+                        // 它是 let、定义在本函数下面几百行,首次调用时还在 TDZ 里 —— 直接读写 localStorage)
+                        const em = lg(K.empty) || {};
+                        if (def && !((em[m.prod] || []).length)) {
+                            (em[m.prod] = em[m.prod] || []).push({ date: m.date || today(), weeks: weeksOpen(m.prod), uses: prodUsageCount(def), name: def.name });
+                            ls(K.empty, em);
+                        }
+                        GONE.push(m.prod); goneChanged = true;
+                        PD = PD.filter(p => p.id !== m.prod);
+                        if (PS[m.prod]) { delete PS[m.prod]; changed = true; }
+                    }
+                } else if (m.type === 'all-normal') {
+                    PD.forEach(p => {
+                        const want = normalStatusOf(p);
+                        if ((PS[p.id] || p.statuses[0]) !== want) { PS[p.id] = want; changed = true; }
+                    });
+                } else if (m.prod) {                       // 老式:直接设某件产品的状态
+                    const def = PD.find(p => p.id === m.prod);
+                    if (def && (PS[m.prod] || def.statuses[0]) !== m.to) { PS[m.prod] = m.to; changed = true; }
+                }
                 done.push(m.id); marked = true;
             });
+            if (goneChanged) ls(K.gone, GONE);
             if (changed) ls(K.prods, PS);
             if (marked)  ls(K.mig, done);
+            return changed || goneChanged;
+        }
+        // 云端同步来的旧货架可能还带着已退役的 pending 状态 —— 落到界面上就是
+        // `def.labels[undefined]`(空白按钮)。迁移只跑一次,所以这一步必须常驻。
+        function sanitizePS() {
+            let changed = false;
+            Object.keys(PS).forEach(id => {
+                const def = PD.find(p => p.id === id);
+                if (!def) { if (isGone(id)) { delete PS[id]; changed = true; } return; }
+                if ((def.statuses || []).indexOf(PS[id]) < 0) { PS[id] = normalStatusOf(def); changed = true; }
+            });
+            if (changed) ls(K.prods, PS);
             return changed;
         }
         applyShelfMigrations();
+        sanitizePS();
 
         // ══ 私人化层:关注区域(分区护理) + 硬性排除清单 + 诉求建议 ══════════════
         // 都是 per-user 数据，不写死任何人的情况。
@@ -2889,6 +2969,14 @@
             if (jrnlLastNDays(14).some(e => (e.status || []).some(s => s === '闭口' || s === '爆痘'))) return 'spot';
             const b = barrierScore();
             return (b !== null && b >= 70 && (PROFILE.skinType || '').includes('油')) ? 'spot' : 'full';
+        }
+        // 修护霜为什么这么涂 —— 文案跟着真实原因走,别写死"近期有闭口"(方案卡上会照着念)
+        function repairReason() {
+            if (PROFILE.repairUse) return '你自己设定的';
+            if (jrnlLastNDays(14).some(e => (e.status || []).some(x => x === '闭口' || x === '爆痘'))) return '近期有闭口/痘，全脸厚涂容易更闷';
+            const b = barrierScore();
+            if (b !== null && b >= 70 && (PROFILE.skinType || '').includes('油')) return '屏障稳、偏油，不必全脸厚涂';
+            return '屏障优先，全脸薄薄一层';
         }
         function toggleExcluded(id) {
             const list = (PROFILE.excluded || []).slice();
@@ -3094,10 +3182,7 @@
             const cur = PS[id] || def.statuses[0];
             const idx = def.statuses.indexOf(cur);
             const next = def.statuses[(idx + 1) % def.statuses.length];
-            // 「用完了」不是普通的状态切换,是一个要留痕的事件 → 交给 markRunOut(记日期/开封时长/累计次数)
-            if (next === 'pending' && cur !== 'pending') { markRunOut(id); return; }
-            // 从「用完了」切回来 = 补货了 → 自动把开封日记成今天(卡片里能改);没有它 PAO 和累计次数都不显示
-            if (cur === 'pending' && next !== 'pending' && !POPEN[id]) { POPEN[id] = today(); ls(K.popen, POPEN); }
+            // 状态只剩两态(正常使用 / 备用)。「用完了」不是状态而是事件,走 markRunOut(记一笔 + 从货架删掉)。
             PS[id] = next;
             ls(K.prods, PS); invalidatePlanCache(); renderProds(); updateProdUI(); renderWk(); renderTn(); renderAm();
         }
@@ -3140,19 +3225,41 @@
                 ? `接下来由「${r.p.name}」顶上 —— 它现在是「备用」,点一下改成「正常使用」就会排进流程`
                 : `接下来由「${r.p.name}」顶上(已经在流程里了)`;
         }
+        // 用完了 = ①记一笔空瓶 ②从货架删掉(不再出现在产品清单/待买清单) ③立刻按剩下的东西重出一版方案。
+        // Cait 2026-08-26:「用完的产品直接删掉」+「不是简单删掉用完的产品,要针对当前皮肤状况作出一版新方案」。
         function markRunOut(id, e) {
             if (e) e.stopPropagation();
             const def = PD.find(d => d.id === id); if (!def) return;
-            const rec = { date: today(), weeks: weeksOpen(id), uses: prodUsageCount(def) };
+            if (!confirm(`「${def.name}」用完了？\n\n它会从产品清单里删掉(空瓶记录留一笔,买回来能一键恢复),\n然后按家里剩下的东西、照你现在的皮肤状况重出一版方案。`)) return;
+            const rec = { date: today(), weeks: weeksOpen(id), uses: prodUsageCount(def), name: def.name };
             (EMPTIES[id] = EMPTIES[id] || []).push(rec);
             ls(K.empty, EMPTIES);
-            PS[id] = 'pending'; ls(K.prods, PS);
-            delete POPEN[id]; ls(K.popen, POPEN);   // 补货后要重记开封日;旧的那次已经留在空瓶记录里了
+            const hint = replacementText(def);          // 要在删掉之前算:删完它自己就不在 PD 里了
+            if (!isGone(id)) { GONE.push(id); ls(K.gone, GONE); }
+            PD = PD.filter(p => p.id !== id);
+            delete PS[id]; ls(K.prods, PS);
+            delete POPEN[id]; ls(K.popen, POPEN);
             invalidatePlanCache();
+            const reg = syncRegimen('用完了：' + def.name, true);   // ← 新方案在这里生成
             renderProds(); renderWk(); renderTn(); renderAm();
             const life = rec.weeks !== null ? `开封 ${rec.weeks} 周、` : '';
-            sysAlert(`已记下:「${def.name}」用完了(${life}累计用过 ${rec.uses} 次)。\n\n` +
-                     `它已进待购清单、不会再排进今晚的流程。\n\n${replacementText(def)}`);
+            sysAlert(`已记下：「${def.name}」用完了(${life}累计用过 ${rec.uses} 次),已从产品清单删除。\n\n${hint}\n\n` +
+                     (reg ? `已按你现在的皮肤状况重出一版方案(v${reg.v})：\n${regimenSummary(reg)}` : ''));
+        }
+        // 买回来了 = 从"已删掉"里恢复:重新出现在货架、状态正常使用、开封日记今天,并再出一版方案
+        function unGone(id) {
+            const i = GONE.indexOf(id); if (i < 0) return;
+            GONE.splice(i, 1); ls(K.gone, GONE);
+            PD = loadPD();
+            const def = PD.find(p => p.id === id);
+            if (def) { PS[id] = normalStatusOf(def); ls(K.prods, PS); }
+            if (!POPEN[id]) { POPEN[id] = today(); ls(K.popen, POPEN); }
+            ls(K.popen, POPEN);
+            invalidatePlanCache();
+            const reg = syncRegimen('补货：' + (def ? def.name : id), true);
+            renderProds(); renderWk(); renderTn(); renderAm();
+            sysAlert(`「${def ? def.name : id}」已恢复到产品清单(开封日记为今天)。\n\n` +
+                     (reg ? `方案已更新(v${reg.v})：\n${regimenSummary(reg)}` : ''));
         }
         function _lastEmpty(id) { const l = EMPTIES[id]; return (l && l.length) ? l[l.length - 1] : null; }
         function emptyLogRows() {
@@ -3297,14 +3404,12 @@
                 if (usageCountHtml) schedTags += `<div class="sched-info" style="margin-top:2px">${usageCountHtml}</div>`;
                 return `<div class="pc"><div class="pch" onclick="togglePCB('${def.id}')">
       <div class="pci">${def.icon}</div>
-      <div class="pci2"><div class="pcn"${isExcluded(def)?' style="opacity:.45;text-decoration:line-through"':''}>${esc(def.name)}</div><div class="pcc">${isExcluded(def)?'🚫 我不用 · ':''}${(_critIds && _critIds.has(def.id))?'🔸没有能顶替的 · ':''}${esc(visCat(def))}${wo!==null?` · 开封${wo}周`:''}</div>${s==='pending'&&_lastEmpty(def.id)?`<div class="pcc" style="color:var(--am)">🫗 ${esc(_lastEmpty(def.id).date)} 用完${_lastEmpty(def.id).weeks!==null?` · 开封${_lastEmpty(def.id).weeks}周`:''} · 累计${_lastEmpty(def.id).uses}次</div><div class="pcc">↪︎ ${esc(replacementText(def).replace(/^接下来由/,'由'))}</div>`:''}<div class="sched-info" style="margin-top:4px">${paoTag}</div>${schedTags}</div>
+      <div class="pci2"><div class="pcn"${isExcluded(def)?' style="opacity:.45;text-decoration:line-through"':''}>${esc(def.name)}</div><div class="pcc">${isExcluded(def)?'🚫 我不用 · ':''}${(_critIds && _critIds.has(def.id))?'🔸没有能顶替的 · ':''}${esc(visCat(def))}${wo!==null?` · 开封${wo}周`:''}</div><div class="sched-info" style="margin-top:4px">${paoTag}</div>${schedTags}</div>
       ${can?`<button class="pcp ${def.pillCls[s]}" onclick="cyclePS('${def.id}',event)">${def.labels[s]}</button>`:`<span class="pcp ${def.pillCls[s]}">${def.labels[s]}</span>`}
     </div><div class="pcb" id="pcb-${def.id}">
       <div style="margin-top:0">${notes}</div>
       <div class="popen"><label>开封日期：</label><input type="date" value="${POPEN[def.id]||''}" onchange="saveOpenDate('${def.id}',this.value)">${woHtml}</div>
-      <div class="prod-acts"><button class="prod-act" onclick="showProdModal('${def.id}')">✏️ 编辑</button>${s==='pending'
-          ? `<button class="prod-act" onclick="cyclePS('${def.id}',event)">🛍 补货了</button>`
-          : `<button class="prod-act" onclick="markRunOut('${def.id}',event)">🫗 用完了</button>`}<button class="prod-act" onclick="toggleExcluded('${def.id}')">${isExcluded(def)?'↩︎ 取消不用':'🚫 我不用这个'}</button><button class="prod-act del" onclick="deleteProd('${def.id}')">${def.builtin?'👁 隐藏':'🗑 删除'}</button></div>
+      <div class="prod-acts"><button class="prod-act" onclick="showProdModal('${def.id}')">✏️ 编辑</button><button class="prod-act" onclick="markRunOut('${def.id}',event)">🫗 用完了</button><button class="prod-act" onclick="toggleExcluded('${def.id}')">${isExcluded(def)?'↩︎ 取消不用':'🚫 我不用这个'}</button><button class="prod-act del" onclick="deleteProd('${def.id}')">${def.builtin?'👁 隐藏':'🗑 删除'}</button></div>
       ${can?`<div class="pch2">点击状态循环切换 → ${def.statuses.map(s2=>def.labels[s2]).join(' → ')}</div>`:''}
     </div></div>`;
             };
@@ -3329,7 +3434,7 @@
             });
             list.innerHTML = keys.map(k => {
                 const { name, items } = bucket[k];
-                const owned  = items.filter(p => !isExcluded(p) && (PS[p.id] || p.statuses[0]) !== 'pending');
+                const owned  = items.filter(p => !isExcluded(p));   // 用完的已经从货架删掉了,还在列表里的就是家里有的
                 const usable = items.filter(p => !isExcluded(p) && isSchedActive(p, PS[p.id] || p.statuses[0]));
                 let badge, warn = '';
                 if (owned.length === 0) { badge = `<span class="grp-count none">家里没有</span>`; }
@@ -3341,14 +3446,22 @@
                 return `<div class="prod-group"><div class="grp-hd">${esc(name)}${badge}</div>${warn}${items.map(cardOf).join('')}</div>`;
             }).join('') + `<button class="add-prod-btn"  onclick="showProdModal()">+ 添加产品</button>`;
             if (PD.some(p=>p.hidden)) list.innerHTML += `<button class="prod-act" onclick="restoreBuiltins()" style="margin-top:8px">恢复已隐藏的内置产品</button>`;
-            const pend = PD.filter(d => !d.hidden && PS[d.id] === 'pending');
+            const gaps = regimenGaps();
             const sp = document.getElementById('shop-pending');
-            if (sp) sp.innerHTML = pend.length ? pend.map((d, i) => `<div class="shop-item"><div class="shop-pri ${i===0?'p1':'p2'}">0${i+1}</div><div class="si"><div class="sn2">${esc(d.name)}</div><div class="sw">${esc(replacementText(d))}</div></div></div>`).join('') : '<div style="font-size:12px;color:var(--tx3);font-family:var(--mono);padding:8px 0">所有产品均已购入 ✓</div>';
+            if (sp) sp.innerHTML = gaps.length ? gaps.map((g, i) => {
+                const ad = SHOP_ADVICE[g.key] || {}; const pick = SHOP_PICKS[g.key];
+                return `<div class="shop-item"><div class="shop-pri ${i===0?'p1':'p2'}">0${i+1}</div><div class="si">
+                    <div class="sn2">${esc(ad.what || g.label)}</div>
+                    <div class="sw">${esc(g.why)}</div>
+                    ${ad.how ? `<div class="sw">挑选标准：${esc(ad.how)}</div>` : ''}
+                    ${pick ? `<div class="sw" style="color:var(--tx)">👉 调研推荐：${esc(pick.name)}${pick.price?`（${esc(pick.price)}）`:''} —— ${esc(pick.why)}</div>` : ''}
+                </div></div>`;
+            }).join('') : '<div style="font-size:12px;color:var(--tx3);font-family:var(--mono);padding:8px 0">家里现有的东西够凑一套完整方案 ✓ 暂时不用买</div>';
             const elog = document.getElementById('empty-log');
             if (elog) {
                 const rows = emptyLogRows();
                 elog.innerHTML = rows.length
-                    ? rows.map(r => `<div class="shop-item"><div class="si"><div class="sn2">${esc(r.name)}</div><div class="sw">🫗 ${esc(r.date)} 用完${r.weeks !== null && r.weeks !== undefined ? ` · 开封 ${r.weeks} 周` : ''} · 累计用过 ${r.uses} 次</div></div></div>`).join('')
+                    ? rows.map(r => `<div class="shop-item"><div class="si"><div class="sn2">${esc(r.name)}</div><div class="sw">🫗 ${esc(r.date)} 用完${r.weeks !== null && r.weeks !== undefined ? ` · 开封 ${r.weeks} 周` : ''} · 累计用过 ${r.uses} 次</div>${isGone(r.id) ? `<button class="prod-act" style="margin-top:4px" onclick="unGone('${r.id}')">🛍 买回来了</button>` : ''}</div></div>`).join('')
                     : '<div style="font-size:12px;color:var(--tx3);font-family:var(--mono);padding:8px 0">还没有用完的产品</div>';
             }
         }
@@ -3363,9 +3476,12 @@
         }
 
         function copyShop() {
-            const pend = PD.filter(d => !d.hidden && PS[d.id] === 'pending');
-            if (!pend.length) { alert('所有产品均已购入！'); return; }
-            const txt = '护肤待购清单\n\n' + pend.map((d, i) => `${i + 1}. ${d.name}\n   ${d.notes[0]||''}`).join('\n\n');
+            const gaps = regimenGaps();
+            if (!gaps.length) { alert('家里现有的东西够凑一套完整方案，暂时不用买。'); return; }
+            const txt = '护肤要买的（按方案缺口）\n\n' + gaps.map((g, i) => {
+                const ad = SHOP_ADVICE[g.key] || {}; const pick = SHOP_PICKS[g.key];
+                return `${i + 1}. ${ad.what || g.label}\n   为什么：${g.why}\n   挑选标准：${ad.how || ''}` + (pick ? `\n   推荐：${pick.name}${pick.price ? '（' + pick.price + '）' : ''} —— ${pick.why}` : '');
+            }).join('\n\n');
             navigator.clipboard.writeText(txt).then(() => {
                 const b = document.getElementById('cpb'); b.textContent = '✓ 已复制'; b.classList.add('copied');
                 setTimeout(() => { b.innerHTML = '📋 复制购物清单'; b.classList.remove('copied'); }, 2000);
@@ -4046,28 +4162,299 @@
             return out;
         }
 
+        // ══ 方案版本:皮肤状况一变 / 东西一用完,就用**现有产品**重出一版方案 ══════════
+        // Cait 2026-08-26:「每次皮肤状态有改变、有产品用完,都用现有产品针对当前皮肤状况作出
+        // 一版新的护肤方案,不是简单删掉用完的产品。」
+        // 所以这里不是"把缺的那一步删掉"就完事 —— 是把当下的皮肤状况 + 家里剩下的东西
+        // 重新过一遍引擎,产出一份带日期、带理由、能回看的方案;并顺带回答"要不要买新的"。
+
+        // 产品的"性格"。role 说它在流程里站哪一格,trait 说它**温不温和、闷不闷、能不能镇静**。
+        // 判断一套方案对当前皮肤起不起作用,靠的是后者:同样是"舒缓类",
+        // 封闭性膏体和轻薄精华对一张正在闷闭口的脸完全是两回事。
+        const TRAIT_MAP = {
+            pc:        ['gentle-exfo'],
+            votary:    ['gentle-exfo'],
+            goodGenes: ['strong-exfo'],
+            drorganic: ['scrub', 'strong-exfo'],
+            clay:      ['clay'],
+            cicaplast: ['calm', 'occlusive'],      // Baume B5:含乳木果油的封闭性膏体 —— 镇静有,但会闷
+            // ⚠️ 下面两条是 2026-08-26 查成分表核实过的,不是照名字猜的:
+            // Dr Sebagh Rose de Vie = 纯油基(Canola/Rosa Canina/Passiflora)+ Aroma、Citronellol、
+            // Geraniol、Linalool(欧盟标注级香料过敏原)+ Isocetyl Stearate(偏致粉刺) → 发炎/闷闭口时该停。
+            sebagh:    ['calm', 'oil-based', 'fragranced'],
+            // Toleriane Ultra 含 Neurosensine(Acetyl Dipeptide-1 Cetyl Ester)——有对照试验支持的镇静肽,
+            // 且无香精/无防腐/无酒精/无羊毛脂。所以它**本身就是**"轻薄的镇静",不只是保湿。
+            // (这条很关键:标错的话 App 会报一个假缺口,让人白买一支镇静产品。)
+            toleriane: ['light', 'calm'],
+            lacura:    ['gentle-clean'],
+            lancome:   ['strong-clean'],
+            wildsource:['oil-based'],
+            sunscreen: ['light']
+        };
+        function traitsOf(p) {
+            if (!p) return [];
+            if (TRAIT_MAP[p.id]) return TRAIT_MAP[p.id];
+            const s = (p.name || '') + (p.cat || '') + ((p.notes || []).join(''));
+            const t = [];
+            if (/磨砂|scrub|颗粒|polish/i.test(s)) { t.push('scrub', 'strong-exfo'); }
+            else if (/甘醇酸|glycolic|视黄醇|retinol|高浓度|果酸换肤/i.test(s)) t.push('strong-exfo');
+            else if (/杏仁酸|乳酸|mandelic|lactic|PHA|葡糖酸|水杨酸|salicylic|果酸|AHA|BHA/i.test(s)) t.push('gentle-exfo');
+            if (/积雪草|cica|泛醇|panthenol|B5|舒缓|calm|soothe|尿囊素|allantoin|神经酰胺|ceramide|抗敏/i.test(s)) t.push('calm');
+            if (/膏|baume|balm|凡士林|petrolatum|乳木果|shea|厚重|rich|封闭/i.test(s)) t.push('occlusive');
+            if (/精油|essential oil|玫瑰|香氛|香精|parfum|fragrance/i.test(s)) t.push('fragranced');
+            if (/面油|精华油|\boil\b/i.test(s)) t.push('oil-based');
+            if (/无油|oil.?free|轻薄|清爽|light|gel|啫喱|lotion|乳液/i.test(s)) t.push('light');
+            return t;
+        }
+        function hasTrait(p, t) { return traitsOf(p).indexOf(t) >= 0; }
+        // 家里有的 / 现在排进流程的
+        function shelfProducts()  { return PD.filter(p => !p.hidden && !isExcluded(p)); }
+        function activeProducts() { return shelfProducts().filter(p => isSchedActive(p, PS[p.id] || p.statuses[0])); }
+        function tagInDays(n, names) { return jrnlLastNDays(n).some(e => (e.status || []).some(x => names.indexOf(x) >= 0)); }
+        // 全脸用的东西。眼霜/眼部精华再"舒缓"也顶不了全脸那一档 ——
+        // 不加这一条,「轻薄的镇静」会被一支眼部精华糊弄过去,缺口就报不出来了(实测踩到)。
+        function faceWide(p) { return p && p.role !== 'eye' && p.role !== 'spf' && p.role !== 'precleanse'; }
+
+        // 🔴 要不要买新东西,**不按产品分类判断**(「舒缓类只剩一件了」这种没有意义),
+        // 而是:照现在这张脸,一套能起作用的方案需要哪几件事?家里剩下的东西能不能把每件事办了?
+        // 办不了的那一项才是"缺口",才需要买 —— 这是 Cait 2026-08-26 定的判断标准。
+        function regimenNeeds() {
+            const b = barrierScore();
+            const needs = [
+                { key: 'clean',   label: '把脸洗干净',        why: '每天都要洗脸,这一档不能空',
+                  test: p => capsOf(p).indexOf('clean') >= 0 },
+                { key: 'hydrate', label: '洗完脸上要有东西护着', why: '洗完什么都不涂,屏障只会更差',
+                  test: p => capsOf(p).indexOf('hydrate') >= 0 },
+                { key: 'spf',     label: '白天防晒',          why: '有炎症/用过酸之后不防晒 = 留印、更红',
+                  test: p => capsOf(p).indexOf('spf') >= 0 }
+            ];
+            if (tagInDays(14, ['闭口', '粗糙']))
+                needs.push({ key: 'gentle-exfo', label: '温和疏通(对付闭口)',
+                    why: '近两周记了闭口/粗糙 —— 闭口只能靠温和疏通,搓(磨砂)和闷(厚霜)都只会更糟',
+                    test: p => hasTrait(p, 'gentle-exfo') && !hasTrait(p, 'scrub') });
+            if (tagInDays(14, ['泛红', '敏感', '爆痘']))
+                needs.push({ key: 'calm-light', label: '轻薄的镇静',
+                    why: '近两周有泛红/敏感/痘 —— 需要能镇静、又不闷不刺激的东西(封闭性膏体、精油类不算)',
+                    test: p => faceWide(p) && hasTrait(p, 'calm') && !hasTrait(p, 'occlusive') && !hasTrait(p, 'oil-based') && !hasTrait(p, 'fragranced') });
+            if (b !== null && b < 45)
+                needs.push({ key: 'barrier', label: '修护屏障',
+                    why: '屏障分 ' + b + ',在修护模式 —— 要有能修屏障的东西托底',
+                    test: p => faceWide(p) && (hasTrait(p, 'calm') || p.role === 'repair') });
+            if (tagInDays(7, ['干燥']))
+                needs.push({ key: 'moisture', label: '锁水',
+                    why: '近一周记了干燥 —— 要有保湿封层',
+                    test: p => p.role === 'moist' || p.role === 'repair' || p.role === 'oil' });
+            return needs;
+        }
+        // 每一项需求 → 家里谁能办。一件都没有 = 缺口 = 该买了。
+        function regimenCoverage() {
+            const shelf = shelfProducts();
+            return regimenNeeds().map(n => {
+                const have = shelf.filter(n.test);
+                return { key: n.key, label: n.label, why: n.why, have: have,
+                         active: have.filter(p => isSchedActive(p, PS[p.id] || p.statuses[0])) };
+            });
+        }
+        function regimenGaps() { return regimenCoverage().filter(c => !c.have.length); }
+        // 缺口 → 买什么(说清挑选标准;具体型号在 SHOP_PICKS 里,是调研过的结论,不是随口推荐)
+        const SHOP_ADVICE = {
+            clean:        { what: '一支温和洁面', how: '氨基酸/无皂基、无香精,洗完不紧绷' },
+            hydrate:      { what: '一支基础保湿', how: '油皮选无油乳液,干皮选面霜;成分越简单越好' },
+            spf:          { what: '一支防晒',     how: 'SPF30+、无油/清爽,敏感肌可选纯物理' },
+            'gentle-exfo':{ what: '一支温和的酸', how: '杏仁酸/乳酸/PHA,浓度别高;不要磨砂、不要高浓度甘醇酸' },
+            'calm-light': { what: '一支轻薄的镇静产品', how: '要点:质地是水/精华/凝胶(不是膏体)、无香精无精油、成分表短;泛醇/积雪草/神经酰胺/尿囊素这类修护成分' },
+            barrier:      { what: '一支修护类产品', how: '神经酰胺/泛醇/积雪草;正在闷闭口就别选厚膏' },
+            moisture:     { what: '一支保湿封层', how: '按肤质挑质地,别为了"滋润"选香精重的' }
+        };
+        // 调研过的具体推荐(英国可买)。留空 = 还没调研过,界面就只给挑选标准。
+        // 2026-08-26 查过成分表的结论,不是随手推荐:
+        const SHOP_PICKS = {
+            'calm-light': { name: 'Avène Tolérance Hydra-10 Hydrating Fluid (40ml)', price: '约 £16–20，Boots/Escentual',
+                why: '全表只有 9 个成分、无香精无防腐(无菌泵)、质地是 fluid 不闷，油皮混油都能用。' +
+                     '⚠️ 别买 Cicaplast B5 精华顶这一档：它含 Isopropyl Myristate(偏致粉刺)和 Methyldihydrojasmonate(香料)，正在闷闭口时不合适。' },
+            'gentle-exfo': { name: 'Paula\'s Choice 6% 杏仁酸 + 2% 乳酸（家里这支就是）', price: '',
+                why: '杏仁酸分子大、渗透慢、对微炎症最友好，是这类皮肤的首选；真要再买就买同类，别升级成甘醇酸。' }
+        };
+
+        // ── 一版方案 ────────────────────────────────────────────────
+        function regimenSkinTags() {
+            const set = [];
+            jrnlLastNDays(3).forEach(e => (e.status || []).forEach(t => { if (set.indexOf(t) < 0) set.push(t); }));
+            return set;
+        }
+        // 家里有、但这一版方案**故意不排**的东西 + 为什么(别让人以为是漏掉了)
+        function restingProducts() {
+            const out = [];
+            const cap = maxAcidPerWeek(), b = barrierScore();
+            const planIds = new Set();
+            try { computePlanRolling().forEach(d => (d.items || []).forEach(it => { if (it.id) planIds.add(it.id); })); } catch (e) {}
+            activeProducts().forEach(p => {
+                const t = p.schedule && p.schedule.type;
+                if (!(t === 'acid' || t === 'mask' || t === 'retinol')) return;
+                if (planIds.has(p.id)) return;
+                let why = '这一版没排上';
+                if (hasTrait(p, 'scrub')) why = '磨砂:正在发炎/闭口的脸上搓只会更糟';
+                else if (hasTrait(p, 'strong-exfo')) why = '偏猛:屏障还没稳,先不用';
+                else if (t === 'mask' && b !== null && b < 45) why = '修护模式:泥膜/面膜暂停';
+                else if (t === 'acid' && cap === 0) why = '本周去角质额度是 0';
+                else if (t === 'acid') why = '同类里这一版先用另一支,别叠';
+                out.push({ id: p.id, name: p.name, why: why });
+            });
+            return out;
+        }
+        function buildRegimen() {
+            const a = assessSkin();
+            const b = barrierScore();
+            const cap = maxAcidPerWeek();
+            const t = today();
+            let slot = { items: [] };
+            try { slot = computePlanRolling().find(d => d.date === t) || { items: [] }; } catch (e) {}
+            const ns = buildNightSteps(false, false, slot);
+            // 方案上写的酸,必须就是排班真的会排的那支(否则方案说 A、今晚给 B,人会不知道信哪个)
+            const acidIds = [];
+            try {
+                computePlanRolling().forEach(dd => { if (!dd.isPast) (dd.items || []).forEach(it => {
+                    if (it.type === 'acid' && it.id && acidIds.indexOf(it.id) < 0) acidIds.push(it.id); }); });
+            } catch (e) {}
+            const acids = activeProducts().filter(p => p.role === 'acid');
+            let acidNames = acidIds.map(id => (PD.find(x => x.id === id) || {}).name).filter(Boolean);
+            if (!acidNames.length) { const g = acids.find(p => hasTrait(p, 'gentle-exfo')) || acids[0]; if (g) acidNames = [g.name]; }
+            const acidPick = acidNames.length ? { name: acidNames.join(' / ') } : null;
+            const cleanser = pickCleanser(activeProducts().filter(p => p.role === 'cleanse' &&
+                ((p.schedule && p.schedule.time) || ['pm']).indexOf('pm') >= 0), { shower: false, acidTonight: false });
+            return {
+                date: t,
+                skin: {
+                    overall: a.overall, barrier: b, phase: currentPhase(),
+                    tags: regimenSkinTags(),
+                    axes: a.axes.map(x => ({ key: x.key, name: x.name, score: x.score, dir: x.trend.dir }))
+                },
+                rules: {
+                    acidCap: cap,
+                    acidName: acidPick ? acidPick.name : null,
+                    acidZones: zonesAvoiding('acid'),
+                    repair: repairUse(), repairWhy: repairReason(),
+                    cleanse: cleanser ? cleanser.name : null,
+                    resting: restingProducts()
+                },
+                steps: ns.steps.map(x => ({ p: x.p, h: x.h })),
+                using: activeProducts().map(x => ({ id: x.id, name: x.name, role: x.role })),
+                gaps: regimenGaps().map(g => ({ key: g.key, label: g.label, why: g.why })),
+                notes: (a.recs || []).filter(r => r.level === 'safety' || r.level === 'warn').map(r => ({ level: r.level, text: r.text }))
+            };
+        }
+        // 皮肤状况的"指纹":分档取整(15 分一档),否则一分之差天天出新方案
+        function skinSignature() {
+            const a = assessSkin();
+            const bk = x => (x === null || x === undefined) ? '-' : Math.floor(x / 15);
+            return [bk(a.overall), a.axes.map(x => bk(x.score)).join('/'),
+                    regimenSkinTags().slice().sort().join(','), currentPhase(),
+                    maxAcidPerWeek(), repairUse()].join('|');
+        }
+        function shelfSignature() {
+            return shelfProducts().map(p => p.id + ':' + (PS[p.id] || p.statuses[0])).sort().join(',');
+        }
+        function regimenHistory() { return lg(K.regimen) || []; }
+        function currentRegimen() { const h = regimenHistory(); return h.length ? h[h.length - 1] : null; }
+        // 变了什么 —— 说人话的理由,方便回看"这版为什么会变"
+        function regimenDiffReason(prev, next) {
+            const bits = [];
+            const before = (prev.skin && prev.skin.tags) || [], after = next.skin.tags || [];
+            const added = after.filter(x => before.indexOf(x) < 0), goneT = before.filter(x => after.indexOf(x) < 0);
+            if (added.length) bits.push('新出现：' + added.join('、'));
+            if (goneT.length) bits.push('不再记：' + goneT.join('、'));
+            const pIds = (prev.using || []).map(x => x.id), nIds = (next.using || []).map(x => x.id);
+            const lost = pIds.filter(x => nIds.indexOf(x) < 0), got = nIds.filter(x => pIds.indexOf(x) < 0);
+            (prev.using || []).forEach(x => { if (lost.indexOf(x.id) >= 0) bits.push('少了：' + x.name); });
+            (next.using || []).forEach(x => { if (got.indexOf(x.id) >= 0) bits.push('多了：' + x.name); });
+            if (prev.rules && prev.rules.acidCap !== next.rules.acidCap) bits.push('去角质额度 ' + prev.rules.acidCap + '→' + next.rules.acidCap + ' 次/周');
+            if (prev.rules && prev.rules.repair !== next.rules.repair) bits.push('修护霜改成' + (next.rules.repair === 'spot' ? '点涂' : '全脸薄涂'));
+            return bits.length ? bits.join('；') : '皮肤状况有变化';
+        }
+        // 唯一入口:指纹变了就出新版本。force=true 用于"用完了/补货了"这种明确事件。
+        function syncRegimen(reason, force) {
+            let hist = regimenHistory();
+            const sig = skinSignature() + '||' + shelfSignature();
+            const last = hist.length ? hist[hist.length - 1] : null;
+            if (!force && last && last.sig === sig) return null;
+            const reg = buildRegimen();
+            reg.v = (last ? (last.v || 0) : 0) + 1;
+            reg.sig = sig;
+            reg.reason = reason || (last ? regimenDiffReason(last, reg) : '第一版：按现在的皮肤状况和家里现有的东西生成');
+            hist = hist.concat([reg]).slice(-12);      // 只留最近 12 版,localStorage 别撑爆
+            ls(K.regimen, hist);
+            return reg;
+        }
+        function regimenSummary(reg) {
+            if (!reg) return '';
+            const r = reg.rules || {};
+            const bits = [];
+            bits.push('· 去角质：' + (r.acidCap ? (r.acidCap + ' 次/周' + (r.acidName ? '，用' + r.acidName : '') + (r.acidZones && r.acidZones.length ? '（避开' + r.acidZones.join('、') + '）' : '')) : '这一版先停'));
+            if (r.cleanse) bits.push('· 洗脸：' + r.cleanse);
+            bits.push('· 修护霜：' + (r.repair === 'spot' ? '只点涂' : '全脸薄涂') + (r.repairWhy ? '（' + r.repairWhy + '）' : ''));
+            if ((r.resting || []).length) bits.push('· 先不排：' + r.resting.map(x => x.name).join('、'));
+            if ((reg.gaps || []).length) bits.push('· 缺一环：' + reg.gaps.map(g => g.label).join('、') + ' —— 家里没有能顶的了');
+            return bits.join('\n');
+        }
+
+        let _rgOpen = false;
+        function toggleRegimenDetail() { _rgOpen = !_rgOpen; renderRegimenCard(); }
+        const _RG_BAD = ['爆痘', '泛红', '敏感', '闭口', '干燥', '变差', '粗糙'];
+        function renderRegimenCard() {
+            const box = document.getElementById('regimen-card'); if (!box) return;
+            const reg = currentRegimen();
+            if (!reg) { box.innerHTML = ''; return; }
+            const r = reg.rules || {}, sk = reg.skin || {};
+            const tags = (sk.tags || []).map(t =>
+                `<span class="rg-tag ${_RG_BAD.indexOf(t) >= 0 ? 'bad' : (t === '稳定' || t === '好转' ? 'ok' : '')}">${esc(t)}</span>`).join('');
+            const meta = [];
+            if (sk.barrier !== null && sk.barrier !== undefined) meta.push('屏障 ' + sk.barrier);
+            if (sk.phase && PHASES[sk.phase]) meta.push(PHASES[sk.phase].name);
+            const rules = [];
+            rules.push('去角质：' + (r.acidCap
+                ? r.acidCap + ' 次/周' + (r.acidName ? '，用' + esc(r.acidName) : '') + ((r.acidZones || []).length ? '（避开' + esc(r.acidZones.join('、')) + '）' : '')
+                : '这一版先停'));
+            if (r.cleanse) rules.push('洗脸：' + esc(r.cleanse));
+            rules.push('修护霜：' + (r.repair === 'spot' ? '只点涂' : '全脸薄涂') + (r.repairWhy ? '（' + esc(r.repairWhy) + '）' : ''));
+            if ((r.resting || []).length) rules.push('先不排：' + r.resting.map(x => esc(x.name) + '（' + esc(x.why) + '）').join('、'));
+            const gaps = (reg.gaps || []).map(g => `🛒 <b>${esc(g.label)}</b> —— 家里没有能顶的了。${esc(g.why)}`).join('<br>');
+            let detail = '';
+            if (_rgOpen) {
+                const hist = regimenHistory().slice().reverse();
+                detail = `<div class="rg-detail">
+                    <div class="rg-sub">这一版的今晚流程（非洗澡夜）</div>
+                    ${(reg.steps || []).map((x, i) => `<div class="rg-step">${i + 1}. <b>${esc(x.p)}</b>${x.h ? ' — ' + esc(x.h) : ''}</div>`).join('')}
+                    <div class="rg-sub">在用的东西（${(reg.using || []).length} 件）</div>
+                    <div class="rg-step">${(reg.using || []).map(x => esc(x.name)).join(' · ') || '—'}</div>
+                    ${(reg.notes || []).length ? `<div class="rg-sub">要注意</div>${reg.notes.map(n => `<div class="rg-step">${n.level === 'safety' ? '🚑 ' : '⚠️ '}${esc(n.text)}</div>`).join('')}` : ''}
+                    <div class="rg-sub">历史版本</div>
+                    ${hist.map(h => `<div class="rg-hist">v${h.v} · ${esc(h.date)} — ${esc(h.reason || '')}</div>`).join('')}
+                </div>`;
+            }
+            box.innerHTML = `<div class="rg-card">
+                <div class="rg-hd"><div class="rg-t">📋 当前方案</div><div class="rg-v">v${reg.v} · ${esc(reg.date)}</div></div>
+                <div class="rg-why">为什么是这一版：${esc(reg.reason || '')}</div>
+                <div class="rg-skin">${tags || '<span class="rg-tag">还没记录皮肤状态</span>'}${meta.map(m => `<span class="rg-tag">${esc(m)}</span>`).join('')}</div>
+                <ul class="rg-rules">${rules.map(x => `<li>· ${x}</li>`).join('')}</ul>
+                ${gaps ? `<div class="rg-gap">${gaps}<br><span style="color:var(--tx2)">（「产品」页最下面有挑选标准和推荐）</span></div>` : ''}
+                <button class="rg-more" onclick="toggleRegimenDetail()">${_rgOpen ? '收起' : '看完整方案 / 历史版本'}</button>
+                ${detail}
+            </div>`;
+        }
+
         // 开封天数(没填开封日期返回 null —— 不能当成"刚开始用",否则所有产品会同时报警)
         function openedDays(p) {
             const d = POPEN[p.id];
             if (!d) return null;
             return Math.floor((new Date(today() + 'T12:00:00') - new Date(d + 'T12:00:00')) / 86400000);
         }
-        // 只在"确实刚开封"(≤14 天)或"快到期"时才单独提醒；没填开封日期的合并成一行,不刷屏
+        // 「今晚」页顶上那条补货黄条已经并进方案卡的「缺一环」里了(2026-08-26):
+        // 判断要不要买,现在只有一个口径 —— regimenGaps()「这套方案对当前皮肤还成不成立」。
+        // 同一页两处说同一件事只会让人不知道信哪个;产品页里那条"用完它就没有能顶替的了"是**提前预警**,
+        // 性质不同,保留在那边。这里保留空函数,免改所有调用点。
         function renderSoleAlerts() {
-            const box = document.getElementById('sole-alert'); if (!box) return;
-            const dismissed = PROFILE.soleDismissed || [];
-            const critical = planCriticalProducts().filter(x => !dismissed.includes(x.p.id));
-            box.innerHTML = critical.map(x => {
-                // 家里还有同组但被暂停的 → 那不算真断,提示可以启用它顶上
-                const backup = ownedOfGroup(x.p.role).filter(q => q.id !== x.p.id &&
-                    !isSchedActive(q, PS[q.id] || q.statuses[0]));
-                const tail = backup.length
-                    ? `不过你还有备用的「${esc(backup[0].name)}」，到时候启用它就能顶上。`
-                    : `建议提前补货。`;
-                return `<div class="alert warn" style="margin-bottom:.75rem"><div class="at">🛒 少了它，流程会缺一环</div>
-                 「${esc(x.p.name)}」用完就没有能顶替的了，${esc(x.lost.map(c => CAP_LABEL[c] || c).join('、'))}就没有任何东西能顶了。${tail}
-                 <button class="prod-act" style="margin-top:6px" onclick="dismissSole('${x.p.id}')">知道了，不再提醒</button></div>`;
-            }).join('');
+            const box = document.getElementById('sole-alert');
+            if (box) box.innerHTML = '';
         }
         function dismissSole(id) {
             const list = (PROFILE.soleDismissed || []).slice();
@@ -4155,23 +4542,36 @@
                 } else if (schedRet) {
                     const rp = pd(schedRet.id); if (rp && active(rp.id)) { steps.push({ p: rp.name, h: (hint(rp) || '1次/周，薄涂全脸') + (PS[rp.id] === 'active' ? '' : '（谨慎引入期）') + zoneHintFor('retinol') }); skips.push('酸类（视黄醇夜不叠加）'); }
                 } else {
-                    byRole('serum').forEach(p => steps.push({ p: p.name, h: hint(p) || '全脸轻拍至吸收' }));
-                    if (!shower) byRole('oil').forEach(p => steps.push({ p: p.name, h: hint(p) || '1–2滴，两颊和颈部，额头避开' }));
+                    // 正在泛红/发炎、或最近一直闷闭口时,含精油·香精的精华和面油先不上。
+                    // 它们不解决当下的问题,却是最常见的刺激源与致闭口源 ——
+                    // 方案要「对现在这张脸起作用」,不是「把家里的东西都排上」(Cait 2026-08-26)。
+                    const calmDown = irritated || jrnlLastNDays(14).some(e => (e.status || []).indexOf('闭口') >= 0);
+                    const gentleOK = p => !calmDown || !(hasTrait(p, 'fragranced') || hasTrait(p, 'oil-based'));
+                    byRole('serum').forEach(p => gentleOK(p)
+                        ? steps.push({ p: p.name, h: hint(p) || '全脸轻拍至吸收' })
+                        : skips.push(p.name + '（含精油/香精 —— 正在泛红或闷闭口时先停）'));
+                    if (!shower) byRole('oil').forEach(p => gentleOK(p)
+                        ? steps.push({ p: p.name, h: hint(p) || '1–2滴，两颊和颈部，额头避开' })
+                        : skips.push(p.name + '（面油会闷 —— 闭口/发炎期先停）'));
                 }
                 byRole('eye', true).forEach(p => steps.push({ p: p.name, h: hint(p) || '无名指轻拍眼眶骨' }));
-                byRole('moist', true).forEach(p => steps.push({ p: p.name, h: hasScheduledAcid ? '酸类夜首选封层' : (hint(p) || '全脸封层') }));
+                // 手边没有舒缓面膜时,"镇静"这一档由谁顶,要按**能力**挑而不是按分类:
+                // 优先挑带 calm 又不封闭的(如 Toleriane Ultra,含 Neurosensine 镇静肽),
+                // 而不是顺手把封闭性的修护膏改成全脸厚涂 —— 那正是闷出闭口的老路。
+                const needCalm = irritated && !soothers.length;
+                const spotUse = repairUse() === 'spot';
+                byRole('moist', true).forEach(p => steps.push({ p: p.name, h: hasScheduledAcid ? '酸类夜首选封层' :
+                    (hint(p) || '全脸封层') + (needCalm && hasTrait(p, 'calm') && !hasTrait(p, 'occlusive') ? '　（最近有泛红：这支自带镇静成分，泛红处多按一层）' : '') }));
                 // 修护霜用法按档案:屏障修复是基础治疗、指南建议常规全脸使用;仅在屏障好且油皮时才点涂
                 // 手边没有舒缓面膜了(Avène 用完),不能让"最近在泛红"这条线索跟着一起消失。
                 // ⚠️ 但也不能借机把修护霜改成全脸厚涂:近期有闭口/爆痘的人全脸涂封闭性膏体
                 //    正是闷出闭口的经典路子(App 自己在建议里也写着"厚重面霜先放一边")。
                 //    涂法仍旧由 repairUse() 决定,这里只补一句"最近在泛红"。
-                const needCalm = irritated && !soothers.length;
-                const spotUse = repairUse() === 'spot';
                 const clogged = jrnlLastNDays(14).some(e => (e.status || []).some(s => s === '闭口' || s === '爆痘'));
                 byRole('repair').forEach(p => steps.push({ p: p.name, h:
                     (spotUse ? ('活跃痘痘处、口罩线点涂' + (clogged && !PROFILE.repairUse ? '（近期有闭口/痘 → 先别全脸厚涂）' : ''))
                              : '全脸薄涂封层') +
-                    (needCalm ? '（手边没有舒缓面膜了;最近有泛红/不适,泛红处多带一下）' : '') }));
+                    (needCalm ? '（最近有泛红/不适，泛红处多带一下）' : '') }));
             }
             return { steps, skips };
         }
@@ -4179,6 +4579,8 @@
             const { shower, manual } = TN;
             const shave = !!TN.shave && !!PROFILE.shaving;   // 同上：门控收口
             updatePhase();
+            syncRegimen();          // 皮肤状况变了就自动出新一版方案(指纹没变就什么都不做)
+            renderRegimenCard();
             renderAssessment();
             renderSoleAlerts();
             const sBtn = document.getElementById('tn-sh'), vBtn = document.getElementById('tn-sv');
@@ -4556,6 +4958,15 @@
             // 屏障闸门：修护模式下不排任何去角质/视黄醇；谨慎模式下不排视黄醇。
             if (!allowMask())    schedulable = schedulable.filter(p => p.schedule.type !== 'mask');
             if (!allowRetinol()) schedulable = schedulable.filter(p => p.schedule.type !== 'retinol');
+            // 皮肤状况闸门(2026-08-26):方案要对**现在这张脸**起作用 ——
+            // 屏障没稳(或干脆没数据)、近两周有炎症时,猛酸(甘醇酸/高浓度)不排;
+            // 有炎症或在闷闭口时,物理磨砂不排(AAD 把它列为加重痤疮的十大坏习惯之一)。
+            // 没有这一层,「所有产品都设成正常使用」的直接后果就是 Good Genes 被排到一张正在发炎的脸上。
+            const _bScore = barrierScore();
+            const _inflamed = jrnlLastNDays(14).some(e => (e.status || []).some(x => x === '泛红' || x === '敏感' || x === '爆痘'));
+            const _clogged  = jrnlLastNDays(14).some(e => (e.status || []).indexOf('闭口') >= 0);
+            if (_bScore === null || _bScore < 65 || _inflamed) schedulable = schedulable.filter(p => !hasTrait(p, 'strong-exfo'));
+            if (_inflamed || _clogged) schedulable = schedulable.filter(p => !hasTrait(p, 'scrub'));
             const acids    = schedulable.filter(p => p.schedule.type === 'acid');
             const masks    = schedulable.filter(p => p.schedule.type === 'mask');
             const retinols = schedulable.filter(p => p.schedule.type === 'retinol');
@@ -5609,7 +6020,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
         setInterval(checkDayRollover, 60000);
 
         // ══ Firebase 云同步 ═══════════════════════════════════
-        const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_amsteps1','sk_proddefs1','sk_profile1','sk_preset1','sk_planday1','sk_mig1','sk_empty1'];
+        const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_amsteps1','sk_proddefs1','sk_profile1','sk_preset1','sk_planday1','sk_mig1','sk_empty1','sk_gone1','sk_regimen1'];
         let _db = null, _user = null, _pushTimer = null, _pushing = false, _pushDirty = false;
         // 递归按键名排序的序列化——只用于云/本地数据的等价比较
         function _stableStr(v) {
@@ -5718,8 +6129,11 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
             syncSettingsUI();
             renderPlanTemplates();
             renderBarrierBadge();
+            GONE = lg(K.gone) || GONE; EMPTIES = lg(K.empty) || EMPTIES;   // ⚠️ 必须在 loadPD 之前:loadPD 靠 GONE 过滤已删掉的产品
             PD = loadPD(); PS = lg(K.prods) || PS;
             applyShelfMigrations();   // 云端刚盖过来的可能还是旧货架
+            sanitizePS();
+            syncRegimen();            // 皮肤状况或货架变了 → 立刻重出一版方案
             initPhotoDB(() => {
                 if (document.getElementById('jrnl').classList.contains('active')) renderJrnl();
             });
