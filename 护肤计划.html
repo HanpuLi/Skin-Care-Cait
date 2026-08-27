@@ -3205,22 +3205,38 @@
             // 「保湿/精华/舒缓」组,但它只有 hydrate;真正对症的 B5 还带 calm(镇静)。
             // 所以**能力重合度**要压过分组:同角色 100 > 每项重合能力 10 > 同组 3 > 在用 1。
             const st = x => PS[x.id] || x.statuses[0];
+            // 光看"能力/分组"会挑出性格完全不同的东西:舒缓面膜用完 → 拿封闭性的 B5 顶,
+            // 正好是闷闭口的老路。所以再加一层"性格接近"的分,并在发炎/闷闭口期给封闭性膏体减分。
+            const dt = traitsOf(def);
             const score = x => (x.role === def.role ? 100 : 0)
                 + capsOf(x).filter(c => caps.includes(c)).length * 10
                 + ((g && g.roles.includes(x.role)) ? 3 : 0)
+                + traitsOf(x).filter(t => dt.indexOf(t) >= 0).length * 4
+                - ((calmDownMode() && hasTrait(x, 'occlusive')) ? 8 : 0)
                 + (isSchedActive(x, st(x)) ? 1 : 0);
             const ranked = PD
                 .filter(x => x.id !== def.id && !x.hidden && !isExcluded(x) && st(x) !== 'pending')
                 .map(x => ({ x: x, s: score(x) }))
-                .filter(o => o.s >= 3)            // 至少要同组、同能力或同角色,不然不算"能顶"
+                // 「算不算替补」只看同角色/同能力/同组;性格分只用来排序 ——
+                // 否则一支防晒能靠"都轻薄"这 4 分挤进候选(实测踩到:Toleriane 用完 → 推荐 Lancaster 防晒)
+                .filter(o => o.x.role === def.role || capsOf(o.x).some(c => caps.includes(c))
+                             || (g && g.roles.includes(o.x.role)))
                 .sort((a, b) => b.s - a.s);
             if (!ranked.length) return null;
-            const top = ranked[0].x;
-            return { p: top, needEnable: !isSchedActive(top, st(top)) };
+            // 现在这张脸用不了的东西不算"能顶上" —— 说它顶上,等于让人照着一个流程里根本不会出现的
+            // 产品用(2026-08-28 实测:Toleriane 用完后 App 说"由 Rose de Vie 顶上、已经在流程里了",
+            // 可它含香精+油基,同一版方案的晚间流程里正把它停着)。
+            // 被替代的是"全脸留在脸上"的东西时,只点涂的修护膏也顶不了(点在痘上护不了整张脸)
+            const noGood = x => blockedNow(x) ||
+                ((leaveOn(def) && faceWide(def) && spotOnly(x)) ? '这一版只点涂，顶不了全脸' : null);
+            const ok = ranked.filter(o => !noGood(o.x));
+            const top = (ok.length ? ok[0] : ranked[0]).x;
+            return { p: top, needEnable: !isSchedActive(top, st(top)), blocked: ok.length ? null : noGood(top) };
         }
         function replacementText(def) {
             const r = pickReplacement(def);
             if (!r) return '⚠️ 同类里家里没有别的了 —— 这一档会断档,记得补货';
+            if (r.blocked) return `⚠️ 同类里家里剩下的这几件，照现在的皮肤状况都顶不了这一档（例如「${r.p.name}」：${r.blocked}）—— 这一档等于断了，见「产品」页最下面的「要不要买新的」`;
             return r.needEnable
                 ? `接下来由「${r.p.name}」顶上 —— 它现在是「备用」,点一下改成「正常使用」就会排进流程`
                 : `接下来由「${r.p.name}」顶上(已经在流程里了)`;
@@ -3449,14 +3465,14 @@
                 return `<div class="prod-group"><div class="grp-hd">${esc(name)}${badge}</div>${warn}${items.map(cardOf).join('')}</div>`;
             }).join('') + `<button class="add-prod-btn"  onclick="showProdModal()">+ 添加产品</button>`;
             if (PD.some(p=>p.hidden)) list.innerHTML += `<button class="prod-act" onclick="restoreBuiltins()" style="margin-top:8px">恢复已隐藏的内置产品</button>`;
-            const gaps = regimenGaps();
+            const shop = shopItems();
             const sp = document.getElementById('shop-pending');
-            if (sp) sp.innerHTML = gaps.length ? gaps.map((g, i) => {
-                const ad = SHOP_ADVICE[g.key] || {}; const pick = SHOP_PICKS[g.key];
+            if (sp) sp.innerHTML = shop.length ? shop.map((g, i) => {
+                const pick = g.pick;
                 return `<div class="shop-item"><div class="shop-pri ${i===0?'p1':'p2'}">0${i+1}</div><div class="si">
-                    <div class="sn2">${esc(ad.what || g.label)}</div>
+                    <div class="sn2">${esc(g.what)}</div>
                     <div class="sw">${esc(g.why)}</div>
-                    ${ad.how ? `<div class="sw">挑选标准：${esc(ad.how)}</div>` : ''}
+                    ${g.how ? `<div class="sw">挑选标准：${esc(g.how)}</div>` : ''}
                     ${pick ? `<div class="sw" style="color:var(--tx)">👉 调研推荐：${esc(pick.name)}${pick.price?`（${esc(pick.price)}）`:''} —— ${esc(pick.why)}</div>` : ''}
                 </div></div>`;
             }).join('') : '<div style="font-size:12px;color:var(--tx3);font-family:var(--mono);padding:8px 0">家里现有的东西够凑一套完整方案 ✓ 暂时不用买</div>';
@@ -3479,11 +3495,11 @@
         }
 
         function copyShop() {
-            const gaps = regimenGaps();
-            if (!gaps.length) { alert('家里现有的东西够凑一套完整方案，暂时不用买。'); return; }
-            const txt = '护肤要买的（按方案缺口）\n\n' + gaps.map((g, i) => {
-                const ad = SHOP_ADVICE[g.key] || {}; const pick = SHOP_PICKS[g.key];
-                return `${i + 1}. ${ad.what || g.label}\n   为什么：${g.why}\n   挑选标准：${ad.how || ''}` + (pick ? `\n   推荐：${pick.name}${pick.price ? '（' + pick.price + '）' : ''} —— ${pick.why}` : '');
+            const shop = shopItems();
+            if (!shop.length) { alert('家里现有的东西够凑一套完整方案，暂时不用买。'); return; }
+            const txt = '护肤要买的（按方案缺口）\n\n' + shop.map((g, i) => {
+                const pick = g.pick;
+                return `${i + 1}. ${g.what}\n   为什么：${g.why}\n   挑选标准：${g.how || ''}` + (pick ? `\n   推荐：${pick.name}${pick.price ? '（' + pick.price + '）' : ''} —— ${pick.why}` : '');
             }).join('\n\n');
             navigator.clipboard.writeText(txt).then(() => {
                 const b = document.getElementById('cpb'); b.textContent = '✓ 已复制'; b.classList.add('copied');
@@ -4217,6 +4233,23 @@
         // 全脸用的东西。眼霜/眼部精华再"舒缓"也顶不了全脸那一档 ——
         // 不加这一条,「轻薄的镇静」会被一支眼部精华糊弄过去,缺口就报不出来了(实测踩到)。
         function faceWide(p) { return p && p.role !== 'eye' && p.role !== 'spf' && p.role !== 'precleanse'; }
+        // 冲洗掉的东西(洁面、冲洗型面膜)顶不了「洗完脸上有东西护着」—— 它根本没留在脸上。
+        function leaveOn(p) { return p && ['cleanse', 'precleanse', 'mask', 'soothe'].indexOf(p.role) < 0; }
+        // 🔴 今晚流程和"缺口判断"必须用**同一个**口径,否则会出现「流程里把它停了、缺口里却算它顶着」
+        //    这种自相矛盾 —— 2026-08-28 实测就是这样:Toleriane 用完后,家里只剩含香精的 Rose de Vie
+        //    和只点涂的 B5,晚上流程两件都不涂,缺口却报"洗完有东西护着 ✓",于是 App 说不用买,
+        //    而 Cici 的晚间流程实际变成了「洗脸 + 眼霜 + 点涂」——洗完脸全脸什么都没有。
+        function irritatedNow() { return jrnlLastNDays(3).some(e => (e.status || []).some(s => s === '泛红' || s === '敏感' || s === '爆痘')); }
+        function calmDownMode() { return irritatedNow() || jrnlLastNDays(14).some(e => (e.status || []).indexOf('闭口') >= 0); }
+        // 这支东西**今天到底会不会被涂上脸**?不会就返回"为什么不用",它也就顶不了任何一档。
+        function blockedNow(p) {
+            if (!p) return '家里没有这件东西';
+            if (calmDownMode() && (hasTrait(p, 'fragranced') || hasTrait(p, 'oil-based')))
+                return '含精油/香精，正在泛红或闷闭口时要停';
+            return null;
+        }
+        // 只点涂的修护膏顶不了"全脸洗完有东西护着"那一档(点在痘上的东西护不了整张脸)
+        function spotOnly(p) { return !!p && p.role === 'repair' && repairUse() === 'spot'; }
 
         // 🔴 要不要买新东西,**不按产品分类判断**(「舒缓类只剩一件了」这种没有意义),
         // 而是:照现在这张脸,一套能起作用的方案需要哪几件事?家里剩下的东西能不能把每件事办了?
@@ -4226,8 +4259,15 @@
             const needs = [
                 { key: 'clean',   label: '把脸洗干净',        why: '每天都要洗脸,这一档不能空',
                   test: p => capsOf(p).indexOf('clean') >= 0 },
+                // ⚠️ 不能只看"家里有没有这一类" —— 要看**今天会不会真涂上脸**:被停掉的、只点涂的、
+                //    洗掉的,都顶不了这一档(见 blockedNow/spotOnly/leaveOn 上面那段注释)
+                // ⚠️ 排酸的那一晚流程按设计会跳过精华(不在刚用完酸的脸上叠活性),
+                //    所以"家里只有一支精华"的货架,在排酸那晚全脸是空的 —— 那晚恰恰最需要封层
+                //    (AAD:去角质后立即保湿)。有排酸时,精华不算能顶这一档。
                 { key: 'hydrate', label: '洗完脸上要有东西护着', why: '洗完什么都不涂,屏障只会更差',
-                  test: p => capsOf(p).indexOf('hydrate') >= 0 },
+                  test: p => faceWide(p) && leaveOn(p) && capsOf(p).indexOf('hydrate') >= 0
+                             && !blockedNow(p) && !spotOnly(p)
+                             && !(maxAcidPerWeek() > 0 && p.role === 'serum') },
                 { key: 'spf',     label: '白天防晒',          why: '有炎症/用过酸之后不防晒 = 留印、更红',
                   test: p => capsOf(p).indexOf('spf') >= 0 }
             ];
@@ -4238,15 +4278,15 @@
             if (tagInDays(14, ['泛红', '敏感', '爆痘']))
                 needs.push({ key: 'calm-light', label: '轻薄的镇静',
                     why: '近两周有泛红/敏感/痘 —— 需要能镇静、又不闷不刺激的东西(封闭性膏体、精油类不算)',
-                    test: p => faceWide(p) && hasTrait(p, 'calm') && !hasTrait(p, 'occlusive') && !hasTrait(p, 'oil-based') && !hasTrait(p, 'fragranced') });
+                    test: p => faceWide(p) && hasTrait(p, 'calm') && !spotOnly(p) && !hasTrait(p, 'occlusive') && !hasTrait(p, 'oil-based') && !hasTrait(p, 'fragranced') });
             if (b !== null && b < 45)
                 needs.push({ key: 'barrier', label: '修护屏障',
                     why: '屏障分 ' + b + ',在修护模式 —— 要有能修屏障的东西托底',
-                    test: p => faceWide(p) && (hasTrait(p, 'calm') || p.role === 'repair') });
+                    test: p => faceWide(p) && !blockedNow(p) && (hasTrait(p, 'calm') || p.role === 'repair') });
             if (tagInDays(7, ['干燥']))
                 needs.push({ key: 'moisture', label: '锁水',
                     why: '近一周记了干燥 —— 要有保湿封层',
-                    test: p => p.role === 'moist' || p.role === 'repair' || p.role === 'oil' });
+                    test: p => !blockedNow(p) && (p.role === 'moist' || p.role === 'repair' || p.role === 'oil') });
             return needs;
         }
         // 每一项需求 → 家里谁能办。一件都没有 = 缺口 = 该买了。
@@ -4262,7 +4302,7 @@
         // 缺口 → 买什么(说清挑选标准;具体型号在 SHOP_PICKS 里,是调研过的结论,不是随口推荐)
         const SHOP_ADVICE = {
             clean:        { what: '一支温和洁面', how: '氨基酸/无皂基、无香精,洗完不紧绷' },
-            hydrate:      { what: '一支基础保湿', how: '油皮选无油乳液,干皮选面霜;成分越简单越好' },
+            hydrate:      { what: '一支基础保湿', how: '油皮选无油乳液/fluid,干皮选面霜;无香精无精油,成分越简单越好' },
             spf:          { what: '一支防晒',     how: 'SPF30+、无油/清爽,敏感肌可选纯物理' },
             'gentle-exfo':{ what: '一支温和的酸', how: '杏仁酸/乳酸/PHA,浓度别高;不要磨砂、不要高浓度甘醇酸' },
             'calm-light': { what: '一支轻薄的镇静产品', how: '要点:质地是水/精华/凝胶(不是膏体)、无香精无精油、成分表短;泛醇/积雪草/神经酰胺/尿囊素这类修护成分' },
@@ -4272,12 +4312,46 @@
         // 调研过的具体推荐(英国可买)。留空 = 还没调研过,界面就只给挑选标准。
         // 2026-08-26 查过成分表的结论,不是随手推荐:
         const SHOP_PICKS = {
+            // 2026-08-28(Toleriane Ultra Light 用完之后)查成分表定的,不是照名字挑:
+            // Cait 明确「不需要买同款,买同品类最合适最好的」。同品类里对**这张脸**最对症的是
+            // 烟酰胺款 —— 泛红、痘、出油三件事一支全管,而 Ultra 那种镇静肽款只管镇静。
+            hydrate: { name: 'La Roche-Posay Toleriane Sensitive Fluide (40ml)', price: '约 £14–19，Boots/Escentual/LookFantastic',
+                why: '全表只有 10 个成分、无香精无精油无酒精，fluid 质地混油/油皮不闷；含烟酰胺 —— 泛红、痘、出油这三件正好是现在这张脸的问题。' },
+            'hydrate+calm': { name: 'La Roche-Posay Toleriane Sensitive Fluide (40ml)', price: '约 £14–19，Boots/Escentual/LookFantastic',
+                why: '一支同时办两档：早晚全脸的保湿打底 + 「轻薄的镇静」。10 个成分、无香精无精油无酒精、fluid 不闷；烟酰胺对泛红/痘/出油都有据可依。' +
+                     '备选 Avène Tolérance Hydra-10 Fluid(9 成分、无香精无防腐，但没有烟酰胺这类活性，只是被动保湿)。' +
+                     '⚠️ 别拿 Cicaplast B5 精华顶这一档：含 Isopropyl Myristate(偏致粉刺)和 Methyldihydrojasmonate(香料)，正在闷闭口时不合适。' },
             'calm-light': { name: 'Avène Tolérance Hydra-10 Hydrating Fluid (40ml)', price: '约 £16–20，Boots/Escentual',
                 why: '全表只有 9 个成分、无香精无防腐(无菌泵)、质地是 fluid 不闷，油皮混油都能用。' +
                      '⚠️ 别买 Cicaplast B5 精华顶这一档：它含 Isopropyl Myristate(偏致粉刺)和 Methyldihydrojasmonate(香料)，正在闷闭口时不合适。' },
             'gentle-exfo': { name: 'Paula\'s Choice 6% 杏仁酸 + 2% 乳酸（家里这支就是）', price: '',
                 why: '杏仁酸分子大、渗透慢、对微炎症最友好，是这类皮肤的首选；真要再买就买同类，别升级成甘醇酸。' }
         };
+
+        // 一支产品能同时补上好几档时要合并成一条 —— 否则「缺保湿」+「缺镇静」会被读成"要买两支",
+        // 而实际上一支无香精的轻薄保湿把两档都办了(2026-08-28 Toleriane 用完后就是这个情况)。
+        const SHOP_MERGE = [
+            { key: 'hydrate+calm', keys: ['hydrate', 'calm-light'],
+              what: '一支轻薄的保湿（同一支就顶了「镇静」那一档）',
+              how: '无香精无精油、质地是 fluid/乳液不是厚膏、非致粉刺；带烟酰胺/泛醇/神经酰胺这类修护成分更好' }
+        ];
+        // 购物清单唯一入口:缺口 → 合并 → 挑选标准 + 调研推荐。产品页和「复制购物清单」都走这里。
+        function shopItems() {
+            const gaps = regimenGaps(), keys = gaps.map(g => g.key), taken = {}, out = [];
+            SHOP_MERGE.forEach(m => {
+                if (!m.keys.every(k => keys.indexOf(k) >= 0)) return;
+                m.keys.forEach(k => { taken[k] = 1; });
+                out.push({ key: m.key, what: m.what, how: m.how,
+                           why: gaps.filter(g => m.keys.indexOf(g.key) >= 0).map(g => g.why).join('；'),
+                           pick: SHOP_PICKS[m.key] });
+            });
+            gaps.forEach(g => {
+                if (taken[g.key]) return;
+                const ad = SHOP_ADVICE[g.key] || {};
+                out.push({ key: g.key, what: ad.what || g.label, how: ad.how, why: g.why, pick: SHOP_PICKS[g.key] });
+            });
+            return out;
+        }
 
         // ── 一版方案 ────────────────────────────────────────────────
         function regimenSkinTags() {
@@ -4349,6 +4423,9 @@
             };
         }
         // 皮肤状况的"指纹":分档取整(15 分一档),否则一分之差天天出新方案
+        // 判断口径一改,旧方案会一直挂在那儿(指纹只看皮肤和货架,不看代码)。
+        // 把引擎版本写进指纹:改口径就 +1 → 所有人下次打开立刻重出一版。
+        const REGIMEN_ENGINE = 'e2';
         function skinSignature() {
             const a = assessSkin();
             const bk = x => (x === null || x === undefined) ? '-' : Math.floor(x / 15);
@@ -4379,13 +4456,16 @@
         // 唯一入口:指纹变了就出新版本。force=true 用于"用完了/补货了"这种明确事件。
         function syncRegimen(reason, force) {
             let hist = regimenHistory();
-            const sig = skinSignature() + '||' + shelfSignature();
+            const sig = REGIMEN_ENGINE + '||' + skinSignature() + '||' + shelfSignature();
             const last = hist.length ? hist[hist.length - 1] : null;
             if (!force && last && last.sig === sig) return null;
             const reg = buildRegimen();
             reg.v = (last ? (last.v || 0) : 0) + 1;
             reg.sig = sig;
-            reg.reason = reason || (last ? regimenDiffReason(last, reg) : '第一版：按现在的皮肤状况和家里现有的东西生成');
+            const engChanged = !!last && String(last.sig || '').indexOf(REGIMEN_ENGINE + '||') !== 0;
+            reg.reason = reason || (engChanged
+                ? '判断口径升级：只算「今天真会涂到脸上」的东西 —— 被停掉的、只点涂的、洗掉的,不再充数'
+                : (last ? regimenDiffReason(last, reg) : '第一版：按现在的皮肤状况和家里现有的东西生成'));
             hist = hist.concat([reg]).slice(-12);      // 只留最近 12 版,localStorage 别撑爆
             ls(K.regimen, hist);
             return reg;
@@ -4532,7 +4612,8 @@
                 }
                 else steps.push({ p: '温水冲洗', h: '没有洁面产品时的兜底——建议在「产品」页加一支洁面' });
                 // 舒缓面膜:冲洗型,只在最近有泛红/敏感/刺痛时才提示,不占去角质额度
-                const irritated = jrnlLastNDays(3).some(e => (e.status || []).some(s => s === '泛红' || s === '敏感' || s === '爆痘'));
+                const irritated = irritatedNow();
+                let faceCovered = false;   // 洗完之后有没有东西是**全脸**留在脸上的
                 const soothers = irritated ? byRole('soothe') : [];
                 soothers.forEach(p => steps.push({ p: p.name, h: (hint(p) || '敷约5分钟后洗掉') + '（最近有泛红/不适才建议用）', t: 300 }));
                 if (hasScheduledAcid) {
@@ -4550,13 +4631,12 @@
                     // 正在泛红/发炎、或最近一直闷闭口时,含精油·香精的精华和面油先不上。
                     // 它们不解决当下的问题,却是最常见的刺激源与致闭口源 ——
                     // 方案要「对现在这张脸起作用」,不是「把家里的东西都排上」(Cait 2026-08-26)。
-                    const calmDown = irritated || jrnlLastNDays(14).some(e => (e.status || []).indexOf('闭口') >= 0);
-                    const gentleOK = p => !calmDown || !(hasTrait(p, 'fragranced') || hasTrait(p, 'oil-based'));
+                    const gentleOK = p => !blockedNow(p);   // 与缺口判断共用同一个口径
                     byRole('serum').forEach(p => gentleOK(p)
-                        ? steps.push({ p: p.name, h: hint(p) || '全脸轻拍至吸收' })
+                        ? (steps.push({ p: p.name, h: hint(p) || '全脸轻拍至吸收' }), faceCovered = true)
                         : skips.push(p.name + '（含精油/香精 —— 正在泛红或闷闭口时先停）'));
                     if (!shower) byRole('oil').forEach(p => gentleOK(p)
-                        ? steps.push({ p: p.name, h: hint(p) || '1–2滴，两颊和颈部，额头避开' })
+                        ? (steps.push({ p: p.name, h: hint(p) || '1–2滴，两颊和颈部，额头避开' }), faceCovered = true)
                         : skips.push(p.name + '（面油会闷 —— 闭口/发炎期先停）'));
                 }
                 byRole('eye', true).forEach(p => steps.push({ p: p.name, h: hint(p) || '无名指轻拍眼眶骨' }));
@@ -4565,18 +4645,21 @@
                 // 而不是顺手把封闭性的修护膏改成全脸厚涂 —— 那正是闷出闭口的老路。
                 const needCalm = irritated && !soothers.length;
                 const spotUse = repairUse() === 'spot';
-                byRole('moist', true).forEach(p => steps.push({ p: p.name, h: hasScheduledAcid ? '酸类夜首选封层' :
-                    (hint(p) || '全脸封层') + (needCalm && hasTrait(p, 'calm') && !hasTrait(p, 'occlusive') ? '　（最近有泛红：这支自带镇静成分，泛红处多按一层）' : '') }));
+                byRole('moist', true).forEach(p => { steps.push({ p: p.name, h: hasScheduledAcid ? '酸类夜首选封层' :
+                    (hint(p) || '全脸封层') + (needCalm && hasTrait(p, 'calm') && !hasTrait(p, 'occlusive') ? '　（最近有泛红：这支自带镇静成分，泛红处多按一层）' : '') }); faceCovered = true; });
                 // 修护霜用法按档案:屏障修复是基础治疗、指南建议常规全脸使用;仅在屏障好且油皮时才点涂
                 // 手边没有舒缓面膜了(Avène 用完),不能让"最近在泛红"这条线索跟着一起消失。
                 // ⚠️ 但也不能借机把修护霜改成全脸厚涂:近期有闭口/爆痘的人全脸涂封闭性膏体
                 //    正是闷出闭口的经典路子(App 自己在建议里也写着"厚重面霜先放一边")。
                 //    涂法仍旧由 repairUse() 决定,这里只补一句"最近在泛红"。
                 const clogged = jrnlLastNDays(14).some(e => (e.status || []).some(s => s === '闭口' || s === '爆痘'));
-                byRole('repair').forEach(p => steps.push({ p: p.name, h:
+                byRole('repair').forEach(p => { steps.push({ p: p.name, h:
                     (spotUse ? ('活跃痘痘处、口罩线点涂' + (clogged && !PROFILE.repairUse ? '（近期有闭口/痘 → 先别全脸厚涂）' : ''))
                              : '全脸薄涂封层') +
-                    (needCalm ? '（最近有泛红/不适，泛红处多带一下）' : '') }));
+                    (needCalm ? '（最近有泛红/不适，泛红处多带一下）' : '') }); if (!spotUse) faceCovered = true; });
+                // 🔴 洗完全脸什么都不涂 = 屏障只会更差。剩下的东西全被停掉/只点涂时必须说出来,
+                //    别让流程静悄悄少一档(2026-08-28:Toleriane 用完后就变成了「洗脸+眼霜+点涂」)。
+                if (!faceCovered) skips.push('⚠️ 洗完全脸没有能涂的东西了 —— 「保湿」这一档现在是空的，去「产品」页最下面看「要不要买新的」');
             }
             return { steps, skips };
         }
@@ -4727,10 +4810,16 @@
                 : [{ p: '清水冲洗 30秒', h: '早晨轻柔冲洗，不用洁面产品，保留皮脂膜' }];
             let skips = [];
 
+            let amFaceCovered = false;
             if (amPolicy === 'full') {
-                byRoleAm('serum').forEach(p => steps.push({ p: p.name, h: amHint(p) || '早晨全脸轻拍' }));
+                // 早晚必须同一个口径:晚上因为含精油/香精把它停掉、早上却照涂,等于没停
+                // (2026-08-28 实测:Rose de Vie 就是这样,晚上停、早上还排着)。
+                byRoleAm('serum').forEach(p => { const why = blockedNow(p);
+                    if (why) skips.push(`${p.name}（${why}）`);
+                    else { steps.push({ p: p.name, h: amHint(p) || '早晨全脸轻拍' }); amFaceCovered = true; } });
                 byRoleAm('eye', true).forEach(p => steps.push({ p: p.name, h: amHint(p) || '早晨：无名指轻拍眼眶骨，补水淡化' }));
-                byRoleAm('moist', true).forEach(p => steps.push({ p: p.name, h: amHint(p) || '全脸薄涂打底' }));
+                byRoleAm('moist', true).forEach(p => { steps.push({ p: p.name, h: amHint(p) || '全脸薄涂打底' }); amFaceCovered = true; });
+                if (!amFaceCovered) skips.push('⚠️ 防晒前没有能打底的保湿了 —— 「保湿」这一档现在是空的，去「产品」页看「要不要买新的」');
             }
 
             const spf = PD.filter(p => !p.hidden && p.role === 'spf' && hasSpfReady(p)
