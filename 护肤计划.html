@@ -4312,15 +4312,19 @@
         // 调研过的具体推荐(英国可买)。留空 = 还没调研过,界面就只给挑选标准。
         // 2026-08-26 查过成分表的结论,不是随手推荐:
         const SHOP_PICKS = {
-            // 2026-08-28(Toleriane Ultra Light 用完之后)查成分表定的,不是照名字挑:
-            // Cait 明确「不需要买同款,买同品类最合适最好的」。同品类里对**这张脸**最对症的是
-            // 烟酰胺款 —— 泛红、痘、出油三件事一支全管,而 Ultra 那种镇静肽款只管镇静。
+            // 2026-08-28(Toleriane Ultra Light 用完之后)查成分表定的,不是照名字挑。
+            // Cait:「不需要买同款,买同品类最合适最好的」+「选最合适 Cici 肤质/需求的」。
+            // → 按**她这张脸**(混油出油 + 连续泛红 + 闷闭口爆痘 + 在刷酸)选:要的不只是"不刺激",
+            //   还得"能干活"。烟酰胺对**控皮脂、抗炎泛红、痤疮**三件事都有证据,这三件正好是她的三件。
+            //   Avène Hydra-10 成分表更短(9 个、无防腐)但纯被动保湿 —— 只是不添乱,不解决问题 → 转备选。
             hydrate: { name: 'La Roche-Posay Toleriane Sensitive Fluide (40ml)', price: '约 £14–19，Boots/Escentual/LookFantastic',
-                why: '全表只有 10 个成分、无香精无精油无酒精，fluid 质地混油/油皮不闷；含烟酰胺 —— 泛红、痘、出油这三件正好是现在这张脸的问题。' },
+                why: '全表 10 个成分、无香精无精油无酒精，fluid 质地混油/油皮不闷；含烟酰胺 —— 控油、泛红、痘这三件正好是现在这张脸的问题。' },
             'hydrate+calm': { name: 'La Roche-Posay Toleriane Sensitive Fluide (40ml)', price: '约 £14–19，Boots/Escentual/LookFantastic',
-                why: '一支同时办两档：早晚全脸的保湿打底 + 「轻薄的镇静」。10 个成分、无香精无精油无酒精、fluid 不闷；烟酰胺对泛红/痘/出油都有据可依。' +
-                     '备选 Avène Tolérance Hydra-10 Fluid(9 成分、无香精无防腐，但没有烟酰胺这类活性，只是被动保湿)。' +
-                     '⚠️ 别拿 Cicaplast B5 精华顶这一档：含 Isopropyl Myristate(偏致粉刺)和 Methyldihydrojasmonate(香料)，正在闷闭口时不合适。' },
+                why: '一支同时办两档：早晚全脸的保湿打底 + 「轻薄的镇静」。10 个成分、无香精无精油无酒精、fluid 不闷；' +
+                     '烟酰胺对出油/泛红/痘都有据可依 —— 按肤质挑就是它。' +
+                     '备选 Avène Tolérance Hydra-10 Fluid(£16–20，9 成分、无香精无防腐，成分表更短但没有活性，只是被动保湿；烟酰胺不耐受时换它)。' +
+                     '⚠️ 别拿 Cicaplast B5 精华顶这一档：含 Isopropyl Myristate(偏致粉刺)和 Methyldihydrojasmonate(香料)，正在闷闭口时不合适。' +
+                     '⚠️ 也别以为贵的更安全：SkinCeuticals Phyto Corrective Gel(约 £70)含 Parfum、桉树叶油、Linalool、Citronellol 和色素，会被同一条规则停掉。' },
             'calm-light': { name: 'Avène Tolérance Hydra-10 Hydrating Fluid (40ml)', price: '约 £16–20，Boots/Escentual',
                 why: '全表只有 9 个成分、无香精无防腐(无菌泵)、质地是 fluid 不闷，油皮混油都能用。' +
                      '⚠️ 别买 Cicaplast B5 精华顶这一档：它含 Isopropyl Myristate(偏致粉刺)和 Methyldihydrojasmonate(香料)，正在闷闭口时不合适。' },
