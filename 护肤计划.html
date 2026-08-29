@@ -2847,7 +2847,11 @@
             // 2026-08-26 Cait:「所有产品都调整为正常使用状态」。
             // 「备用 / 待购入」这类历史状态一次清零 —— 家里有的就是在用的;
             // 某件今晚到底用不用,由方案按当前皮肤状况决定(buildRegimen),不再靠产品状态去表达。
-            { id: 'all-normal-2026-08-26', type: 'all-normal' }
+            { id: 'all-normal-2026-08-26', type: 'all-normal' },
+            // 2026-08-29 买的 Toleriane Sensitive:开封日直接落成买回来那天 ——
+            // 新并进来的内置产品 POPEN 是空的,不填的话 PAO(6 个月)提醒永远不响、
+            // 将来点「用完了」空瓶记录里也算不出"开封几周"。这种事不该让人手动去产品页填。
+            { id: 'tolerianeSens-open-2026-08-29', type: 'open-date', prod: 'tolerianeSens', date: '2026-08-29' }
         ];
         // 一件产品的「正常使用」状态叫什么(内置产品有的叫 active、有的叫 owned)
         function normalStatusOf(def) { return (def.statuses || []).find(x => x !== 'paused') || (def.statuses || ['owned'])[0]; }
@@ -2869,6 +2873,14 @@
                         GONE.push(m.prod); goneChanged = true;
                         PD = PD.filter(p => p.id !== m.prod);
                         if (PS[m.prod]) { delete PS[m.prod]; changed = true; }
+                    }
+                } else if (m.type === 'open-date') {
+                    // 只在还没填过时落,填过的以用户填的为准
+                    const op = lg(K.popen) || {};
+                    if (!op[m.prod] && PD.find(x => x.id === m.prod)) {
+                        op[m.prod] = m.date || today();
+                        ls(K.popen, op);
+                        if (POPEN) POPEN[m.prod] = op[m.prod];
                     }
                 } else if (m.type === 'all-normal') {
                     PD.forEach(p => {
