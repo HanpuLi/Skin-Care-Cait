@@ -2746,6 +2746,9 @@
             { id:'lacura',role:'cleanse',cleanseStrength:'gentle',icon:'🧼',name:'Lacura 温和洗面奶',cat:'洁面 · 温和无皂基',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['无皂基氨基酸洁面，敏感肌','出油也别用皂基/强力泡沫，越洗越油'],pmHint:'全脸打圈30秒后温水洗净',amHint:'温和洁面，30秒洗净',schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
             { id:'wildsource',role:'precleanse',icon:'🧈',name:'Wild Source 卸妆膏',cat:'清洁 · 卸妆第一遍',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['晚间卸防晒/妆的第一遍','没妆没厚防晒可跳过'],pmHint:'干手打圈乳化后温水洗净',schedule:{type:'base',time:['pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
             { id:'toleriane',role:'moist',icon:'💧',name:'La Roche-Posay Toleriane Ultra Light',cat:'保湿 · 无油轻薄',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['无油轻薄乳，敏感/易泛红','油皮/混油首选，防晒前打底'],pmHint:'全脸薄涂封层',amHint:'全脸薄涂，防晒前打底',schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
+            // 2026-08-29 买的(Boots £19.55),顶掉用完的 Toleriane Ultra Light 空出来的那一档。
+            // ⚠️ 与用完的那支**不是同一个配方**:Ultra = 镇静肽 Neurosensine;Sensitive = 烟酰胺 + 甘油。
+            { id:'tolerianeSens',role:'moist',icon:'💧',name:'La Roche-Posay Toleriane Sensitive Fluide',cat:'保湿 · 无油轻薄',journalTag:'',addedOn:'2026-08-29',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['无油 fluid，混油/油皮不闷；无香精、无精油、无酒精','含烟酰胺：控油、泛红、痘都有对照证据'],pmHint:'全脸薄涂封层',amHint:'全脸薄涂，防晒前打底',schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
             { id:'drorganic',role:'mask',icon:'🍊',name:'dr.organic 葡萄柚水杨酸磨砂',cat:'去角质 · 磨砂（慎用）',journalTag:'磨砂',statuses:['paused','owned'],labels:{paused:'备用',owned:'偶尔用'},pillCls:{paused:'paused',owned:'active'},notes:['物理颗粒+水杨酸，油痘肌','⚠️对泛红/红疹区偏刺激，最多两周1次、避开发红处'],pmHint:'湿脸轻打圈、避开红疹区，冲净',schedule:{type:'mask',time:['pm'],maxPerWeek:1,minDaysBetween:6,preferShowerNight:true,avoidShaveDay:true,avoidAcid:true,avoidRetinol:false,enableAutoSchedule:false},paoMonths:12,builtin:true },
             { id:'ren',role:'eye',icon:'👁',name:'REN 亮黑眼圈眼霜',cat:'眼部 · 提亮',journalTag:'',statuses:['owned','paused'],labels:{owned:'正常使用',paused:'备用'},pillCls:{owned:'active',paused:'paused'},notes:['提亮黑眼圈','无名指轻拍眼周，避开眼球'],schedule:{type:'base',time:['am','pm'],maxPerWeek:0,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false},paoMonths:6,builtin:true },
         ];
@@ -4205,6 +4208,12 @@
             // 且无香精/无防腐/无酒精/无羊毛脂。所以它**本身就是**"轻薄的镇静",不只是保湿。
             // (这条很关键:标错的话 App 会报一个假缺口,让人白买一支镇静产品。)
             toleriane: ['light', 'calm'],
+            // 2026-08-29 新买的那支。Toleriane **Sensitive** ≠ 用完的 **Ultra**:Sensitive 是
+            // 烟酰胺 + 甘油(10 个成分、无香精无精油无酒精)。烟酰胺对**控皮脂、抗炎泛红、痤疮**
+            // 都有对照证据 → 它同样是"轻薄的镇静"那一档,不只是保湿。
+            // 🔴 必须显式写在这里:traitsOf 的兜底正则原本认不出"烟酰胺"(已一并补进正则),
+            //    漏标的直接后果就是 App 报一个假的「缺轻薄的镇静」,让人再白买一支。
+            tolerianeSens: ['light', 'calm'],
             lacura:    ['gentle-clean'],
             lancome:   ['strong-clean'],
             wildsource:['oil-based'],
@@ -4218,7 +4227,7 @@
             if (/磨砂|scrub|颗粒|polish/i.test(s)) { t.push('scrub', 'strong-exfo'); }
             else if (/甘醇酸|glycolic|视黄醇|retinol|高浓度|果酸换肤/i.test(s)) t.push('strong-exfo');
             else if (/杏仁酸|乳酸|mandelic|lactic|PHA|葡糖酸|水杨酸|salicylic|果酸|AHA|BHA/i.test(s)) t.push('gentle-exfo');
-            if (/积雪草|cica|泛醇|panthenol|B5|舒缓|calm|soothe|尿囊素|allantoin|神经酰胺|ceramide|抗敏/i.test(s)) t.push('calm');
+            if (/积雪草|cica|泛醇|panthenol|B5|舒缓|calm|soothe|尿囊素|allantoin|神经酰胺|ceramide|抗敏|烟酰胺|niacinamide/i.test(s)) t.push('calm');
             if (/膏|baume|balm|凡士林|petrolatum|乳木果|shea|厚重|rich|封闭/i.test(s)) t.push('occlusive');
             if (/精油|essential oil|玫瑰|香氛|香精|parfum|fragrance/i.test(s)) t.push('fragranced');
             if (/面油|精华油|\boil\b/i.test(s)) t.push('oil-based');
@@ -4232,6 +4241,22 @@
         function tagInDays(n, names) { return jrnlLastNDays(n).some(e => (e.status || []).some(x => names.indexOf(x) >= 0)); }
         // 全脸用的东西。眼霜/眼部精华再"舒缓"也顶不了全脸那一档 ——
         // 不加这一条,「轻薄的镇静」会被一支眼部精华糊弄过去,缺口就报不出来了(实测踩到)。
+        // 新进货架的东西,前几晚别直接全脸怼 —— 先避开发红/破皮处,看两晚没加重再全上。
+        // 正在发炎(疑口周皮炎)时尤其:把没用过的东西压在病灶上,真出事也分不清是谁干的。
+        // 用产品定义里的 addedOn 判断,不依赖用户有没有填开封日期(填了才有 POPEN,新用户多半没填)。
+        const INTRO_NIGHTS = 3;
+        function introNightsLeft(p) {
+            if (!p || !p.addedOn) return 0;
+            const d = Math.floor((new Date(today() + 'T12:00:00') - new Date(p.addedOn + 'T12:00:00')) / 86400000);
+            return (d >= 0 && d < INTRO_NIGHTS) ? (INTRO_NIGHTS - d) : 0;
+        }
+        function introHint(p) {
+            const n = introNightsLeft(p); if (!n) return '';
+            const zs = zonesAvoiding('acid');   // 她自己标过的敏感/红疹区,复用同一份,别让人再设一遍
+            return '　🆕 新品引入期（含今晚还剩 ' + n + ' 晚）：先薄涂一层，' +
+                   (zs.length ? '避开' + zs.join('、') : '避开正在发红/破皮的地方') +
+                   '；没有刺痛或加重，再全脸用。';
+        }
         function faceWide(p) { return p && p.role !== 'eye' && p.role !== 'spf' && p.role !== 'precleanse'; }
         // 冲洗掉的东西(洁面、冲洗型面膜)顶不了「洗完脸上有东西护着」—— 它根本没留在脸上。
         function leaveOn(p) { return p && ['cleanse', 'precleanse', 'mask', 'soothe'].indexOf(p.role) < 0; }
@@ -4649,8 +4674,14 @@
                 // 而不是顺手把封闭性的修护膏改成全脸厚涂 —— 那正是闷出闭口的老路。
                 const needCalm = irritated && !soothers.length;
                 const spotUse = repairUse() === 'spot';
-                byRole('moist', true).forEach(p => { steps.push({ p: p.name, h: hasScheduledAcid ? '酸类夜首选封层' :
-                    (hint(p) || '全脸封层') + (needCalm && hasTrait(p, 'calm') && !hasTrait(p, 'occlusive') ? '　（最近有泛红：这支自带镇静成分，泛红处多按一层）' : '') }); faceCovered = true; });
+                byRole('moist', true).forEach(p => {
+                    const intro = introHint(p);
+                    // 引入期的提示要**盖掉**"泛红处多按一层" —— 还没试过的东西不该往病灶上多涂
+                    steps.push({ p: p.name, h: (hasScheduledAcid ? '酸类夜首选封层' : (hint(p) || '全脸封层')) +
+                        (intro || (needCalm && hasTrait(p, 'calm') && !hasTrait(p, 'occlusive') ? '　（最近有泛红：这支自带镇静成分，泛红处多按一层）' : '')) });
+                    faceCovered = true;
+                    if (intro && hasScheduledAcid) skips.push('⚠️ 今晚既排了酸又是新品第一批 —— 建议酸往后挪一晚：两样一起上，出了问题分不清是谁干的');
+                });
                 // 修护霜用法按档案:屏障修复是基础治疗、指南建议常规全脸使用;仅在屏障好且油皮时才点涂
                 // 手边没有舒缓面膜了(Avène 用完),不能让"最近在泛红"这条线索跟着一起消失。
                 // ⚠️ 但也不能借机把修护霜改成全脸厚涂:近期有闭口/爆痘的人全脸涂封闭性膏体
@@ -4822,7 +4853,7 @@
                     if (why) skips.push(`${p.name}（${why}）`);
                     else { steps.push({ p: p.name, h: amHint(p) || '早晨全脸轻拍' }); amFaceCovered = true; } });
                 byRoleAm('eye', true).forEach(p => steps.push({ p: p.name, h: amHint(p) || '早晨：无名指轻拍眼眶骨，补水淡化' }));
-                byRoleAm('moist', true).forEach(p => { steps.push({ p: p.name, h: amHint(p) || '全脸薄涂打底' }); amFaceCovered = true; });
+                byRoleAm('moist', true).forEach(p => { steps.push({ p: p.name, h: (amHint(p) || '全脸薄涂打底') + introHint(p) }); amFaceCovered = true; });
                 if (!amFaceCovered) skips.push('⚠️ 防晒前没有能打底的保湿了 —— 「保湿」这一档现在是空的，去「产品」页看「要不要买新的」');
             }
 
