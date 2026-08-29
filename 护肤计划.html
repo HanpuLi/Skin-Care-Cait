@@ -2514,11 +2514,20 @@
     </div>
 
     <script>
+        // 🔴 云端数据正在落到本机的这一小段时间里,本机的**自动写盘**(货架迁移、方案版本、状态清洗)
+        //    绝不能反弹回云端。否则闭环是:云端盖本地 → renderAll() 重跑 applyShelfMigrations/
+        //    syncRegimen/sanitizePS → ls() 触发 schedulePush → 云端 _updatedAt 变新 →
+        //    下一次 snapshot(或另一台设备)又盖回来 → **无限对推、本地反复被覆盖**。
+        //    2026-08-29 实发:REGIMEN_ENGINE 升到 'e2' 让每台设备一打开必写一次方案版本,
+        //    把这个一直潜伏的回声放大成了"每次打开都发作"。
+        //    这里只是不推送;值仍然落盘,下一次真实操作会被整份推送一并带上。
+        let _applyingCloud = false;
         // ══ Storage ══════════════════════════════════════════════════
         function lg(k) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null } catch { return null } }
         function ls(k, v) {
             try {
                 localStorage.setItem(k, JSON.stringify(v));
+                if (_applyingCloud) return;   // 云端回声,别推回去
                 schedulePush();
             } catch(e) {
                 if (e.name === 'QuotaExceededError' || e.code === 22) {
@@ -6281,6 +6290,11 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
             renderProdChips(); renderQuickAcidBtns(); renderProds(); updateProdUI(); renderWk(); renderTn(); renderAm(); renderPaoAlerts();
         }
 
+        // 云端数据落地后的重绘:期间的自动写盘只落本机、不反弹(见文件顶部 _applyingCloud 那段注释)
+        function applyCloudThenRender() {
+            _applyingCloud = true;
+            try { renderAll(); } finally { _applyingCloud = false; }
+        }
         function setupRealtimeSync() {
             if (!_db || !_user) return;
             if (_unsub) _unsub();
@@ -6293,6 +6307,15 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
                 // 不能让旧云覆盖(这正是"改动没推成→下次打开被旧云盖掉"的丢数据主因),反过来把本地推上去。
                 const cloudAt = Number(cloudDoc._updatedAt || 0);
                 const lastPush = Number(localStorage.getItem('sk_lastpush') || 0);
+                // 🔴 本机还有没推上去的改动 ⇒ 先上传,绝不接受覆盖。
+                // 只靠下面的 cloudAt<=lastPush 挡不住这一种:用户刚改完(2 秒防抖还没推出去),
+                // 而云端此刻恰好比 lastPush 新(另一台设备刚推过)→ 直接走"全盘应用云端",
+                // 刚改的那几下就没了。这正是"本地被无限覆盖"里**真会丢用户数据**的那一半。
+                if (_pushTimer || _pushing || _pushDirty) {
+                    showSyncStatus('↑ 本机有改动还没上传，先上传…', 'syncing');
+                    if (!_pushing) { clearTimeout(_pushTimer); _pushTimer = setTimeout(pushToCloud, 200); }
+                    return;
+                }
                 // 注意是 <= 不是 <（丢记录事故根因）：手机 PWA 上"最后几下勾选"常因 2 秒防抖没推完就被切后台,
                 // 下次冷启动时 cloudAt 恰好等于上次成功推送的时间戳,旧版 < 判断放行,旧云把昨晚的记录整个抹掉。
                 // 云端不比本机上次推送新 ⇒ 本机任何差异都只可能是还没推上去的新改动,应该上传,绝不能下载覆盖。
@@ -6311,7 +6334,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
                         // 键序无关比较：Firestore 回来的 map 键序和本地 JSON 不同，比原串会永远"脏"→无限互推
                         if (_stableStr(lv) !== _stableStr(cloudDoc[k])) dirty = true;
                     });
-                    if (pulled) { if (_user) autoMatchProfile(_user.uid); renderAll(); }
+                    if (pulled) { if (_user) autoMatchProfile(_user.uid); applyCloudThenRender(); }
                     if (dirty) {
                         showSyncStatus('↑ 本机数据较新，正在上传…', 'syncing');
                         clearTimeout(_pushTimer); _pushTimer = setTimeout(pushToCloud, 200);
@@ -6349,7 +6372,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
                         try { localStorage.setItem(k, cloudV); changed = true; } catch {}
                     }
                 });
-                if (changed) { if (_user) autoMatchProfile(_user.uid); renderAll(); showSyncStatus('☁ 已从云端更新'); }
+                if (changed) { if (_user) autoMatchProfile(_user.uid); applyCloudThenRender(); showSyncStatus('☁ 已从云端更新'); }
                 else if (isInit) { showSyncStatus('✓ 云端已连接'); }
             }, e => console.warn('监听云端数据失败:', e));
         }
