@@ -2513,6 +2513,13 @@
         </div>
     </div>
 
+    <style>
+      .low-note{font-size:11px;line-height:1.5;color:var(--tx2);background:rgba(255,176,32,.10);
+                border-left:2px solid rgba(255,176,32,.55);border-radius:4px;padding:6px 8px;margin:6px 0}
+      .prod-act.on{background:rgba(255,176,32,.18);border-color:rgba(255,176,32,.5)}
+      .shop-item.soon{opacity:.88}
+      .shop-pri.p3{background:rgba(255,176,32,.18);color:var(--tx2)}
+    </style>
     <script>
         // 🔴 云端数据正在落到本机的这一小段时间里,本机的**自动写盘**(货架迁移、方案版本、状态清洗)
         //    绝不能反弹回云端。否则闭环是:云端盖本地 → renderAll() 重跑 applyShelfMigrations/
@@ -2618,6 +2625,7 @@
             mig: 'sk_mig1',         // 已跑过的「货架迁移」id;进 CLOUD_KEYS 跟着云端走(见 applyShelfMigrations)
             empty: 'sk_empty1',     // 空瓶记录:{产品id: [{date, weeks, uses}]}——「用完了」是事件,要留痕
             gone:  'sk_gone1',      // 家里已经没有了、已从货架删掉的产品 id(用完即删,不进待买清单)
+            low:   'sk_low1',       // 「快用完了」的产品 id —— 见底预警,**不是**已退役的 pending(见 toggleLow)
             regimen: 'sk_regimen1'  // 方案版本历史:皮肤状况或货架一变就重出一版(见 syncRegimen)
         };
         // One-time migration from old keys
@@ -3275,6 +3283,7 @@
             (EMPTIES[id] = EMPTIES[id] || []).push(rec);
             ls(K.empty, EMPTIES);
             const hint = replacementText(def);          // 要在删掉之前算:删完它自己就不在 PD 里了
+            if (isLow(id)) { LOW = LOW.filter(x => x !== id); ls(K.low, LOW); }   // 已经没了,见底预警收工
             if (!isGone(id)) { GONE.push(id); ls(K.gone, GONE); }
             PD = PD.filter(p => p.id !== id);
             delete PS[id]; ls(K.prods, PS);
@@ -3300,6 +3309,42 @@
             renderProds(); renderWk(); renderTn(); renderAm();
             sysAlert(`「${def ? def.name : id}」已恢复到产品清单(开封日记为今天)。\n\n` +
                      (reg ? `方案已更新(v${reg.v})：\n${regimenSummary(reg)}` : ''));
+        }
+        // ══ 「快用完了」:见底预警,给买东西留提前量 ══════════════════════════
+        // 🔴 这**不是** 2026-08-26 废除的 `pending`,别当成它复活了:
+        //    - pending = 东西**已经没了**,却还占着货架和待买清单(Cait 明令废除)
+        //    - 「快用完了」= 东西**还在**、照常排进流程,只是提前告诉 App 它见底了
+        //      —— 现在的设计是"用完那一刻才知道",而买东西要几天,这中间的空窗正是 Cici 提的问题
+        // 判断要不要买,口径不变(仍是 Cait 2026-08-26 定的「按整套方案成不成立」,不按分类):
+        // 把它临时从货架上挖掉跑一遍缺口,**挖掉才出现的**缺口才需要买;有替补就说谁顶,不催。
+        let LOW = lg(K.low) || [];
+        function isLow(id) { return LOW.indexOf(id) >= 0; }
+        function toggleLow(id, e) {
+            if (e) e.stopPropagation();
+            const i = LOW.indexOf(id);
+            if (i >= 0) LOW.splice(i, 1); else LOW.push(id);
+            ls(K.low, LOW);
+            renderProds(); renderTn(); renderAm();
+        }
+        // 「它没了的话,会多出哪几个缺口」——用 _simExclude 做假设推演,不落盘。
+        function gapsIfGone(id) {
+            const before = regimenGaps().map(g => g.key);
+            const prev = _simExclude;
+            let after = [];
+            try {
+                _simExclude = id; invalidatePlanCache();
+                after = regimenGaps();
+            } finally {
+                // 🔴 一定要复位:漏了这一句,整个 App 会从此以为这件东西不存在
+                _simExclude = prev; invalidatePlanCache();
+            }
+            return after.filter(g => before.indexOf(g.key) < 0);
+        }
+        // 快用完的这支,家里有没有能接班的(接班人要现在这张脸真能用 —— 复用 pickReplacement 的判断)
+        function successorText(def) {
+            const r = pickReplacement(def);
+            if (!r || r.blocked) return null;
+            return r.needEnable ? `${r.p.name}（现在是「备用」，点一下改成「正常使用」就接上）` : r.p.name;
         }
         function _lastEmpty(id) { const l = EMPTIES[id]; return (l && l.length) ? l[l.length - 1] : null; }
         function emptyLogRows() {
@@ -3451,7 +3496,14 @@
     </div><div class="pcb" id="pcb-${def.id}">
       <div style="margin-top:0">${notes}</div>
       <div class="popen"><label>开封日期：</label><input type="date" value="${POPEN[def.id]||''}" onchange="saveOpenDate('${def.id}',this.value)">${woHtml}</div>
-      <div class="prod-acts"><button class="prod-act" onclick="showProdModal('${def.id}')">✏️ 编辑</button><button class="prod-act" onclick="markRunOut('${def.id}',event)">🫗 用完了</button><button class="prod-act" onclick="toggleExcluded('${def.id}')">${isExcluded(def)?'↩︎ 取消不用':'🚫 我不用这个'}</button><button class="prod-act del" onclick="deleteProd('${def.id}')">${def.builtin?'👁 隐藏':'🗑 删除'}</button></div>
+      ${isLow(def.id) ? (() => {
+          // 标了「快用完了」就当场推演:它见底之后这套方案还成不成立
+          const ng = gapsIfGone(def.id), suc = successorText(def);
+          return `<div class="low-note">🔉 <b>快用完了</b> —— ` + (ng.length
+              ? `它一没，<b>${esc(ng.map(g => g.label).join('、'))}</b>就断了 → 见下面「要不要买新的」，现在买来得及`
+              : (suc ? `不用急着买：家里还有「${esc(suc)}」能接上` : `不用急着买：这一档没了也不影响整套方案`)) + `</div>`;
+      })() : ''}
+      <div class="prod-acts"><button class="prod-act" onclick="showProdModal('${def.id}')">✏️ 编辑</button><button class="prod-act${isLow(def.id)?' on':''}" onclick="toggleLow('${def.id}',event)">${isLow(def.id)?'↩︎ 还够用':'🔉 快用完了'}</button><button class="prod-act" onclick="markRunOut('${def.id}',event)">🫗 用完了</button><button class="prod-act" onclick="toggleExcluded('${def.id}')">${isExcluded(def)?'↩︎ 取消不用':'🚫 我不用这个'}</button><button class="prod-act del" onclick="deleteProd('${def.id}')">${def.builtin?'👁 隐藏':'🗑 删除'}</button></div>
       ${can?`<div class="pch2">点击状态循环切换 → ${def.statuses.map(s2=>def.labels[s2]).join(' → ')}</div>`:''}
     </div></div>`;
             };
@@ -3493,7 +3545,7 @@
             const sp = document.getElementById('shop-pending');
             if (sp) sp.innerHTML = shop.length ? shop.map((g, i) => {
                 const pick = g.pick;
-                return `<div class="shop-item"><div class="shop-pri ${i===0?'p1':'p2'}">0${i+1}</div><div class="si">
+                return `<div class="shop-item${g.soon?' soon':''}"><div class="shop-pri ${g.soon?'p3':(i===0?'p1':'p2')}">${g.soon?'⏳':'0'+(i+1)}</div><div class="si">
                     <div class="sn2">${esc(g.what)}</div>
                     <div class="sw">${esc(g.why)}</div>
                     ${g.how ? `<div class="sw">挑选标准：${esc(g.how)}</div>` : ''}
@@ -4391,7 +4443,7 @@
             SHOP_MERGE.forEach(m => {
                 if (!m.keys.every(k => keys.indexOf(k) >= 0)) return;
                 m.keys.forEach(k => { taken[k] = 1; });
-                out.push({ key: m.key, what: m.what, how: m.how,
+                out.push({ key: m.key, mergedKeys: m.keys, what: m.what, how: m.how,
                            why: gaps.filter(g => m.keys.indexOf(g.key) >= 0).map(g => g.why).join('；'),
                            pick: SHOP_PICKS[m.key] });
             });
@@ -4399,6 +4451,37 @@
                 if (taken[g.key]) return;
                 const ad = SHOP_ADVICE[g.key] || {};
                 out.push({ key: g.key, what: ad.what || g.label, how: ad.how, why: g.why, pick: SHOP_PICKS[g.key] });
+            });
+            // 「快用完了」的提前量:排在真缺口后面 —— 那些是现在就没有,这些是还够用几天。
+            // 同样只在"它没了真会缺"时才提示买;有替补的不催(免得又变成按分类催货)。
+            LOW.forEach(id => {
+                const prod = PD.find(x => x.id === id); if (!prod) return;
+                const ng = gapsIfGone(id);
+                if (!ng.length) return;
+                const nk = ng.map(g => g.key), used = {};
+                const covered = k => out.some(o => o.key === k || o.key === 'soon:' + k ||
+                                                   (o.mergedKeys || []).indexOf(k) >= 0);
+                // ⚠️ 提前买的也必须走「一支顶两档」的合并,否则「快用完的是唯一的保湿」会同时报
+                //    "缺保湿"+"缺镇静"两条,又变成让人以为要买两支(8/28 刚修过的老毛病)
+                SHOP_MERGE.forEach(m => {
+                    if (!m.keys.every(k => nk.indexOf(k) >= 0)) return;
+                    m.keys.forEach(k => { used[k] = 1; });
+                    if (covered(m.key)) return;
+                    out.push({ key: 'soon:' + m.key, mergedKeys: m.keys, soon: true, prod: prod.name,
+                               what: m.what + '（提前买：「' + prod.name + '」快用完了）', how: m.how,
+                               why: '你标了「' + prod.name + '」快用完 —— 它一没，' +
+                                    ng.filter(g => m.keys.indexOf(g.key) >= 0).map(g => g.label).join('、') + '就都断了',
+                               pick: SHOP_PICKS[m.key] });
+                });
+                ng.forEach(g => {
+                    if (used[g.key] || covered(g.key)) return;
+                    const ad = SHOP_ADVICE[g.key] || {};
+                    out.push({ key: 'soon:' + g.key, soon: true, prod: prod.name,
+                               what: (ad.what || g.label) + '（提前买：「' + prod.name + '」快用完了）',
+                               how: ad.how,
+                               why: '你标了「' + prod.name + '」快用完 —— 它一没，' + g.label + '就断了：' + g.why,
+                               pick: SHOP_PICKS[g.key] });
+                });
             });
             return out;
         }
@@ -4716,6 +4799,12 @@
                 // 🔴 洗完全脸什么都不涂 = 屏障只会更差。剩下的东西全被停掉/只点涂时必须说出来,
                 //    别让流程静悄悄少一档(2026-08-28:Toleriane 用完后就变成了「洗脸+眼霜+点涂」)。
                 if (!faceCovered) skips.push('⚠️ 洗完全脸没有能涂的东西了 —— 「保湿」这一档现在是空的，去「产品」页最下面看「要不要买新的」');
+            }
+            // 「快用完了」的小标记统一在出口贴:步骤的 hint 有十几个拼装点(酸类夜的封层、
+            // 洁面、修护霜都各拼各的),逐点去补必定漏 —— 实测漏掉的正是保湿那一步。
+            if (LOW.length) {
+                const lowNames = LOW.map(id => (PD.find(x => x.id === id) || {}).name).filter(Boolean);
+                steps.forEach(st => { if (lowNames.indexOf(st.p) >= 0) st.h = (st.h || '') + '　🔉 这支快用完了'; });
             }
             return { steps, skips };
         }
@@ -6170,7 +6259,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
         setInterval(checkDayRollover, 60000);
 
         // ══ Firebase 云同步 ═══════════════════════════════════
-        const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_amsteps1','sk_proddefs1','sk_profile1','sk_preset1','sk_planday1','sk_mig1','sk_empty1','sk_gone1','sk_regimen1'];
+        const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_amsteps1','sk_proddefs1','sk_profile1','sk_preset1','sk_planday1','sk_mig1','sk_empty1','sk_gone1','sk_low1','sk_regimen1'];
         let _db = null, _user = null, _pushTimer = null, _pushing = false, _pushDirty = false;
         // 递归按键名排序的序列化——只用于云/本地数据的等价比较
         function _stableStr(v) {
