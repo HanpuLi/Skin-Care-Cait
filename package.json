@@ -1,0 +1,12 @@
+{
+  "name": "skin-care-cait-security-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:rules": "npx --yes firebase-tools@15.30.2 emulators:exec --only firestore --project demo-skin-care-cait \"node --test tests/firestore-rules.test.mjs\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "5.0.2",
+    "firebase": "12.19.0"
+  }
+}
