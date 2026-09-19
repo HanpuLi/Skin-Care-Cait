@@ -30,7 +30,7 @@ jobs:
         run: |
           node -e '
           const fs = require("fs");
-          const h = fs.readFileSync("护肤计划.html", "utf8");
+          const h = fs.readFileSync("index.html", "utf8");
           const re = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g;
           let m, n = 0, e = 0;
           while ((m = re.exec(h))) {
@@ -46,7 +46,7 @@ jobs:
         run: |
           node -e '
           const fs = require("fs");
-          const h = fs.readFileSync("护肤计划.html", "utf8");
+          const h = fs.readFileSync("index.html", "utf8");
           const need = [
             "function buildNightSteps", "function renderTn", "function renderAm",
             "function assessSkin", "const AXES", "function renderAssessment",
