@@ -1,36 +1,48 @@
 name: QA 体检
 
-# 每次提交自动体检:语法编译 + 关键功能存在性。
-# 目的:防止一次坏改动把 App 推成白屏/功能消失(以前只能手动 headless 验证)。
-
 on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   qa:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          node-version: '20'
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
 
-      - name: 语法检查(内联脚本逐个编译)
+      - name: 语法检查（内联脚本逐个编译）
         run: |
           node -e '
           const fs = require("fs");
           const h = fs.readFileSync("护肤计划.html", "utf8");
           const re = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g;
           let m, n = 0, e = 0;
-          while ((m = re.exec(h))) { n++; try { new Function(m[1]); } catch (err) { e++; console.error("SYNTAX ERROR in inline script #" + n + ": " + err.message); } }
+          while ((m = re.exec(h))) {
+            n++;
+            try { new Function(m[1]); }
+            catch (err) { e++; console.error("SYNTAX ERROR in inline script #" + n + ": " + err.message); }
+          }
           console.log("内联脚本 " + n + " 个，语法错误 " + e);
           process.exit(e > 0 ? 1 : 0);
           '
 
-      - name: 关键功能存在性(防止误删)
+      - name: 关键功能存在性（防止误删）
         run: |
           node -e '
           const fs = require("fs");
@@ -48,7 +60,13 @@ jobs:
           console.log("关键功能齐全，共 " + need.length + " 项 ✓");
           '
 
-      - name: 配套文件检查(manifest / sw)
+      - name: 配套文件与公开边界检查
         run: |
-          test -f manifest.json && node -e 'JSON.parse(require("fs").readFileSync("manifest.json","utf8"));console.log("manifest.json 合法 ✓")'
-          grep -q "skincare-app-v" sw.js && echo "sw.js 缓存版本存在 ✓"
+          node -e '
+          const fs = require("fs");
+          JSON.parse(fs.readFileSync("manifest.json", "utf8"));
+          JSON.parse(fs.readFileSync("firebase.json", "utf8"));
+          if (!fs.readFileSync("sw.js", "utf8").includes("skincare-app-v")) throw new Error("sw.js 缓存版本缺失");
+          console.log("manifest/firebase/sw ✓");
+          '
+          test -z "$(git ls-files AGENTS.md CLAUDE.md LIVING_TODO.md '家中护肤品清单.md' '审计报告_*.json')"

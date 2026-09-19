@@ -1,10 +1,5 @@
 name: Deploy to GitHub Pages
 
-# 自定义静态部署:替代官方自动 workflow。
-# 病因:官方 pages-build-deployment 的 deploy 步骤硬超时 10 分钟,
-# 遇到 Pages 后端慢(deployment_queued)就 failed 发邮件。这里把 timeout 放宽到 30 分钟,
-# 并直接静态上传(有 .nojekyll,不跑 Jekyll)。
-
 on:
   push:
     branches: [main]
@@ -15,28 +10,30 @@ permissions:
   pages: write
   id-token: write
 
-# 同一时刻只跑一个,且不取消进行中的(避免互相取消)
 concurrency:
-  group: "pages"
+  group: pages
   cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          path: '.'
+          persist-credentials: false
+      - name: Setup Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+        with:
+          path: "."
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
         with:
-          timeout: 1800000   # 30 分钟,容忍 Pages 后端慢,不再假性 failed
+          timeout: 1800000
