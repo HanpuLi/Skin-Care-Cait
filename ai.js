@@ -144,7 +144,8 @@ async function aiProbe(force) {
 function _aiRefresh() {
     if (typeof renderRegimenCard === 'function') renderRegimenCard();
     aiRenderTonight();
-    aiRenderProdEntry();
+    if (typeof renderTnSay === 'function') renderTnSay();
+    if (typeof oobeRefresh === 'function') oobeRefresh();
     const p = document.getElementById('coach');
     if (p && p.classList.contains('active')) renderCoach();
 }
@@ -377,7 +378,11 @@ function aiApplyTonight(j) {
     });
     if (n) {
         cur.id = String(j.id || ('t' + Date.now())).slice(0, 80);
-        if (cur.ops.length) ls(K.tnai, cur);
+        // 撤销用的「改之前」存在 sk_tnai1 自己身上:今晚页的变化条和这里的撤销走同一个 undoTonightChange()
+        const prevPlain = prev && prev.date === today() ? Object.assign({}, prev) : null;
+        if (prevPlain) delete prevPlain.undo;
+        cur.undo = { prev: prevPlain, note: snap.note };
+        ls(K.tnai, cur);
         _aiDropOldSnaps('tonight');
         invalidatePlanCache();
         if (typeof renderTn === 'function') renderTn();
@@ -391,15 +396,9 @@ function _aiUndoTonight(rec) {
     const s = rec.snap;
     if (!s) return '这条已经撤不了了';
     if (s.date !== today()) return '已经不是那天了，没撤';
-    if (s.tnai) ls(K.tnai, s.tnai); else localStorage.removeItem(K.tnai), ls(K.tnai, null);
-    if (rec.changes.some((c, k) => c.op === 'note' && !rec.result[k])) {
-        const e = lg(K.jrnl) || [];
-        const en = e.find(x => x.date === today());
-        if (en) { en.note = s.note || ''; ls(K.jrnl, e); }
-    }
-    invalidatePlanCache();
+    const why = undoTonightChange(rec.id);
+    if (why) return why;
     if (typeof renderTn === 'function') renderTn();
-    if (typeof renderWk === 'function') renderWk();
     return '';
 }
 // 整套方案的改动(对话 propose_regimen / 复盘 adjustments)→ 新的一版方案(source:'ai'),撤销 = 回到上一版
@@ -637,17 +636,17 @@ async function _aiMemPost(body, ok) {
 function aiMemDelete(id) { if (id) return _aiMemPost({ op: 'delete', id }, '删掉了'); }
 function aiMemClear() {
     const n = (_aiMem && _aiMem.items || []).length;
-    if (!n || !confirm('清空顾问记住的 ' + n + ' 件事？清了就找不回来。')) return;
-    return _aiMemPost({ op: 'clear' }, '清空了');
+    if (!n) return;
+    sysConfirm('清空顾问记住的 ' + n + ' 件事？清了就找不回来。', () => _aiMemPost({ op: 'clear' }, '清空了'), { ok: '全部清空' });
 }
 
 // ── 对话 ──
 function _aiChatState() { const st = _aiMine(AIK.chat); return st || { uid: _aiUid(), chat: [], ctx: null }; }
 function aiNewChat() {
     const st = _aiChatState();
-    if (st.chat.length && !confirm('开始新对话？之前的对话会清掉（已经改过的方案不受影响）。')) return;
-    _aiSet(AIK.chat, { uid: _aiUid(), chat: [], ctx: null });
-    _aiShowChat();
+    const go = () => { _aiSet(AIK.chat, { uid: _aiUid(), chat: [], ctx: null }); _aiShowChat(); };
+    if (!st.chat.length) return go();
+    sysConfirm('开始新对话？之前的对话会清掉（已经改过的方案不受影响）。', go, { ok: '开始新对话' });
 }
 function _aiShowChat(streaming) {
     const el = document.getElementById('co-chat-log'); if (!el) return;
@@ -823,11 +822,12 @@ function aiRegimenActionsHtml(reg) {
 }
 function aiUndoCurrent() {
     const last = currentRegimen(); if (!last || last.source !== 'ai') return;
-    if (!confirm('撤销这一版顾问方案，回到上一版？')) return;
-    const why = undoRegimen(last.id);
-    if (why) { _aiToast(why); return; }
-    _aiAfterRegimenChange();
-    _aiToast('已撤销 · 方案回到上一版');
+    sysConfirm('撤销这一版顾问方案，回到上一版？', () => {
+        const why = undoRegimen(last.id);
+        if (why) { _aiToast(why); return; }
+        _aiAfterRegimenChange();
+        _aiToast('已撤销 · 方案回到上一版');
+    }, { ok: '撤销' });
 }
 
 // 每周复盘:每周一之后第一次打开自动跑一次(sk_ai1.reviewWeek 跟云走,两台设备不会各跑一遍);也能手动点
@@ -909,11 +909,11 @@ async function aiVision(input, mode) {
     const f = input.files && input.files[0];
     input.value = '';
     if (!f) return;
-    if (!aiReady()) { await aiProbe(true); if (!aiReady()) { _aiToast(_aiDown ? '顾问连不上，先手动加' : '顾问还没开通'); if (mode === 'read_label') showProdModal(); return; } }
+    if (!aiReady()) { await aiProbe(true); if (!aiReady()) { _aiToast(_aiDown ? '顾问连不上，先手动加' : '顾问还没开通'); if (mode === 'read_label') openAddProduct(); return; } }
     let img;
     try { img = await aiImage(f, 1280); } catch (e) { return _aiToast(e.message); }
     _aiResult = { busy: mode === 'read_label' ? '在读成分标…' : '在看皮肤…' };
-    if (document.getElementById('coach').classList.contains('active')) _aiShowResult(); else _aiToast(_aiResult.busy);
+    if (document.getElementById('co-result') && document.getElementById('coach').classList.contains('active')) _aiShowResult(); else _aiToast(_aiResult.busy);
     try {
         const r = await aiPoint('/api/vision', Object.assign({ context: buildSkincareContext(), image: img, mode }, _aiOpts()));
         aiVisionResult(r.data || {}, mode, { model: r.model, cost: r.cost });
@@ -965,7 +965,7 @@ function aiSkinToNote() {
 }
 // 产品页顶上的入口:拍成分标
 function aiRenderProdEntry() {
-    const box = document.getElementById('ai-prod-entry'); if (!box) return;
+    const box = document.getElementById('ai-prod-entry'); if (!box) return;   // 新版产品页把「拍成分表」并进了「添加产品」,这个挂点已经没了
     const a = aiAccess();
     box.innerHTML = a === 'on'
         ? `<label class="co-btn" style="display:block;text-align:center;margin-bottom:1rem">拍成分标 · 自动认产品和成分特性<input type="file" accept="image/*" capture="environment" onchange="aiVision(this,'read_label')" aria-label="拍成分标"></label>`
@@ -975,11 +975,6 @@ function aiRenderProdEntry() {
 // ── 今晚页:今日顾问的话(一天一次,本机缓存)+ 打卡反馈 ──
 function aiRenderTonight() {
     _aiStyle();
-    const nb = document.getElementById('ai-note');
-    if (nb) {
-        const n = _aiMine(AIK.note);
-        nb.innerHTML = (n && n.date === today() && n.note) ? `<div class="co-note"><b>今天顾问的话</b>　${_aiEsc(n.note)}</div>` : '';
-    }
     const fb = document.getElementById('ai-feedback');
     if (fb) {
         const f = (_aiState().feedback || {})[today()];
@@ -987,6 +982,11 @@ function aiRenderTonight() {
     }
     _aiMaybeNote();
     _aiMaybeAutoReview();
+}
+// 今天顾问的话(一天一次,本机缓存):今晚页标题下面那一行用它;没有就用规则文案
+function aiNoteToday() {
+    const n = _aiMine(AIK.note);
+    return (n && n.date === today() && n.note) ? String(n.note) : '';
 }
 function _aiMaybeNote() {
     if (!aiReady() || _aiInflight.note) return;
@@ -997,7 +997,7 @@ function _aiMaybeNote() {
     _aiMaybeNote.tried = today() + _aiUid();
     _aiInflight.note = true;
     aiPoint('/api/note', Object.assign({ context: buildSkincareContext() }, _aiOpts()))
-        .then(r => { if (r && r.data && r.data.note) { _aiSet(AIK.note, { uid: _aiUid(), date: today(), note: r.data.note, model: r.model, cost: r.cost }); aiRenderTonight(); } })
+        .then(r => { if (r && r.data && r.data.note) { _aiSet(AIK.note, { uid: _aiUid(), date: today(), note: r.data.note, model: r.model, cost: r.cost }); if (typeof renderTnSay === 'function') renderTnSay(); } })
         .catch(() => { })
         .then(() => { _aiInflight.note = false; });
 }
