@@ -50,16 +50,17 @@ jobs:
           const need = [
             "function buildNightSteps", "function renderTn", "function renderAm",
             "function assessSkin", "const AXES", "function renderAssessment",
-            "const PLAN_TEMPLATES", "function applyPlanTemplate",
-            "const PHASES", "function currentPhase", "function goalProgress",
+            "const PHASES", "function currentPhase",
             "function safetyGate", "function gateBlocks", "function acidLadder", "function traitsOf",
-            "function regimenRules", "function commitAiRegimen", "function undoRegimen",
-            "const ONBOARD_SKIN", "function finishOnboarding",
-            "const CLOUD_KEYS", "function clearLocalUserData", "function assignRoles"
+            "function medicalRedLine", "function renderSafetyAlert", "function absorbPrescribedHistory",
+            "function regimenRules", "function commitAiRegimen", "function undoRegimen", "function renderChangeBar",
+            "function startOOBE", "function oobeFinish", "function openSheet", "function stripEmoji",
+            "const CLOUD_KEYS", "function clearLocalUserData", "function assignRoles",
+            "_applyingCloud", "hasPendingWrites", "function flushPendingPush"
           ];
           const miss = need.filter(s => !h.includes(s));
           if (miss.length) { console.error("缺失关键代码: " + miss.join(", ")); process.exit(1); }
-          console.log("关键功能齐全，共 " + need.length + " 项 ✓");
+          console.log("关键功能齐全，共 " + need.length + " 项");
           '
 
       - name: 配套文件与公开边界检查
@@ -71,12 +72,24 @@ jobs:
           const sw = fs.readFileSync("sw.js", "utf8");
           if (!sw.includes("skincare-app-v")) throw new Error("sw.js 缓存版本缺失");
           if (!sw.includes("./ai.js")) throw new Error("sw.js 没缓存 ai.js");
+          // 自托管字体:三套都要在预缓存清单里、文件真的在(离线也是宋体)
+          for (const f of ["fonts/noto-serif-sc-400-skin.woff2", "fonts/eb-garamond-latin-400.woff2", "fonts/courier-prime-latin-400.woff2"]) {
+            if (!sw.includes("./" + f)) throw new Error("sw.js 没预缓存 " + f);
+            if (!fs.existsSync(f)) throw new Error("缺字体文件 " + f);
+          }
+          if (!fs.existsSync("fonts/LICENSES.txt")) throw new Error("缺 fonts/LICENSES.txt(OFL)");
+          for (const i of JSON.parse(fs.readFileSync("manifest.json", "utf8")).icons) if (!fs.existsSync(i.src)) throw new Error("manifest 图标缺文件 " + i.src);
+          // 全程不用 emoji(Cait 2026-10-29):App 源码里一个都不留
+          for (const f of ["index.html", "ai.js", "sw.js", "manifest.json"]) {
+            const hit = fs.readFileSync(f, "utf8").match(/\p{Extended_Pictographic}/u);
+            if (hit) throw new Error(f + " 里有 emoji: " + hit[0]);
+          }
           const ai = fs.readFileSync("ai.js", "utf8");
           new Function(ai);
           const hooks = ["function renderCoach", "function aiRenderTonight", "function aiRegimenActionsHtml", "function aiOnAuth", "function aiClearLocal", "function aiAfterCheckin", "function buildSkincareContext"];
           const missAi = hooks.filter(s => !ai.includes(s));
           if (missAi.length) throw new Error("ai.js 缺: " + missAi.join(", "));
           if (/test:[A-Za-z0-9_-]{8,}/.test(ai)) throw new Error("ai.js 里不能写死测试 token");
-          console.log("manifest/firebase/sw/ai.js ✓");
+          console.log("manifest/firebase/sw/fonts/ai.js ok");
           '
           test -z "$(git ls-files AGENTS.md CLAUDE.md LIVING_TODO.md '家中护肤品清单.md' '审计报告_*.json')"

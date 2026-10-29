@@ -4,14 +4,14 @@
 //   · 鉴权 + 网络:取 Firebase ID token、fetch / SSE、每人同时 1 个请求的排队、开通状态(未登录 / 邀请制 / 可用 / 连不上)
 //   · 上下文拼装 buildSkincareContext()(照 ~/skincare-coach/BRIEF.md 的契约)
 //   · 对话(SSE)、认图(读成分标 / 看皮肤)、出方案、方案复盘(每周一次自动)、今日顾问的话、打卡反馈、长期记忆
-//   · 🔴 AI 的改动**一律直接生效 + 一键撤销**(Cait 2026-10-29「放开了动」,不做「采纳」门槛);
+//   · 【要紧】AI 的改动**一律直接生效 + 一键撤销**(Cait 2026-10-29「放开了动」,不做「采纳」门槛);
 //     应用前每一条都过 _validate*(安全闸,唯一红线),被拦的写明为什么没生效。
 // 这个文件挂了 / 没缓存上 / 后端连不上:index.html 的离线规则(阶梯 + 安全闸)照常排今晚,不会白屏。
 
 const AI_BASE = (['127.0.0.1', 'localhost'].indexOf(location.hostname) >= 0) ? 'http://127.0.0.1:8808' : 'https://node.tail95239f.ts.net/skin';
 const AI_CHAT_MAX = 40, AI_CHAT_SEND = 24;
 // 本机缓存(不进云;换账号时 aiClearLocal 清掉):对话、今日顾问的话、开通状态、模型选择
-const AIK = { chat: 'sk_aichat1', note: 'sk_ainote1', acc: 'sk_aiacc1', opts: 'sk_aiopts1' };
+const AIK = { chat: 'sk_aichat1', note: 'sk_ainote1', acc: 'sk_aiacc1', opts: 'sk_aiopts1', privacy: 'sk_aiprivacy1' };
 const AI_LOCKED = ['not_allowed', 'mismatch'];
 const AI_ROLE_FROM_CN = { '洁面': 'cleanse', '卸妆': 'precleanse', '去角质': 'acid', '精华': 'serum', '眼部': 'eye', '修护': 'repair', '防晒': 'spf', '面膜': 'mask', '保湿': 'moist', '舒缓': 'soothe' };
 
@@ -29,13 +29,20 @@ function _aiMine(k) { const v = _aiGet(k); return (v && v.uid === _aiUid()) ? v 
 function _aiEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
 function _aiMd(s) {
     // 只认最基本的:**粗体**、换行、「- 」开头的列表行。其余一律转义
-    return _aiEsc(s).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').split('\n').map(l => /^\s*[-·•]\s+/.test(l) ? '<div class="co-li">· ' + l.replace(/^\s*[-·•]\s+/, '') + '</div>' : l).join('<br>').replace(/<\/div><br>/g, '</div>');
+    return _aiEsc(s).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').split('\n').map(l => /^\s*[-·•]\s+/.test(l) ? '<span class="co-li">· ' + l.replace(/^\s*[-·•]\s+/, '') + '</span>' : l).join('<br>').replace(/<\/span><br>/g, '</span>');
 }
 function _aiToast(msg) {
     const t = document.getElementById('sync-toast-el');
     if (!t) return;
     t.textContent = msg; t.classList.add('show');
     clearTimeout(_aiToast._t); _aiToast._t = setTimeout(() => t.classList.remove('show'), 3500);
+}
+// 顾问回来的字一律先去 emoji(界面全程不用 emoji;提示词里也要求了,这里兜底)
+function _aiClean(x) {
+    if (typeof x === 'string') return typeof stripEmoji === 'function' ? stripEmoji(x) : x;
+    if (Array.isArray(x)) return x.map(_aiClean);
+    if (x && typeof x === 'object') { const o = {}; Object.keys(x).forEach(k => { o[k] = _aiClean(x[k]); }); return o; }
+    return x;
 }
 function _aiHM(t) { if (!t) return ''; const d = new Date(t); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
 function _aiWeek() { return isoWeek(new Date(today() + 'T12:00:00')); }
@@ -55,19 +62,30 @@ async function aiFetch(path, body, opt) {
         });
     } catch (e) {
         _aiDown = true;
-        const err = new Error('顾问暂时连不上（后端没开或网络断了）。今晚照离线规则来，不影响打卡。'); err.code = 0; throw err;
+        const err = new Error('顾问暂时连不上，今晚照上一版做，不影响打卡。'); err.code = 0; throw err;
     }
     _aiDown = false;
     if (opt.stream && r.ok) return r;
     let j = null;
     try { j = await r.json(); } catch (e) { }
     if (!r.ok) {
-        const e = new Error((j && j.error) || ('顾问出错了（' + r.status + '）'));
+        const msg = (j && j.error) || ('顾问出错了（' + r.status + '）');
+        const e = new Error(msg);
         e.status = j && j.status; e.info = j || {}; e.code = r.status;
         if (AI_LOCKED.indexOf(e.status) >= 0) _aiRememberAccess(e.status);
+        // 额度用完:顾问页换成「今天的顾问次数用完了」,别让她一遍遍点发送
+        if (r.status === 429 && /今天的 AI 用量/.test(msg)) { _aiQuota = { kind: 'daily', date: today() }; e.message = '今天的顾问次数用完了，明天再来。'; }
+        else if (r.status === 429 && /这个月的 AI 额度/.test(msg)) { _aiQuota = { kind: 'cycle', date: today() }; e.message = '这个月的顾问额度用完了，17 号恢复。'; }
         throw e;
     }
+    if (_aiQuota && _aiQuota.kind === 'daily') _aiQuota = null;
     return j;
+}
+let _aiQuota = null;
+function _aiQuotaText() {
+    if (!_aiQuota) return '';
+    if (_aiQuota.kind === 'daily' && _aiQuota.date !== today()) { _aiQuota = null; return ''; }
+    return _aiQuota.kind === 'daily' ? '今天的顾问次数用完了，明天再来。' : '这个月的顾问额度用完了，17 号恢复。';
 }
 // 后端每人同时只跑 1 个请求(第二个回 429):本机排成一队
 let _aiChain = Promise.resolve();
@@ -75,7 +93,7 @@ function _aiSerial(fn) { const p = _aiChain.then(fn, fn); _aiChain = p.then(() =
 function aiPoint(path, body) {
     return _aiSerial(async () => {
         for (let i = 0; ; i++) {
-            try { return await aiFetch(path, body); }
+            try { return _aiClean(await aiFetch(path, body)); }
             catch (e) {
                 if (e.code === 429 && /还没跑完/.test(e.message) && i < 2) { await new Promise(r => setTimeout(r, 3000)); continue; }
                 throw e;
@@ -95,6 +113,7 @@ async function aiStream(path, body, onDelta) {
                 const ev = (block.match(/^event: (.*)$/m) || [])[1], data = (block.match(/^data: (.*)$/m) || [])[1];
                 if (!data) return;
                 let j; try { j = JSON.parse(data); } catch (e) { return; }
+                j = _aiClean(j);
                 if (ev === 'delta') { out.text += j.t || ''; if (onDelta) onDelta(out.text); }
                 else if (ev === 'proposal') out.prop = j;
                 else if (ev === 'action') out.act = j;
@@ -153,7 +172,7 @@ function _aiOpts() { const o = _aiGet(AIK.opts) || {}; return o.model ? { model:
 
 // ══ 上下文拼装(BRIEF 契约)═══════════════════════════════════════════════════
 // {user, skinType, concerns[], phase, products[], regimen{}, tonight{}, recentLogs[], assess{}, zones[], hrt?}
-// 🔴 hrt 只在**当前用户本人**开了 HRT 时才带(数据本来就按 uid 隔离,Cici 的快照里永远没有 Cait 的东西);
+// 【要紧】hrt 只在**当前用户本人**开了 HRT 时才带(数据本来就按 uid 隔离,Cici 的快照里永远没有 Cait 的东西);
 //    日志里的 phase(HRT 阶段)字段也只在开了 HRT 时才进快照。
 function _aiRoleOf(name) { const p = PD.find(x => x.name === name); return p ? (ROLE_LABEL[p.role] || p.role) : ''; }
 function buildSkincareContext() {
@@ -172,7 +191,8 @@ function buildSkincareContext() {
         const ns = buildNightSteps(TN.shower, TN.shave, slot);
         const te = (lg(K.jrnl) || []).find(x => x.date === today());
         tonight = { steps: ns.steps.map(s => ({ role: _aiRoleOf(s.p), product: s.p })), skipped: ns.skips.slice(0, 8),
-            shower: !!TN.shower, shave: !!(TN.shave && PROFILE.shaving), done: !!(te && te.done), ticked: [...loadDoneSteps('tn')] };
+            shower: !!TN.shower, shave: !!(TN.shave && PROFILE.shaving), done: !!(te && te.done), ticked: [...loadDoneSteps('tn')],
+            notDone: ((te && te.skipped) || []).slice(0, 8) };   // 她点了「今晚没做」的
     } catch (e) { }
     const tags = getAcidTags();
     const recentLogs = jrnlLastNDays(14).map(e => {
@@ -180,6 +200,7 @@ function buildSkincareContext() {
         if ((e.products || []).length) o.used = e.products;
         if ((e.products || []).some(x => tags.indexOf(x) >= 0)) o.acid = true;
         if (e.auto) o.auto = true;   // 极简模式按计划推定的,不是她记的
+        if ((e.skipped || []).length) o.notDone = e.skipped.slice(0, 8);   // 那晚她点了「没做」的
         if (e.done) o.done = true;
         if (PROFILE.hrt && e.phase) o.hrtPhase = e.phase;
         return o;
@@ -208,10 +229,12 @@ function buildSkincareContext() {
         tonight,
         recentLogs,
         assess: { barrier: barrierScore(), overall: a.overall, axes,
-                  gate: { irritated: g.irritated, tags: g.tags, worsening: g.worsening, acidReaction: g.react, hrtFlare: g.hrtFlare, notes: g.notes } },
+                  gate: { irritated: g.irritated, tags: g.tags, worsening: g.worsening, acidReaction: g.react, hrtFlare: g.hrtFlare, medical: g.medical, firstNight: g.firstNight, acidCapMax: g.acidCapMax, notes: g.notes } },
         zones: userZones().map(z => ({ name: z.name, avoid: z.avoid || [], care: z.care || '' }))
     };
     if (rr.source !== 'ai') ctx.regimen.ladder = { level: rr.ladder.level, why: rr.ladder.why, uses: rr.ladder.uses };
+    // 就医提醒的状态(数据说明里写了「看过医生的记录(如果有)」会给顾问看)
+    if (PROFILE.medical && PROFILE.medical.state) ctx.medical = { state: PROFILE.medical.state, date: PROFILE.medical.date || '', seenAt: PROFILE.medical.seenAt || '', note: PROFILE.medical.note || '' };
     if (PROFILE.hrt) ctx.hrt = { on: true, flare: g.hrtFlare, recent: jrnlLastNDays(14).filter(e => e.phase).map(e => ({ date: e.date, phase: e.phase })) };
     return ctx;
 }
@@ -239,7 +262,7 @@ function _validateTonight(c, g, stepNames) {
     if (gb) return gb;
     const t = p.schedule && p.schedule.type;
     if (t === 'acid' && c.op === 'add') {
-        if (exfoliantCountInLastNDays(7) >= Math.min(g.acidCapMax, 7)) return '这周的去角质已经到安全闸的上限了';
+        if (exfoliantCountInLastNDays(7) >= Math.min(g.acidCapMax, 7)) return '这周的刷酸已经到安全闸的上限了';
         if (TN.shave && PROFILE.shaving) return '刮胡夜不上酸';
     }
     return '';
@@ -346,7 +369,7 @@ const _AI_TONIGHT_TXT = {
 const _AI_REG_TXT = {
     acid_freq: c => '刷酸改成每周 ' + c.value + ' 次' + (c.product ? '，用「' + c.product + '」' : ''),
     add_product: c => '把「' + c.product + '」正式排进来', remove_product: c => '「' + c.product + '」这一版先不排',
-    phase: c => '阶段：' + ((PHASES[c.value] || {}).name || c.value), zone: c => c.product + '避开' + ({ acid: '酸', retinol: '视黄醇', mask: '面膜', scrub: '磨砂' }[c.value] || c.value),
+    phase: c => '阶段：' + ((PHASES[c.value] || {}).name || c.value), zone: c => c.product + '避开' + ({ acid: '酸', retinol: '维 A', mask: '面膜', scrub: '磨砂' }[c.value] || c.value),
     cleanse: c => '洗脸：' + c.value, repair: c => '修护霜' + (c.value === 'spot' ? '只点涂' : '全脸薄涂')
 };
 // 今晚的小改(change_tonight)→ 写 sk_tnai1 + 今天日志的备注;快照留给撤销。返回一条记录挂在那条助手消息上。
@@ -378,6 +401,7 @@ function aiApplyTonight(j) {
     });
     if (n) {
         cur.id = String(j.id || ('t' + Date.now())).slice(0, 80);
+        cur.at = new Date().toISOString();
         // 撤销用的「改之前」存在 sk_tnai1 自己身上:今晚页的变化条和这里的撤销走同一个 undoTonightChange()
         const prevPlain = prev && prev.date === today() ? Object.assign({}, prev) : null;
         if (prevPlain) delete prevPlain.undo;
@@ -452,16 +476,16 @@ function _aiRecHtml(rec, mi, ri) {
     const rows = rec.changes.map((c, k) => {
         const bad = rec.result[k], txt = (T[c.op] || (() => c.op))(c);
         const part = !bad && (rec.blocked || []).find(b => b.partial && b.text === txt);
-        return `<li class="${bad ? 'bad' : ''}">${bad ? `<s>${_aiEsc(txt)}</s> <small class="co-err">没生效：${_aiEsc(bad)}</small>` : `<span>${_aiEsc(txt)}</span>${part ? ` <small class="co-warn">${_aiEsc(part.why)}</small>` : (c.why ? ` <small>${_aiEsc(c.why)}</small>` : '')}`}</li>`;
+        return `<li class="${bad ? 'bad' : ''}">${_aiEsc(cjkSpace(txt))}${bad ? `<span class="why">，没生效：${_aiEsc(bad)}</span>` : (part ? `<span class="why">，${_aiEsc(part.why)}</span>` : (c.why ? `<span class="why">：${_aiEsc(c.why)}</span>` : ''))}</li>`;
     }).join('');
     const okN = rec.result.filter(x => !x).length;
-    const head = rec.state === 'applied' ? (rec.kind === 'tonight' ? `已改 · 今晚 · ${okN} 处` : `已改 · 方案 v${rec.v} · ${okN} 处`)
+    const head = rec.state === 'applied' ? (rec.kind === 'tonight' ? `改了今晚 · ${okN} 处` : `换成方案 v${rec.v} · ${okN} 处`)
         : rec.state === 'undone' ? '已撤销' : '没改成';
     const canUndo = rec.state === 'applied' && (rec.kind === 'tonight' ? !!rec.snap : !!rec.versionId);
     return `<div class="co-act" data-mi="${mi}" data-ri="${ri}"><div class="co-act-h">${_aiEsc(head)}</div><ul class="co-act-list">${rows}</ul>`
-        + ((rec.dropped || []).length ? `<div class="co-meta">还提到 ${rec.dropped.length} 个不在你产品库里的：${_aiEsc(rec.dropped.join('、'))}</div>` : '')
-        + (rec.undoErr ? `<div class="co-meta co-err">${_aiEsc(rec.undoErr)}</div>` : '')
-        + (canUndo ? `<button type="button" class="rg-more co-undo" onclick="aiUndoRec(${mi},${ri})">撤销</button>` : '')
+        + ((rec.dropped || []).length ? `<p class="note">还提到 ${rec.dropped.length} 个不在你产品库里的：${_aiEsc(rec.dropped.join('、'))}</p>` : '')
+        + (rec.undoErr ? `<p class="note co-err">${_aiEsc(rec.undoErr)}</p>` : '')
+        + (canUndo ? `<button type="button" class="btn-link" onclick="aiUndoRec(${mi},${ri})">撤销</button>` : '')
         + `</div>`;
 }
 function aiUndoRec(mi, ri) {
@@ -478,113 +502,97 @@ function aiUndoRec(mi, ri) {
 }
 
 // ══ 页面:顾问 ═════════════════════════════════════════════════════════════════
-// (功能骨架;整体视觉等统一设计规范 —— 2026-10-29 协调要求)
-function _aiStyle() {
-    if (document.getElementById('ai-style')) return;
-    const st = document.createElement('style');
-    st.id = 'ai-style';
-    st.textContent = `
-      .co-card{background:var(--sur);border:1px solid var(--bd);border-radius:var(--r);padding:14px 16px;margin-bottom:1rem}
-      .co-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
-      .co-t{font-size:15px;font-weight:600;color:var(--tx)}
-      .co-meta{font-size:11px;color:var(--tx3);font-family:var(--mono);margin-top:4px}
-      .co-err{color:var(--rd)!important}
-      .co-warn{color:var(--am)!important}
-      .co-row{display:flex;flex-wrap:wrap;gap:8px}
-      .co-btn{padding:9px 12px;border:1px solid var(--bd2);border-radius:var(--rs);background:var(--sur2);color:var(--tx);font-family:inherit;font-size:13px;cursor:pointer;position:relative;overflow:hidden}
-      .co-btn input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
-      .co-btn:disabled{opacity:.5}
-      .co-log{display:flex;flex-direction:column;gap:10px;max-height:none}
-      .co-msg{font-size:14px;line-height:1.6}
-      .co-msg .who{display:block;font-size:11px;font-family:var(--mono);color:var(--tx3);margin-bottom:2px}
-      .co-msg.user{align-self:flex-end;background:var(--bl-bg);border-radius:12px;padding:8px 12px;max-width:88%}
-      .co-msg.assistant{background:var(--sur2);border-radius:12px;padding:8px 12px}
-      .co-li{padding-left:2px}
-      .co-act{margin-top:8px;border-left:3px solid var(--gr);background:var(--sur);border-radius:8px;padding:8px 10px;font-size:13px}
-      .co-act-h{font-weight:600;font-size:12px;margin-bottom:4px}
-      .co-act-list{list-style:none;padding:0;margin:0}
-      .co-act-list li{margin:2px 0}
-      .co-act-list li.bad{color:var(--tx3)}
-      .co-act-list small{color:var(--tx3);font-size:11px}
-      .co-composer{display:flex;gap:8px;align-items:flex-end;margin-top:10px}
-      .co-composer textarea{flex:1;min-height:44px;max-height:140px;border:1px solid var(--bd2);border-radius:var(--rs);padding:10px;font-family:inherit;font-size:16px;background:var(--sur);color:var(--tx);resize:vertical}
-      .co-pending img{width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid var(--bd)}
-      .co-mem-row{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:6px 0;border-bottom:1px solid var(--bd)}
-      .co-input{width:100%;border:1px solid var(--bd2);border-radius:var(--rs);padding:10px;font-family:var(--mono);font-size:16px;background:var(--sur);color:var(--tx);text-transform:uppercase;margin:8px 0}
-      .co-note{background:var(--sur2);border-radius:var(--rs);padding:10px 12px;font-size:13px;line-height:1.6;margin-bottom:1rem}
-      .co-note b{font-weight:600}
-      .co-sel{border:1px solid var(--bd2);border-radius:var(--rs);padding:6px 8px;background:var(--sur);color:var(--tx);font-family:inherit;font-size:13px}`;
-    document.head.appendChild(st);
-}
+// 版式照 AUDIT-aesthetic §3(纸墨护理手册)与 AUDIT-ux §4.3:输入框 + 拍照在最上,快捷问题,对话,本周复盘,方案历史,记得的事。
+function _aiStyle() { }   // 样式都在 index.html 的「纸墨护理手册」里,这里不再注入
 function renderCoach() {
-    _aiStyle();
     const el = document.getElementById('coach-content');
     if (!el) return;
     const a = aiAccess();
-    const privacy = `<div class="co-meta" style="margin:6px 0 12px">对话、你的产品和皮肤记录会发给 AI（Anthropic）帮你判断；服务端只存你让顾问「记住」的那几句，可以随时删。</div>`;
+    const privacy = `<div class="sec"><button class="btn-link quiet sm" onclick="aiPrivacySheet()">顾问会看到什么、存在哪</button></div>`;
     if (a === 'out') {
-        el.innerHTML = `<div class="co-card"><div class="co-t">顾问</div><p style="font-size:14px;margin-top:6px">登录后能用：问护肤问题、拍成分标自动认产品、让顾问出方案和每周复盘。</p><p class="co-meta">没登录也没关系，今晚的步骤照离线规则排。</p></div>${privacy}`;
+        el.innerHTML = `<div class="empty"><p class="lede">登录后可用。</p><p class="note">能问护肤问题、拍成分表认产品、让顾问出方案和每周复盘。没登录也没关系，今晚的步骤照离线规则排。</p>
+            <div class="btn-row"><button class="btn btn-primary" onclick="signInGoogle()">用 Google 登录</button></div></div>${privacy}`;
         return;
     }
     if (a === 'none' || a === 'mismatch') {
-        el.innerHTML = `<div class="co-card" id="co-access"><div class="co-t">顾问 · ${a === 'mismatch' ? '用不了' : '邀请制'}</div>`
-            + (a === 'mismatch' ? `<p style="font-size:14px;margin-top:6px">这个邮箱已经绑定了另一个账号，换回第一次用的登录方式试试。</p>`
-                : `<p style="font-size:14px;margin-top:6px">顾问每次调用都要花钱，现在只对受邀的人开放。有邀请码填在下面。</p>`
-                + `<input id="co-code" class="co-input" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="16" placeholder="邀请码 · ABCDE-FGHJK" aria-label="邀请码" onkeydown="if(event.key==='Enter')aiRedeem()">`
-                + `<button class="bsv" id="co-code-go" onclick="aiRedeem()">开通</button><div class="co-meta">邀请码用一次就作废，两周内有效。没有也不影响打卡和离线规则。</div>`)
-            + `</div>${privacy}`;
-        if (a === 'mismatch') return;
-        aiProbe(true);   // 后台再核一次:可能已经被加进白名单了
+        el.innerHTML = a === 'mismatch'
+            ? `<div class="empty" id="co-access"><p class="lede">这个账号用不了顾问。</p><p class="note">这个邮箱已经绑定了另一个账号，换回第一次用的登录方式试试。</p></div>${privacy}`
+            : `<div class="empty" id="co-access"><p class="lede">顾问是邀请制。</p><p class="note">每次调用都要花钱，现在只对受邀的人开放。没有邀请码也不影响今晚的步骤。</p>
+                <label class="field"><span>邀请码</span><input id="co-code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="16" placeholder="ABCDE-FGHJK" onkeydown="if(event.key==='Enter')aiRedeem()"></label>
+                <div class="btn-row syms"><button class="btn btn-primary" id="co-code-go" onclick="aiRedeem()">开通</button></div>
+                <p class="note syms">邀请码用一次就作废，两周内有效。</p></div>${privacy}`;
+        // 后台再核一次:可能已经被加进白名单了。一分钟最多一次 —— aiProbe 结束会重画这一页,不节流就成了死循环
+        if (a === 'none' && Date.now() - (renderCoach._probeAt || 0) > 60000) { renderCoach._probeAt = Date.now(); aiProbe(true); }
         return;
     }
     const me = AI_ME && _aiMeUid === _aiUid() ? AI_ME : null;
-    const status = _aiDown ? `<span class="co-err">连不上顾问 · 今晚照离线规则来</span> <button class="rg-more" style="margin:0" onclick="aiProbe(true)">重试</button>`
-        : me ? `今天 $${Number(me.today || 0).toFixed(2)}${me.daily_cap ? ' / 上限 $' + Number(me.daily_cap).toFixed(0) : ''} · 本期 $${Number(me.cycle || 0).toFixed(2)}` : '连接中…';
+    const owner = typeof isOwnerAccount === 'function' && isOwnerAccount();
+    const quota = _aiQuotaText();
+    const blocked = _aiDown || !!quota;
+    const status = _aiDown ? '' : quota ? '' : me ? (owner ? `今天 $${Number(me.today || 0).toFixed(2)}${me.daily_cap ? ' / $' + Number(me.daily_cap).toFixed(0) : ''} · 本期 $${Number(me.cycle || 0).toFixed(2)}` : '在线') : '连接中…';
     const busy = _aiBusy;
+    const QUICK = ['今晚能刷酸吗？', '这颗痘怎么办？', '这周怎么样？'];
     el.innerHTML = `
-      <div class="co-card">
-        <div class="co-h"><span class="co-t">顾问</span><span class="co-meta" id="co-status">${status}</span></div>
-        <div class="co-row">
-          <button class="co-btn" id="co-plan-go" onclick="aiPlan()" ${busy ? 'disabled' : ''}>出方案</button>
-          <button class="co-btn" id="co-review-go" onclick="aiReview()" ${busy ? 'disabled' : ''}>方案复盘</button>
-          <label class="co-btn">拍成分标<input type="file" accept="image/*" capture="environment" onchange="aiVision(this,'read_label')" aria-label="拍成分标"></label>
-          <label class="co-btn">看皮肤<input type="file" accept="image/*" capture="user" onchange="aiVision(this,'assess_skin')" aria-label="拍皮肤照片"></label>
+      <p class="meta" id="co-status">${status}</p>
+      ${_aiDown ? `<div class="empty"><p class="lede">顾问暂时连不上，今晚照上一版做。</p><p class="note">顾问的服务在 Cait 家里的电脑上，可能没开或者网络断了。打卡和今晚的步骤都不受影响。</p><div class="btn-row"><button class="btn" onclick="aiProbe(true)">重试</button></div></div>` : ''}
+      ${quota ? `<div class="empty"><p class="lede">${quota}</p><p class="note">今晚的步骤照离线规则排，打卡不受影响。</p></div>` : ''}
+      ${blocked ? '' : `<div class="co-composer">
+          <textarea id="co-chat-text" rows="1" placeholder="问点什么" aria-label="问顾问" onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();aiSend()}"></textarea>
+          <button class="btn" aria-label="拍照" onclick="aiPhotoMenu()">${ico('camera')}</button>
+          <button class="btn btn-primary" id="co-chat-go" onclick="aiSend()" ${busy ? 'disabled' : ''} aria-label="发送">${ico('send')}</button>
         </div>
-        <div id="co-result"></div>
-      </div>
-      <div id="co-review"></div>
-      <div class="co-card">
-        <div class="co-h"><span class="co-t">对话</span><button class="rg-more" style="margin:0" onclick="aiNewChat()">新对话</button></div>
-        <div id="co-chat-log" class="co-log" aria-live="polite"></div>
         <div id="co-chat-img"></div>
-        <div class="co-composer">
-          <label class="co-btn" aria-label="发图片">图<input type="file" accept="image/*" onchange="aiAttach(this)"></label>
-          <textarea id="co-chat-text" rows="1" placeholder="问点什么，比如「今晚有点刺痛还要刷酸吗」" aria-label="问顾问" onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();aiSend()}"></textarea>
-          <button class="bsv" id="co-chat-go" onclick="aiSend()" ${busy ? 'disabled' : ''}>发送</button>
-        </div>
-        <div class="co-meta">对话只存在这台设备上</div>
-      </div>
-      <details class="co-card" id="co-settings"><summary class="co-t" style="cursor:pointer">顾问设置 · 记住的事</summary>
-        <div id="co-opts" style="margin-top:10px"></div>
-        <div id="co-mem" style="margin-top:12px"></div>
-      </details>
+        <div class="chips co-quick">${QUICK.map(q => `<button class="chip" onclick="aiSend(${_aiEsc(JSON.stringify(q))})" ${busy ? 'disabled' : ''}>${q}</button>`).join('')}</div>`}
+      <div id="co-result"></div>
+      <div id="co-chat-log" class="co-log" aria-live="polite"></div>
+      <div id="co-review"></div>
+      <div class="sec"><div class="sec-h"><span class="sec-t">方案历史</span>${blocked ? '' : `<button class="btn-link sm quiet" id="co-plan-go" onclick="aiPlan()" ${busy ? 'disabled' : ''}>让顾问重排</button>`}</div>${typeof regimenHistoryHtml === 'function' ? regimenHistoryHtml(8) : ''}</div>
+      <div class="sec" id="co-mem"></div>
+      ${owner ? `<div class="sec" id="co-opts"></div>` : ''}
       ${privacy}`;
     _aiShowChat();
     _aiShowReview();
     _aiShowResult();
-    _aiRenderOpts();
-    if (!me && !_aiDown) aiProbe(true).then(() => { const s = document.getElementById('co-status'); if (s && AI_ME) renderCoach(); });
+    if (!_aiDown) aiMemLoad();
+    if (owner) _aiRenderOpts();
+    if (!me && !_aiDown) aiProbe(true).then(() => { if (AI_ME && document.getElementById('co-status')) renderCoach(); });
+    _aiMaybePrivacy();
+}
+// 第一次进顾问页弹一次数据说明(每个账号一次);之后在页底能再打开
+function aiPrivacySheet(first) {
+    const hrt = typeof PROFILE !== 'undefined' && PROFILE.hrt;
+    openSheet({ id: 'ai-privacy', title: '顾问会看到什么', html: `<ul class="list lede">
+            <li>你的产品清单和成分特性</li>
+            <li>近 14 天的皮肤记录、备注、做了哪几步</li>
+            <li>设置里的肤质、想解决的、要避开的区域${hrt ? '、HRT 阶段' : ''}；看过医生的记录（如果有）</li>
+            <li>你发的对话和照片</li></ul>
+        <p class="note syms">这些会发到 Cait 家里的服务器，再转给 Anthropic 的 Claude 模型生成回答。服务器只记每次花了多少钱，不存对话和照片；只存你让顾问「记住」的那几句，可以随时删。对话本身只存在这台设备上。</p>`,
+        actions: [{ label: '知道了', primary: true, fn: () => _aiSet(AIK.privacy, { uid: _aiUid(), at: Date.now() }) }],
+        onClose: () => { if (first) _aiSet(AIK.privacy, { uid: _aiUid(), at: Date.now() }); } });
+}
+function _aiMaybePrivacy() {
+    if (!_aiUid() || _aiMine(AIK.privacy) || document.getElementById('ai-privacy')) return;
+    const p = document.getElementById('coach');
+    if (p && p.classList.contains('active')) aiPrivacySheet(true);
+}
+// 拍照先选做什么:拍皮肤(顾问看状态)/ 拍成分表(认产品)/ 随对话发一张
+function aiPhotoMenu() {
+    const lbl = (txt, cap, fn) => `<label class="btn btn-block file-btn">${ico('camera')}${txt}<input type="file" accept="image/*"${cap ? ` capture="${cap}"` : ''} onchange="closeSheet('ai-photo');${fn}"></label>`;
+    openSheet({ id: 'ai-photo', title: '拍什么？', html: `<div class="acts stack-acts">
+        ${lbl('拍皮肤，让顾问看看状态', 'user', "aiVision(this,'assess_skin')")}
+        ${lbl('拍成分表，认是什么产品', 'environment', "aiVision(this,'read_label')")}
+        ${lbl('随这条消息发一张图', '', 'aiAttach(this)')}</div>` });
 }
 function _aiRenderOpts() {
     const box = document.getElementById('co-opts'); if (!box) return;
     const me = AI_ME;
-    if (!me) { box.innerHTML = '<div class="co-meta">连上之后能选模型和思考深度。</div>'; return; }
+    if (!me) { box.innerHTML = '<div class="sec-h"><span class="sec-t">模型</span></div><p class="note">连上之后能选模型和思考深度。</p>'; return; }
     const o = _aiGet(AIK.opts) || {};
     const models = [['', '自动（按任务挑）']].concat((me.models || []).map(m => [m[0], m[1] + (m[2] ? ' · ' + m[2] : '')]));
-    box.innerHTML = `<label class="set-row"><span>模型</span><select class="co-sel" id="co-model" onchange="aiSetOpts()">${models.map(([k, n]) => `<option value="${_aiEsc(k)}" ${(o.model || '') === k ? 'selected' : ''}>${_aiEsc(n)}</option>`).join('')}</select></label>`
-        + `<label class="set-row" style="margin-top:8px"><span>思考深度${o.model ? '' : '（选了模型才生效）'}</span><select class="co-sel" id="co-effort" onchange="aiSetOpts()" ${o.model ? '' : 'disabled'}>${(me.efforts || []).map(([k, n]) => `<option value="${_aiEsc(k)}" ${(o.effort || 'medium') === k ? 'selected' : ''}>${_aiEsc(n)}</option>`).join('')}</select></label>`
-        + `<div class="co-meta">每天有上限；每月 17 号重置。</div>`;
-    aiMemLoad();
+    box.innerHTML = `<div class="sec-h"><span class="sec-t">模型与用量（只有你看得到）</span></div>
+        <label class="field"><span>模型</span><select id="co-model" onchange="aiSetOpts()">${models.map(([k, n]) => `<option value="${_aiEsc(k)}" ${(o.model || '') === k ? 'selected' : ''}>${_aiEsc(n)}</option>`).join('')}</select></label>
+        <label class="field"><span>思考深度${o.model ? '' : '（选了模型才生效）'}</span><select id="co-effort" onchange="aiSetOpts()" ${o.model ? '' : 'disabled'}>${(me.efforts || []).map(([k, n]) => `<option value="${_aiEsc(k)}" ${(o.effort || 'medium') === k ? 'selected' : ''}>${_aiEsc(n)}</option>`).join('')}</select></label>
+        <p class="note syms">每天有上限；每月 17 号重置。</p>`;
 }
 function aiSetOpts() {
     const m = (document.getElementById('co-model') || {}).value || '', e = (document.getElementById('co-effort') || {}).value || 'medium';
@@ -613,7 +621,7 @@ let _aiMem = null;
 async function aiMemLoad(force) {
     const box = document.getElementById('co-mem'); if (!box) return;
     if (_aiMem && _aiMem.uid === _aiUid() && !force) return _aiMemPaint();
-    box.innerHTML = '<div class="co-meta">读取记住的事…</div>';
+    box.innerHTML = '<div class="sec-h"><span class="sec-t">顾问记得的事</span></div><p class="note">读取中…</p>';
     try { const r = await aiFetch('/api/memory'); _aiMem = { uid: _aiUid(), items: r.items || [] }; }
     catch (e) { _aiMem = { uid: _aiUid(), items: [], err: e.message }; }
     _aiMemPaint();
@@ -621,12 +629,11 @@ async function aiMemLoad(force) {
 function _aiMemPaint() {
     const box = document.getElementById('co-mem'); if (!box || !_aiMem) return;
     const m = _aiMem;
-    box.innerHTML = `<div class="sec-title" style="margin-bottom:4px">顾问记住的事</div>`
-        + (m.err ? `<div class="co-meta co-err">${_aiEsc(m.err)}</div><button class="rg-more" onclick="aiMemLoad(true)">再试一次</button>`
-            : !m.items.length ? `<div class="co-meta">还没有。对话里说「记住……」，比如对某个成分过敏、哪支用了会刺痛，开新对话也不会忘。</div>`
-                : m.items.map(x => `<div class="co-mem-row"><span>${_aiEsc(x.text)} <small class="co-meta">${_aiEsc(String(x.at || '').slice(5, 10))}</small></span><button class="rg-more" style="margin:0" data-id="${_aiEsc(x.id)}" onclick="aiMemDelete(this.dataset.id)">删掉</button></div>`).join('')
-                + `<button class="rg-more" onclick="aiMemClear()">全部清空</button>`)
-        + `<div class="co-meta">记在 Cait 家里的服务器上，只给你自己的顾问看。</div>`;
+    box.innerHTML = `<div class="sec-h"><span class="sec-t">顾问记得的事</span>${!m.err && m.items.length ? '<button class="btn-link sm quiet" onclick="aiMemClear()">全部清空</button>' : ''}</div>`
+        + (m.err ? `<p class="note co-err">${_aiEsc(m.err)}</p><button class="btn-link" onclick="aiMemLoad(true)">再试一次</button>`
+            : !m.items.length ? `<p class="note">还没有。对话里说「记住……」，比如对某个成分过敏、哪支用了会刺痛，开新对话也不会忘。</p>`
+                : `<div class="rows">${m.items.map(x => `<div class="row"><span class="row-main"><span class="lede">${_aiEsc(cjkSpace(x.text))}</span><span class="note">${_aiEsc(String(x.at || '').slice(5, 10).replace('-', '/').replace(/^0/, '').replace('/0', '/'))}</span></span><button class="btn-link sm quiet" data-id="${_aiEsc(x.id)}" onclick="aiMemDelete(this.dataset.id)">删掉</button></div>`).join('')}</div>`)
+        + `<p class="note syms">记在 Cait 家里的服务器上，只给你自己的顾问看。</p>`;
 }
 async function _aiMemPost(body, ok) {
     try { const r = await aiFetch('/api/memory', body); _aiMem = { uid: _aiUid(), items: r.items || [] }; _aiToast(ok); }
@@ -651,11 +658,12 @@ function aiNewChat() {
 function _aiShowChat(streaming) {
     const el = document.getElementById('co-chat-log'); if (!el) return;
     const chat = _aiChatState().chat;
-    el.innerHTML = chat.length ? chat.map((m, mi) => m.role === 'assistant'
-        ? `<div class="co-msg assistant"><span class="who">顾问 ${_aiHM(m.at)}</span><div>${_aiMd(m.text)}</div>${(m.recs || []).map((r, ri) => _aiRecHtml(r, mi, ri)).join('')}${m.mem ? `<div class="co-meta">${_aiEsc(m.mem)}</div>` : ''}${m.meta && m.meta.cost != null ? `<div class="co-meta">${_aiEsc(m.meta.model || '')} · $${Number(m.meta.cost).toFixed(3)}</div>` : ''}</div>`
-        : `<div class="co-msg user"><span class="who">你 ${_aiHM(m.at)}</span>${m.img ? '<span class="co-meta">[图片] </span>' : ''}${_aiEsc(m.text).replace(/\n/g, '<br>')}</div>`).join('')
-        + (streaming ? `<div class="co-msg assistant"><span class="who">顾问</span><div id="co-stream"><span class="co-meta">在想…</span></div></div>` : '')
-        : '<div class="co-meta" style="padding:6px 0">比如：「我基本没刷过酸，闭口怎么开始」「今晚下巴有点刺痛还要刷吗」「这支 B5 能全脸涂吗」</div>';
+    const owner = typeof isOwnerAccount === 'function' && isOwnerAccount();
+    el.innerHTML = chat.map((m, mi) => m.role === 'assistant'
+        ? `<div class="msg ai"><span class="who">顾问 · ${_aiHM(m.at)}</span><div class="body">${_aiMd(m.text)}</div>${(m.recs || []).map((r, ri) => _aiRecHtml(r, mi, ri)).join('')}${m.mem ? `<p class="note">${_aiEsc(m.mem)}</p>` : ''}${owner && m.meta && m.meta.cost != null ? `<p class="meta">${_aiEsc(m.meta.model || '')} · $${Number(m.meta.cost).toFixed(3)}</p>` : ''}</div>`
+        : `<div class="msg user"><span class="who">你 · ${_aiHM(m.at)}${m.img ? ' · 带了一张图' : ''}</span><div class="body">${_aiEsc(cjkSpace(m.text)).replace(/\n/g, '<br>')}</div></div>`).join('')
+        + (streaming ? `<div class="msg ai"><span class="who">顾问</span><div class="body" id="co-stream"><span class="note">在想…</span></div></div>` : '')
+        + (chat.length && !streaming ? `<div class="sec-h syms"><span></span><button class="btn-link sm quiet" onclick="aiNewChat()">新对话</button></div>` : '');
 }
 async function aiAttach(input) {
     const f = input.files && input.files[0];
@@ -663,7 +671,7 @@ async function aiAttach(input) {
     if (!f) return;
     try { _aiPendingImg = await aiImage(f, 1024); } catch (e) { return _aiToast(e.message); }
     const b = document.getElementById('co-chat-img');
-    if (b) b.innerHTML = `<div class="co-pending"><img src="${_aiPendingImg}" alt="待发送的图片"> <button class="rg-more" onclick="_aiPendingImg=null;this.parentNode.remove()">移除</button></div>`;
+    if (b) b.innerHTML = `<div class="co-pending"><img src="${_aiPendingImg}" alt="待发送的图片"><button class="btn-link quiet" onclick="_aiPendingImg=null;this.parentNode.remove()">移除</button></div>`;
 }
 // 照片压到长边 1280、JPEG,别上传原图
 function aiImage(file, max) {
@@ -754,25 +762,24 @@ function _aiShowResult() {
     const box = document.getElementById('co-result'); if (!box) return;
     const r = _aiResult;
     if (!r) { box.innerHTML = ''; return; }
-    if (r.busy) { box.innerHTML = `<div class="co-meta" style="margin-top:10px">${_aiEsc(r.busy)}</div>`; return; }
-    if (r.err) { box.innerHTML = `<div class="co-meta co-err" style="margin-top:10px">${_aiEsc(r.err)}</div>`; return; }
+    if (r.busy) { box.innerHTML = `<p class="note syms">${_aiEsc(r.busy)}</p>`; return; }
+    if (r.err) { box.innerHTML = `<p class="note co-err syms">${_aiEsc(r.err)}</p>`; return; }
     if (r.kind === 'plan') {
         const reg = regimenHistory().find(x => x.id === r.versionId);
-        box.innerHTML = `<div class="co-act"><div class="co-act-h">${r.state === 'undone' ? '已撤销 · 方案回到上一版' : '已换成新方案 v' + (reg ? reg.v : '?')}</div>`
-            + `<div style="font-size:13px;line-height:1.6">${_aiEsc(r.rationale || '')}</div>`
-            + (r.blocked.length ? `<div class="co-meta">${r.blocked.map(b => (b.partial ? '暂缓：' : '没生效：') + _aiEsc(b.text + ' —— ' + b.why)).join('<br>')}</div>` : '')
-            + (r.gaps && r.gaps.length ? `<div class="co-meta">缺一环：${r.gaps.map(g => _aiEsc(g.label)).join('、')}</div>` : '')
-            + (r.meta ? `<div class="co-meta">${_aiEsc(r.meta.model || '')} · $${Number(r.meta.cost || 0).toFixed(3)}</div>` : '')
-            + (r.state === 'applied' ? `<button class="rg-more co-undo" onclick="aiUndoPlan()">撤销</button>` : '') + `</div>`;
+        box.innerHTML = `<div class="co-act"><div class="co-act-h">${r.state === 'undone' ? '已撤销 · 方案回到上一版' : '换成新方案 v' + (reg ? reg.v : '?')}</div>`
+            + `<p class="lede">${_aiEsc(cjkSpace(r.rationale || ''))}</p>`
+            + (r.blocked.length ? `<ul class="co-act-list">${r.blocked.map(b => `<li class="bad">${_aiEsc(cjkSpace(b.text))}<span class="why">，${b.partial ? '暂缓' : '没生效'}：${_aiEsc(b.why)}</span></li>`).join('')}</ul>` : '')
+            + (r.gaps && r.gaps.length ? `<p class="note">缺一环：${r.gaps.map(g => _aiEsc(g.label)).join('、')}</p>` : '')
+            + (r.state === 'applied' ? `<button class="btn-link" onclick="aiUndoPlan()">撤销</button>` : '') + `</div>`;
         return;
     }
     if (r.kind === 'read_label') {
         const d = r.data || {};
-        box.innerHTML = `<div class="co-act"><div class="co-act-h">读成分标 · ${_aiEsc(d.name || '没认出名字')}</div>`
-            + `<div style="font-size:13px">${_aiEsc(ROLE_LABEL[r.role] || d.role || '')}${r.traits.length ? ' · ' + r.traits.map(t => (TRAIT_DEFS.find(x => x.k === t) || {}).l || t).join('、') : ''}</div>`
-            + (d.note ? `<div class="co-meta">${_aiEsc(d.note)}</div>` : '')
-            + (r.matched ? `<div class="co-meta">${r.state === 'undone' ? '已撤销' : '已把成分特性写进「' + _aiEsc(r.matched) + '」'}</div>${r.state === 'applied' ? '<button class="rg-more co-undo" onclick="aiUndoLabel()">撤销</button>' : ''}`
-                : `<button class="bsv" style="margin-top:8px" onclick="aiLabelToProduct()">加进产品库</button>`)
+        box.innerHTML = `<div class="co-act"><div class="co-act-h">读成分表</div><p class="lede">${_aiEsc(cjkSpace(d.name || '没认出名字'))}</p>`
+            + `<p class="note">${_aiEsc(ROLE_LABEL[r.role] || d.role || '')}${r.traits.length ? ' · ' + r.traits.map(t => (TRAIT_DEFS.find(x => x.k === t) || {}).l || t).join('、') : ''}</p>`
+            + (d.note ? `<p class="note">${_aiEsc(cjkSpace(d.note))}</p>` : '')
+            + (r.matched ? `<p class="note">${r.state === 'undone' ? '已撤销' : '已把成分特性写进「' + _aiEsc(r.matched) + '」'}</p>${r.state === 'applied' ? '<button class="btn-link" onclick="aiUndoLabel()">撤销</button>' : ''}`
+                : `<button class="btn-link" onclick="aiLabelToProduct()">加进产品库</button>`)
             + `</div>`;
         return;
     }
@@ -780,9 +787,9 @@ function _aiShowResult() {
         const d = r.data || {}, ax = d.axes || {};
         const L = { good: '好', ok: '一般', bad: '差' };
         box.innerHTML = `<div class="co-act"><div class="co-act-h">看皮肤</div>`
-            + `<div style="font-size:13px">屏障 ${L[ax.barrier] || '—'} · 控油 ${L[ax.oil] || '—'} · 清透 ${L[ax.congestion] || '—'} · 无炎 ${L[ax.calm] || '—'}</div>`
-            + `<div style="font-size:13px;margin-top:4px">${_aiEsc(d.note || '')}</div>`
-            + (r.saved ? '<div class="co-meta">已记进今天的备注</div>' : `<button class="rg-more" onclick="aiSkinToNote()">记进今天的备注</button>`) + `</div>`;
+            + `<dl class="kv"><dt>屏障</dt><dd>${L[ax.barrier] || '—'}</dd><dt>出油</dt><dd>${L[ax.oil] || '—'}</dd><dt>闭口</dt><dd>${L[ax.congestion] || '—'}</dd><dt>炎症</dt><dd>${L[ax.calm] || '—'}</dd></dl>`
+            + `<p class="lede syms">${_aiEsc(cjkSpace(d.note || ''))}</p>`
+            + (r.saved ? '<p class="note">已记进今天的备注。</p>' : `<button class="btn-link" onclick="aiSkinToNote()">记进今天的备注</button>`) + `</div>`;
     }
 }
 async function aiPlan(request) {
@@ -810,15 +817,14 @@ function aiUndoPlan() {
     r.state = 'undone'; _aiAfterRegimenChange(); _aiShowResult(); _aiToast('已撤销 · 方案回到上一版');
 }
 // 方案卡上的按钮(index.html 的 renderRegimenCard 来要)
+// 方案段底下的按钮(index.html 的 renderRegimenCard 来要)
 function aiRegimenActionsHtml(reg) {
     const a = aiAccess(), btn = [];
-    const last = currentRegimen();
-    if (reg && reg.source === 'ai' && last && last.id === reg.id) btn.push(`<button class="rg-more" onclick="aiUndoCurrent()">撤销这一版</button>`);
-    if (a === 'on') {
-        btn.push(`<button class="rg-more" onclick="aiAsk('关于现在这版方案：')">问顾问</button>`);
-        if (!reg || reg.source !== 'ai' || reg.stale) btn.push(`<button class="rg-more" onclick="aiPlan()">${reg && reg.stale ? '让顾问按新货架重排' : '让顾问出方案'}</button>`);
-    } else if (a === 'none') btn.push(`<span class="co-meta">顾问是邀请制 · 在「顾问」页填邀请码</span>`);
-    return btn.length ? `<div class="co-row" style="margin-top:10px">${btn.join('')}</div>` : '';
+    if (a === 'on' && !_aiDown && !_aiQuotaText()) {
+        btn.push(`<button class="btn-link" onclick="aiAsk('关于现在这版方案：')">问顾问</button>`);
+        if (!reg || reg.source !== 'ai' || reg.stale) btn.push(`<button class="btn-link quiet" onclick="aiPlan()">${reg && reg.stale ? '让顾问按新货架重排' : '让顾问出方案'}</button>`);
+    } else if (a === 'none') btn.push(`<span class="note">顾问是邀请制，在「顾问」页填邀请码。</span>`);
+    return btn.length ? `<div class="btn-row syms">${btn.join('')}</div>` : '';
 }
 function aiUndoCurrent() {
     const last = currentRegimen(); if (!last || last.source !== 'ai') return;
@@ -826,7 +832,7 @@ function aiUndoCurrent() {
         const why = undoRegimen(last.id);
         if (why) { _aiToast(why); return; }
         _aiAfterRegimenChange();
-        _aiToast('已撤销 · 方案回到上一版');
+        _aiToast('已撤销，方案回到上一版');
     }, { ok: '撤销' });
 }
 
@@ -836,20 +842,21 @@ function _aiSaveState(st) { ls(K.ai, st); }
 function _aiShowReview() {
     const box = document.getElementById('co-review'); if (!box) return;
     const rv = _aiState().review;
-    if (!rv || !rv.data) { box.innerHTML = ''; return; }
+    const go = _aiDown || _aiQuotaText() ? '' : `<button class="btn-link sm quiet" id="co-review-go" onclick="aiReview()" ${_aiBusy ? 'disabled' : ''}>${rv && rv.week === _aiWeek() ? '再复盘一次' : '现在复盘'}</button>`;
+    if (!rv || !rv.data) { box.innerHTML = `<div class="sec"><div class="sec-h"><span class="sec-t">本周复盘</span>${go}</div><p class="note">每周一之后第一次打开会自动复盘一次（近两周至少记了 3 天皮肤才跑）。</p></div>`; return; }
     const d = rv.data;
     const rows = (rv.rec && rv.rec.changes || []).map((c, k) => {
         const bad = rv.rec.result[k], txt = (_AI_REG_TXT[c.op] || (() => c.op))(c);
-        return `<li class="${bad ? 'bad' : ''}">${bad ? `<s>${_aiEsc(txt)}</s> <small class="co-err">没生效：${_aiEsc(bad)}</small>` : _aiEsc(txt)}${c.why ? ` <small>${_aiEsc(c.why)}</small>` : ''}</li>`;
+        return `<li class="${bad ? 'bad' : ''}">${_aiEsc(cjkSpace(txt))}${bad ? `<span class="why">，没生效：${_aiEsc(bad)}</span>` : (c.why ? `<span class="why">：${_aiEsc(c.why)}</span>` : '')}</li>`;
     }).join('');
-    box.innerHTML = `<div class="co-card"><div class="co-h"><span class="co-t">本周复盘 · ${_aiEsc(rv.week || '')}</span><span class="co-meta">${_aiEsc(String(rv.at || '').slice(5, 10))}${rv.auto ? ' · 自动' : ''}</span></div>`
-        + `<div style="font-weight:600;font-size:14px">${_aiEsc(d.headline || '')}</div>`
-        + `<div style="font-size:13px;line-height:1.6;margin-top:4px">${_aiMd(d.summary || '')}</div>`
-        + ((d.wins || []).length ? `<div class="co-meta" style="color:var(--gr)">做得好：${d.wins.map(_aiEsc).join('；')}</div>` : '')
-        + ((d.issues || []).length ? `<div class="co-meta" style="color:var(--am)">要注意：${d.issues.map(_aiEsc).join('；')}</div>` : '')
-        + (rows ? `<div class="co-act"><div class="co-act-h">${rv.rec.state === 'applied' ? '已按复盘改成方案 v' + rv.rec.v : rv.rec.state === 'undone' ? '复盘的调整已撤销' : '复盘的调整都没生效'}</div><ul class="co-act-list">${rows}</ul>`
-            + (rv.rec.state === 'applied' && rv.rec.versionId ? `<button class="rg-more co-undo" onclick="aiUndoReview()">撤销</button>` : '') + `</div>` : '')
-        + (rv.replan ? `<button class="rg-more" onclick="aiPlan('复盘建议整套重排')">复盘建议整套重排 · 让顾问出方案</button>` : '')
+    box.innerHTML = `<div class="sec"><div class="sec-h"><span class="sec-t">本周复盘 <span class="mono">${_aiEsc(rv.week || '')}</span></span>${go}</div>`
+        + `<p class="lede">${_aiEsc(cjkSpace(d.headline || ''))}</p>`
+        + `<p class="note">${_aiMd(d.summary || '')}</p>`
+        + ((d.wins || []).length ? `<dl class="kv"><dt>做得好</dt><dd>${d.wins.map(w => `<span class="note">${_aiEsc(cjkSpace(w))}</span>`).join('')}</dd></dl>` : '')
+        + ((d.issues || []).length ? `<dl class="kv"><dt>要注意</dt><dd>${d.issues.map(w => `<span class="note">${_aiEsc(cjkSpace(w))}</span>`).join('')}</dd></dl>` : '')
+        + (rows ? `<div class="co-act"><div class="co-act-h">${rv.rec.state === 'applied' ? '按复盘换成方案 v' + rv.rec.v : rv.rec.state === 'undone' ? '复盘的调整已撤销' : '复盘的调整都没生效'}</div><ul class="co-act-list">${rows}</ul>`
+            + (rv.rec.state === 'applied' && rv.rec.versionId ? `<button class="btn-link" onclick="aiUndoReview()">撤销</button>` : '') + `</div>` : '')
+        + (rv.replan ? `<button class="btn-link" onclick="aiPlan('复盘建议整套重排')">复盘建议整套重排，让顾问出方案</button>` : '')
         + `</div>`;
 }
 async function aiReview(auto) {
@@ -964,13 +971,7 @@ function aiSkinToNote() {
     r.saved = true; _aiShowResult();
 }
 // 产品页顶上的入口:拍成分标
-function aiRenderProdEntry() {
-    const box = document.getElementById('ai-prod-entry'); if (!box) return;   // 新版产品页把「拍成分表」并进了「添加产品」,这个挂点已经没了
-    const a = aiAccess();
-    box.innerHTML = a === 'on'
-        ? `<label class="co-btn" style="display:block;text-align:center;margin-bottom:1rem">拍成分标 · 自动认产品和成分特性<input type="file" accept="image/*" capture="environment" onchange="aiVision(this,'read_label')" aria-label="拍成分标"></label>`
-        : '';
-}
+function aiRenderProdEntry() { }   // 「拍成分表」并进了产品页的「添加」,这个挂点已经没了
 
 // ── 今晚页:今日顾问的话(一天一次,本机缓存)+ 打卡反馈 ──
 function aiRenderTonight() {
@@ -1002,14 +1003,14 @@ function _aiMaybeNote() {
         .then(() => { _aiInflight.note = false; });
 }
 function _aiFeedbackHtml(f) {
-    if (f.busy) return `<div class="co-note co-meta">顾问在看你今晚的记录…</div>`;
-    if (f.err) return `<div class="co-note"><span class="co-meta co-err">${_aiEsc(f.err)}</span> <button class="rg-more" style="margin:0" onclick="aiAfterCheckin(today(), true)">再试一次</button></div>`;
+    if (f.busy) return `<p class="note">顾问在看你今晚的记录…</p>`;
+    if (f.err) return `<p class="note co-err">${_aiEsc(f.err)}</p><button class="btn-link" onclick="aiAfterCheckin(today(), true)">再试一次</button>`;
     const adj = (f.next_adjust || []);
-    return `<div class="co-card" id="ai-fb-card"><div class="co-h"><span class="co-t">打卡反馈</span><span class="co-meta">${f.meta ? '$' + Number(f.meta.cost || 0).toFixed(3) : ''}</span></div>`
-        + `<div style="font-size:13px;line-height:1.6">${_aiMd(f.text || '')}</div>`
-        + (adj.length ? `<ul class="co-act-list" style="margin-top:6px;font-size:13px">${adj.map(x => `<li>· ${_aiEsc(x.item)}：${_aiEsc(x.change)} <small class="co-meta">${_aiEsc(x.why || '')}</small></li>`).join('')}</ul>`
-            + `<button class="rg-more" onclick="aiAsk(${_aiEsc(JSON.stringify('按打卡反馈调一下：' + adj.map(x => x.item + x.change).join('；')))})">让顾问照这个调</button>` : '')
-        + (f.note_add && !f.noteSaved ? `<button class="rg-more" onclick="aiFeedbackNote()">把「${_aiEsc(f.note_add)}」加进今天的记录</button>` : '')
+    return `<div class="co-act" id="ai-fb-card"><div class="co-act-h">顾问</div>`
+        + `<div class="lede">${_aiMd(f.text || '')}</div>`
+        + (adj.length ? `<ul class="co-act-list">${adj.map(x => `<li>${_aiEsc(cjkSpace(x.item))}：${_aiEsc(cjkSpace(x.change))}${x.why ? `<span class="why">。${_aiEsc(x.why)}</span>` : ''}</li>`).join('')}</ul>`
+            + `<button class="btn-link" onclick="closeSheet('done-sheet');aiAsk(${_aiEsc(JSON.stringify('按打卡反馈调一下：' + adj.map(x => x.item + x.change).join('；')))})">让顾问照这个调</button>` : '')
+        + (f.note_add && !f.noteSaved ? `<button class="btn-link quiet" onclick="aiFeedbackNote()">把「${_aiEsc(f.note_add)}」加进今天的记录</button>` : '')
         + `</div>`;
 }
 async function aiAfterCheckin(date, force) {

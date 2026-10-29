@@ -11,7 +11,7 @@
         full(o) {
             o = o || {};
             localStorage.clear();
-            S('sk_profile1', Object.assign({ shaving: true, hrt: false, minimalMode: false, showJournal: true, skinType: '混油皮 · 屏障修护', onboarded: true, autoMatched: 'cait' }, o.profile || {}));
+            S('sk_profile1', Object.assign({ shaving: true, hrt: false, minimalMode: false, showJournal: true, skinType: '混油皮 · 屏障修护', onboarded: true, autoMatched: 'cait', tour3: true }, o.profile || {}));
             const j = [];
             for (let i = o.today ? 0 : -1; i >= -13; i--) j.push({ date: d(i), status: (o.status && o.status(i)) || ['出油', '闭口'], products: (o.products && o.products(i)) || [], note: '', phase: '' });
             S('sk_jrnl1', o.jrnl || j);
@@ -25,7 +25,7 @@
         minimal(o) {
             o = o || {};
             localStorage.clear();
-            S('sk_profile1', Object.assign({ shaving: false, hrt: false, minimalMode: true, showJournal: false, useMakeupRemoval: false, skinType: '油偏混 · 抗闭口', onboarded: true, autoMatched: 'cici',
+            S('sk_profile1', Object.assign({ shaving: false, hrt: false, minimalMode: true, showJournal: false, useMakeupRemoval: false, skinType: '油偏混 · 抗闭口', onboarded: true, autoMatched: 'cici', tour3: true,
                 zones: [{ name: '人中/鼻下', avoid: ['acid', 'mask', 'retinol'], care: '只温和清洁 + 修护霜点涂' }] }, o.profile || {}));
             const j = [];
             for (let i = -1; i >= -13; i--) j.push({ date: d(i), status: (o.status && o.status(i)) || [], products: (o.products && o.products(i)) || [], note: '', phase: '', auto: true });
@@ -66,6 +66,7 @@
             if (body && body.code === 'GOOD1-CODE2') { F.mode = 'on'; return json(200, { ok: true, name: 'Tester' }); }
             return json(400, { error: '邀请码不对或已经用过了' });
         }
+        if (F.mode === 'quota') return json(429, { error: '今天的 AI 用量到上限了($5/天)，明天再来。' });
         if (F.mode === 'none') return json(403, { error: '顾问现在是邀请制', status: 'not_allowed' });
         if (F.mode === 'mismatch') return json(403, { error: '这个邮箱绑了别的账号', status: 'mismatch' });
         const wrap = (data) => json(200, { data, model: 'claude-test', effort: 'medium', cost: 0.012 });

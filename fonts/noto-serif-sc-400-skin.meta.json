@@ -1,0 +1,12 @@
+{
+  "source_font": "Noto Serif CJK SC",
+  "source_version": "Version 2.003;hotconv 1.1.1;makeotfexe 2.6.0",
+  "source_sha256": "2a2eae2628df83556c54018c41e20fa532c1b862c5256ae8b3f23feb918d12ca",
+  "license": "SIL Open Font License 1.1 (fonts/LICENSES.txt)",
+  "charset": "GB 2312 level 1 + UI text of index.html/ai.js + CJK punctuation",
+  "character_count": 3848,
+  "ui_characters": 1051,
+  "ui_missing_in_source": "",
+  "bytes": 1330292,
+  "font_sha256": "98243a855403934ed97be381273988065535386f3c7600596d87b1f3b9376882"
+}
