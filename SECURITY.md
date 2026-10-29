@@ -10,4 +10,10 @@ Security-relevant areas include authentication, cloud synchronisation, access-co
 
 ## Repository boundary
 
-Only files tracked by Git are uploaded by the GitHub Pages workflow. Operator notes and private local records listed in `.gitignore` must stay untracked. Pull requests that widen the public file set should be reviewed specifically for privacy impact.
+Only files tracked by Git are available to the GitHub-hosted Pages build. Operator notes and private local records listed in `.gitignore` must stay untracked. Pull requests that widen the public file set should be reviewed specifically for privacy impact.
+
+## Firebase web API key review
+
+The Firebase web API key embedded in the browser configuration is a project identifier rather than an administrative credential. It still needs an API-restriction review in Google Cloud: keep it restricted to the Firebase-related APIs this app actually uses, and do not enable unrelated or billable APIs on the same browser key. Firestore Security Rules remain the data-access boundary; Firebase App Check should be enabled where practical.
+
+The emulator-backed rules tests verify owner-only reads/writes, denied cross-account access, denied anonymous access, and default-denied unmatched subcollections.

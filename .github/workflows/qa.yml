@@ -19,10 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
 
@@ -67,10 +67,15 @@ jobs:
         run: |
           node -e '
           const fs = require("fs");
-          JSON.parse(fs.readFileSync("manifest.json", "utf8"));
+          const manifest = JSON.parse(fs.readFileSync("manifest.json", "utf8"));
           JSON.parse(fs.readFileSync("firebase.json", "utf8"));
+          if (manifest.start_url !== "./index.html") throw new Error("manifest.start_url 必须指向 ./index.html");
           const sw = fs.readFileSync("sw.js", "utf8");
           if (!sw.includes("skincare-app-v")) throw new Error("sw.js 缓存版本缺失");
+          if (!fs.readFileSync("护肤计划.html", "utf8").includes("location.replace(")) throw new Error("旧 URL 重定向缺失");
+          for (const f of ["README.md", "PRIVACY.md", "SECURITY.md"]) {
+            if (!fs.existsSync(f)) throw new Error("缺少公开边界文档: " + f);
+          }
           if (!sw.includes("./ai.js")) throw new Error("sw.js 没缓存 ai.js");
           // 自托管字体:三套都要在预缓存清单里、文件真的在(离线也是宋体)
           for (const f of ["fonts/noto-serif-sc-400-skin.woff2", "fonts/eb-garamond-latin-400.woff2", "fonts/courier-prime-latin-400.woff2"]) {
@@ -78,7 +83,7 @@ jobs:
             if (!fs.existsSync(f)) throw new Error("缺字体文件 " + f);
           }
           if (!fs.existsSync("fonts/LICENSES.txt")) throw new Error("缺 fonts/LICENSES.txt(OFL)");
-          for (const i of JSON.parse(fs.readFileSync("manifest.json", "utf8")).icons) if (!fs.existsSync(i.src)) throw new Error("manifest 图标缺文件 " + i.src);
+          for (const i of manifest.icons) if (!fs.existsSync(i.src)) throw new Error("manifest 图标缺文件 " + i.src);
           // 全程不用 emoji(Cait 2026-10-29):App 源码里一个都不留
           for (const f of ["index.html", "ai.js", "sw.js", "manifest.json"]) {
             const hit = fs.readFileSync(f, "utf8").match(/\p{Extended_Pictographic}/u);
@@ -90,6 +95,26 @@ jobs:
           const missAi = hooks.filter(s => !ai.includes(s));
           if (missAi.length) throw new Error("ai.js 缺: " + missAi.join(", "));
           if (/test:[A-Za-z0-9_-]{8,}/.test(ai)) throw new Error("ai.js 里不能写死测试 token");
-          console.log("manifest/firebase/sw/fonts/ai.js ok");
+          console.log("manifest/firebase/sw/redirect/public-docs/fonts/ai.js ok");
           '
           test -z "$(git ls-files AGENTS.md CLAUDE.md LIVING_TODO.md '家中护肤品清单.md' '审计报告_*.json')"
+
+  firestore-rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install rule-test dependencies
+        run: npm ci
+      - name: Firestore rules access-control tests
+        run: npm run test:rules

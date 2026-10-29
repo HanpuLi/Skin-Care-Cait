@@ -20,7 +20,7 @@ export default async function ({ origin, S, open }) {
     S.ok(/function ls\(k, v\)[\s\S]{0,400}schedulePush/.test(html), 'ls() 写入都会排一次推送');
     // 公开仓库边界:不写死 token / 测试后门;私密文件没进来
     const tracked = fs.readdirSync(ROOT);
-    S.ok(!['CLAUDE.md', 'README.md', 'LIVING_TODO.md', '家中护肤品清单.md', 'Cici档案'].some(f => tracked.indexOf(f) >= 0), '仓库目录里没有私密文件', tracked);
+    S.ok(!['CLAUDE.md', 'README-private.md', 'LIVING_TODO.md', '家中护肤品清单.md', 'Cici档案'].some(f => tracked.indexOf(f) >= 0), '仓库目录里没有私密文件', tracked);
     S.ok(!/__AIF|__seed|__login|page-helpers/.test(html + ai) && !/Bearer [A-Za-z0-9._-]{20,}|sk-ant-|AIza[0-9A-Za-z_-]{30}(?!.*apiKey)/.test(ai), 'App 代码里没有测试钩子、没有写死的 token');
 
     // ── 运行时 ──
