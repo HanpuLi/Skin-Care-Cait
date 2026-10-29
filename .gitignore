@@ -13,3 +13,6 @@ Cici档案/
 *.bak
 审计报告_*.json
 AGENTS.md
+
+node_modules/
+*-debug.log

@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "test:sync": "node t/sync-unit.mjs",
-    "test:rules": "npx --yes firebase-tools@15.30.2 emulators:exec --only firestore --project demo-skin-care-cait \"node --test tests/firestore-rules.test.mjs\""
+    "test:rules": "npx --yes firebase-tools@15.30.2 emulators:exec --only firestore --project demo-skin-care-cait \"node --test --test-concurrency=1 tests/firestore-rules.test.mjs tests/firestore-roundtrip.test.mjs\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "5.0.2",
