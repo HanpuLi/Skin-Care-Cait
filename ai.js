@@ -511,25 +511,27 @@ function aiUndoRec(mi, ri) {
 }
 
 // ══ 页面:顾问 ═════════════════════════════════════════════════════════════════
-// 版式照 AUDIT-aesthetic §3(纸墨护理手册)与 AUDIT-ux §4.3:输入框 + 拍照在最上,快捷问题,对话,本周复盘,方案历史,记得的事。
+// IA 重排(10/29):顾问页上半「现在的方案」由 index.html 离线渲染(#coach-plan,含版本与撤销),这里只管下半 #coach-content:
+// 问顾问(输入框 + 拍照 + 快捷问题 + 对话)、本周复盘、记得的事、模型、数据说明。方案历史不在这里重复。
 function _aiStyle() { }   // 样式都在 index.html 的「纸墨护理手册」里,这里不再注入
 function renderCoach() {
     const el = document.getElementById('coach-content');
     if (!el) return;
     const a = aiAccess();
     const privacy = `<div class="sec"><button class="btn-link quiet sm" onclick="aiPrivacySheet()">顾问会看到什么、存在哪</button></div>`;
+    const head = `<div class="sec-h"><h2 class="sec-t">问顾问</h2></div>`;
     if (a === 'out') {
-        el.innerHTML = `<div class="empty"><p class="lede">登录后可用。</p><p class="note">能问护肤问题、拍成分表认产品、让顾问出方案和每周复盘。没登录也没关系，今晚的步骤照离线规则排。</p>
+        el.innerHTML = `${head}<div class="empty"><p class="lede">登录后可用。</p><p class="note">能问护肤问题、拍成分表认产品、让顾问出方案和每周复盘。没登录也没关系，上面的方案和今晚的步骤照离线规则排。</p>
             <div class="btn-row"><button class="btn btn-primary" onclick="signInGoogle()">用 Google 登录</button></div></div>${privacy}`;
         return;
     }
     if (a === 'none' || a === 'mismatch') {
-        el.innerHTML = a === 'mismatch'
+        el.innerHTML = head + (a === 'mismatch'
             ? `<div class="empty" id="co-access"><p class="lede">这个账号用不了顾问。</p><p class="note">这个邮箱已经绑定了另一个账号，换回第一次用的登录方式试试。</p></div>${privacy}`
-            : `<div class="empty" id="co-access"><p class="lede">顾问是邀请制。</p><p class="note">每次调用都要花钱，现在只对受邀的人开放。没有邀请码也不影响今晚的步骤。</p>
+            : `<div class="empty" id="co-access"><p class="lede">顾问是邀请制。</p><p class="note">每次调用都要花钱，现在只对受邀的人开放。没有邀请码也不影响上面的方案和今晚的步骤。</p>
                 <label class="field"><span>邀请码</span><input id="co-code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="16" placeholder="ABCDE-FGHJK" onkeydown="if(event.key==='Enter')aiRedeem()"></label>
                 <div class="btn-row syms"><button class="btn btn-primary" id="co-code-go" onclick="aiRedeem()">开通</button></div>
-                <p class="note syms">邀请码用一次就作废，两周内有效。</p></div>${privacy}`;
+                <p class="note syms">邀请码用一次就作废，两周内有效。</p></div>${privacy}`);
         // 后台再核一次:可能已经被加进白名单了。一分钟最多一次 —— aiProbe 结束会重画这一页,不节流就成了死循环
         if (a === 'none' && Date.now() - (renderCoach._probeAt || 0) > 60000) { renderCoach._probeAt = Date.now(); aiProbe(true); }
         return;
@@ -541,7 +543,7 @@ function renderCoach() {
     const status = _aiDown ? '' : quota ? '' : me ? (owner ? `今天 $${Number(me.today || 0).toFixed(2)}${me.daily_cap ? ' / $' + Number(me.daily_cap).toFixed(0) : ''} · 本期 $${Number(me.cycle || 0).toFixed(2)}` : '在线') : '连接中…';
     const busy = _aiBusy;
     const QUICK = ['今晚能刷酸吗？', '这颗痘怎么办？', '这周怎么样？'];
-    el.innerHTML = `
+    el.innerHTML = `${head}
       <p class="meta" id="co-status">${status}</p>
       ${_aiDown ? `<div class="empty"><p class="lede">顾问暂时连不上，今晚照上一版做。</p><p class="note">顾问的服务在 Cait 家里的电脑上，可能没开或者网络断了。打卡和今晚的步骤都不受影响。</p><div class="btn-row"><button class="btn" onclick="aiProbe(true)">重试</button></div></div>` : ''}
       ${quota ? `<div class="empty"><p class="lede">${quota}</p><p class="note">今晚的步骤照离线规则排，打卡不受影响。</p></div>` : ''}
@@ -555,7 +557,6 @@ function renderCoach() {
       <div id="co-result"></div>
       <div id="co-chat-log" class="co-log" aria-live="polite"></div>
       <div id="co-review"></div>
-      <div class="sec"><div class="sec-h"><span class="sec-t">方案历史</span>${blocked ? '' : `<button class="btn-link sm quiet" id="co-plan-go" onclick="aiPlan()" ${busy ? 'disabled' : ''}>让顾问重排</button>`}</div>${typeof regimenHistoryHtml === 'function' ? regimenHistoryHtml(8) : ''}</div>
       <div class="sec" id="co-mem"></div>
       ${owner ? `<div class="sec" id="co-opts"></div>` : ''}
       ${privacy}`;
@@ -831,8 +832,8 @@ function aiRegimenActionsHtml(reg) {
     const a = aiAccess(), btn = [];
     if (a === 'on' && !_aiDown && !_aiQuotaText()) {
         btn.push(`<button class="btn-link" onclick="aiAsk('关于现在这版方案：')">问顾问</button>`);
-        if (!reg || reg.source !== 'ai' || reg.stale) btn.push(`<button class="btn-link quiet" onclick="aiPlan()">${reg && reg.stale ? '让顾问按新货架重排' : '让顾问出方案'}</button>`);
-    } else if (a === 'none') btn.push(`<span class="note">顾问是邀请制，在「顾问」页填邀请码。</span>`);
+        btn.push(`<button class="btn-link quiet" id="co-plan-go" onclick="aiPlan()" ${_aiBusy || _aiInflight.plan ? 'disabled' : ''}>${reg && reg.stale ? '让顾问按新货架重排' : (!reg || reg.source !== 'ai') ? '让顾问出方案' : '让顾问重排'}</button>`);
+    }
     return btn.length ? `<div class="btn-row syms">${btn.join('')}</div>` : '';
 }
 function aiUndoCurrent() {
@@ -988,7 +989,8 @@ function aiRenderTonight() {
     const fb = document.getElementById('ai-feedback');
     if (fb) {
         const f = (_aiState().feedback || {})[today()];
-        fb.innerHTML = f ? _aiFeedbackHtml(f) : '';
+        // 完成今晚之后的 sheet:还没要过反馈 → 一个按钮(记完皮肤再点);不点、直接关掉 sheet 也会在后台要一次(index.html openDoneSheet)
+        fb.innerHTML = f ? _aiFeedbackHtml(f) : (aiReady() && (todayEntry() || {}).done ? `<button class="btn btn-block" onclick="aiAfterCheckin(today())">记好了，看顾问怎么说</button>` : '');
     }
     _aiMaybeNote();
     _aiMaybeAutoReview();

@@ -12,6 +12,7 @@ export default async function ({ origin, S, open }) {
         const tx = await p.eval(`return document.getElementById('tonight').innerText`);
         S.ok(!/\d+\s*分/.test(tx) && !/屏障/.test(tx), `${who}/${scheme}:今晚页没有分数、没有「屏障」`, tx.slice(0, 200));
         S.ok(/^(修护夜|刷酸夜|面膜夜|维 A 夜|刮胡夜)$/.test(await p.eval(`return document.getElementById('tn-title').textContent`)), `${who}/${scheme}:标题是夜型`);
+        S.ok(/^今晚 · (修护夜|刷酸夜|面膜夜|维 A 夜|刮胡夜)$/.test(await p.eval(`return document.getElementById('tn-h').textContent`)), `${who}/${scheme}:整行标题是「今晚 · 夜型」`);
     }
 
     // ── 完整模式:三态步骤写进记录;点 4 下状态,方案版本不变 ──
@@ -21,7 +22,8 @@ export default async function ({ origin, S, open }) {
         await p.eval(`return __seed.full()`);
         await p.reload(800);
         const v0 = await p.eval(`return {v: currentRegimen().v, n: regimenHistory().length}`);
-        await p.eval(`const seg=document.querySelectorAll('#tn-skin .seg button');seg[0].click();await new Promise(r=>setTimeout(r,80));
+        // IA 重排 10/29:皮肤记录挪进「只记皮肤」/「完成今晚」之后的 sheet(#tn-skin 在 sheet 里)
+        await p.eval(`openSkinSheet();await new Promise(r=>setTimeout(r,80));const seg=document.querySelectorAll('#tn-skin .seg button');seg[0].click();await new Promise(r=>setTimeout(r,80));
             document.querySelector('#tn-skin .skin-h .btn-link').click();
             const chips=()=>document.querySelectorAll('#tn-skin .syms .chip');chips()[0].click();await new Promise(r=>setTimeout(r,80));chips()[3].click();await new Promise(r=>setTimeout(r,80));
             document.querySelectorAll('#tn-skin .seg button')[2].click();return 1`);

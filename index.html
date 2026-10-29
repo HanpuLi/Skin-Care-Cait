@@ -95,24 +95,26 @@
       /* 模式 / 功能门控 */
       body.hide-shave .feat-shave{display:none!important}
       body.hide-hrt .feat-hrt{display:none!important}
-      body.minimal:not(.show-skin) .full-only{display:none!important}
+      body.hide-rec .rec-tab{display:none!important}
       body:not(.minimal) .min-only{display:none!important}
       body.minimal .adv{display:none!important}
 
       /* ── 骨架 ── */
       .wrap{max-width:560px;margin:0 auto;padding:0 calc(var(--gutter) + env(safe-area-inset-right,0px)) 0 calc(var(--gutter) + env(safe-area-inset-left,0px))}
-      .hdr{position:relative;display:flex;align-items:center;gap:var(--sp-2);min-height:18px;padding:calc(var(--safe-top) + var(--sp-3)) 44px 0 0}
+      /* 页头:印章在文档流里,整个 44px 高都落在页头里(10/29 前是绝对定位 44px、页头只有 30px,印章压住下一行的洗澡 / 刮胡) */
+      .hdr{position:relative;display:flex;align-items:center;gap:var(--sp-2);min-height:44px;padding:var(--safe-top) 0 0}
+      .hdr .eyebrow{flex:1;min-width:0}
       .eyebrow{font:12px/var(--lh-meta) var(--mono);color:var(--faint)}
       .hdr .net{font:12px/var(--lh-meta) var(--serif);color:var(--muted);margin-left:auto}
-      .seal{position:absolute;right:-6px;top:calc(var(--safe-top) - 1px);width:44px;height:44px;display:grid;place-items:center}
+      .seal{position:relative;flex:none;margin-right:-6px;width:44px;height:44px;display:grid;place-items:center}
       .seal span{width:32px;height:32px;border-radius:50%;box-shadow:inset 0 0 0 1px var(--line-ctl);display:grid;place-items:center;font:16px/1 var(--serif);color:var(--ink)}
       .panel{display:none}
       .panel.active{display:block}
       .page-title{font:28px/var(--lh-title) var(--serif);color:var(--ink-strong);text-wrap:balance}
+      .page-title .pre{color:var(--muted)}
+      .sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
       .title-row{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);margin-top:var(--sp-1)}
-      .title-acts{display:flex;gap:var(--sp-2);flex:none}
       .say{margin-top:var(--sp-1);color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-      .say button{text-align:left;color:inherit;min-height:28px}
       .say .why{color:var(--faint)}
       .sec{border-top:1px solid var(--line);margin-top:var(--sp-5);padding-top:var(--sp-4)}
       .sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:var(--sp-2);min-height:22px}
@@ -174,7 +176,7 @@
         font:16px/22px var(--serif);color:var(--ink);transition:background-color .15s,box-shadow .15s}
       .seg>button[aria-pressed="true"],.seg>button[aria-checked="true"]{background:var(--tint);box-shadow:inset 0 0 0 1.5px var(--ink)}
       .seg>button .dot{margin:0}
-      .tgl{position:relative;min-height:36px;padding:0 var(--sp-3);border-radius:var(--r-ctl);font:14px/22px var(--serif);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line-ctl)}
+      .tgl{position:relative;min-height:36px;min-width:44px;padding:0 var(--sp-3);border-radius:var(--r-ctl);font:14px/22px var(--serif);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line-ctl)}
       .tgl::after{content:"";position:absolute;inset:-4px 0}
       .tgl[aria-pressed="true"]{color:var(--ink);background:var(--tint);box-shadow:inset 0 0 0 1.5px var(--ink)}
       /* 输入:下划线式;iOS 不放大(≥16px) */
@@ -200,8 +202,22 @@
       .sw input:focus-visible+i{outline:2px solid var(--ink);outline-offset:2px}
 
       /* ── 今晚 ── */
+      /* ② 今晚的情况:两个问句开关;宽屏一行两个,320 宽自动折成两行 */
+      .sit{margin-top:var(--sp-3)}
+      .sit-qs{display:flex;flex-wrap:wrap;column-gap:var(--sp-5)}
+      .sit-q{flex:1 1 9.5em;min-height:44px;justify-content:flex-start}
+      .sit-q>span:first-child{font:16px/22px var(--serif);color:var(--ink)}
+      .sit-fx{border-left:2px solid var(--line-ctl);padding-left:var(--sp-3);margin-top:var(--sp-1)}
+      /* ③ 提醒卡:只有一张在外面,其余收进「还有 N 条」 */
+      .more-cards{margin-top:calc(-1 * var(--sp-2))}
+      .more-cards>.fold-body>div>*:first-child{margin-top:0}
+      .sheet-sec>.note+.skin{margin-top:var(--sp-3)}
+      .say-card{border-left:2px solid var(--line-ctl);padding:var(--sp-3) 0 var(--sp-3) 14px;margin:var(--sp-4) 0}
+      .say-card .eyebrow{display:block;font:14px/22px var(--serif);color:var(--muted)}
+      .say-card .lede{margin-top:2px}
+      .say-card .btn-link{margin-top:var(--sp-1)}
       .revbar{border-left:2px solid var(--rev);padding:var(--sp-3) 0 var(--sp-3) 14px;margin:var(--sp-4) 0;display:grid;grid-template-columns:1fr auto;column-gap:var(--sp-3);align-items:center}
-      .revbar .who{font:12px/var(--lh-meta) var(--mono);color:var(--rev)}
+      .revbar .who{display:block;font:12px/var(--lh-meta) var(--mono);color:var(--rev)}
       .revbar .what{font:16px/26px var(--serif);color:var(--ink)}
       .revbar .acts-r{display:flex;flex-direction:column;align-items:flex-end}
       .revbar ul{grid-column:1/-1;margin-top:var(--sp-1)}
@@ -250,16 +266,31 @@
       .skips .row .note{display:block}
       .skip-name{display:block;font:16px/var(--lh-body) var(--serif);color:var(--muted)}
       .done-bar{margin-top:var(--sp-5)}
+      .done-bar .btn-row{justify-content:space-between}
+      .done-bar .btn-primary{flex:1}
       .done-bar .note{margin-bottom:var(--sp-2)}
-      .folds{margin-top:var(--sp-5);border-bottom:1px solid var(--line)}
       .fold{border-top:1px solid var(--line)}
       .fold>summary{color:var(--ink)}
       .fold-sum{flex:1;min-width:0}
       .fold-sum .sec-t{display:block}
       .fold-sum .lede{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
       .fold-body{padding-bottom:var(--sp-4)}
-      .n7{display:grid;grid-template-columns:7em 1fr auto;column-gap:var(--sp-3);align-items:center;min-height:48px;border-top:1px solid var(--line);width:100%;text-align:left}
-      .n7 .meta{font-size:12px}
+      /* 顾问页 · 接下来 7 晚:一晚一行;左边点开看那晚的步骤,右边直接点洗澡 / 刮胡 */
+      .plan-h{margin-top:var(--sp-4)}
+      #next7{margin-top:var(--sp-2);border-bottom:1px solid var(--line)}
+      .n7{display:grid;grid-template-columns:1fr auto;column-gap:var(--sp-2);align-items:center;border-top:1px solid var(--line);padding:var(--sp-1) 0}
+      .n7-go{display:grid;grid-template-columns:5.5em 1fr;column-gap:var(--sp-2);align-items:center;min-height:44px;text-align:left;min-width:0}
+      .n7-go .lede{min-width:0}
+      .n7-tg{display:flex;gap:var(--sp-2)}
+      .n7-chg{grid-column:1/-1;font:14px/22px var(--serif);color:var(--rev);padding:0 0 var(--sp-1) calc(5.5em + var(--sp-2))}
+      .n7.chg{box-shadow:inset 2px 0 0 var(--rev);padding-left:var(--sp-2)}
+      .n7-acts{justify-content:flex-end;gap:var(--sp-4)}
+      /* 常识 */
+      .guide .g-sec{padding:var(--sp-3) 0;border-top:1px solid var(--line)}
+      .guide .g-sec:first-child{border-top:0;padding-top:0}
+      .g-t{font:16px/var(--lh-body) var(--serif);color:var(--ink)}
+      .guide .note+.note,.guide .note+.list,.guide .list+.note{margin-top:var(--sp-2)}
+      .guide .list li+li{margin-top:var(--sp-1)}
       .timer-banner{position:fixed;left:var(--gutter);right:var(--gutter);top:calc(var(--safe-top) + var(--sp-3));z-index:400;background:var(--sheet);color:var(--ink-strong);
         box-shadow:inset 0 0 0 1.5px var(--ink);border-radius:var(--r-card);padding:var(--sp-4);display:flex;justify-content:space-between;align-items:center;gap:var(--sp-3);font:18px/var(--lh-item) var(--serif)}
 
@@ -295,6 +326,9 @@
       .heat{display:grid;grid-template-columns:repeat(7,1fr);gap:var(--sp-1);margin-top:var(--sp-3)}
       .heat button{min-height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--sp-1);border-radius:var(--r-ctl);font:14px/18px var(--serif);color:var(--muted)}
       .heat button .dot{margin:0}
+      .heat .mks{display:flex;gap:2px;min-height:18px}
+      .mk{font:12px/18px var(--mono);color:var(--muted)}
+      .legend .mk{margin-right:var(--sp-1)}
       .heat button.today{box-shadow:inset 0 0 0 1.5px var(--ink);color:var(--ink)}
       .legend{display:flex;flex-wrap:wrap;gap:var(--sp-1) var(--sp-4);margin-top:var(--sp-2);font:14px/22px var(--serif);color:var(--muted)}
       .chart svg{display:block;width:100%;height:auto}
@@ -402,55 +436,108 @@
         </header>
         <div id="sync-toast-el" class="toast" role="status" aria-live="polite"></div>
 
-        <!-- ══ 今晚:夜型标题 → 顾问的话 → 变化条 / 注意 / 就医 → 今天皮肤 → 步骤 → 完成;方案和未来 7 晚折在最下面 ══ -->
-        <section id="tonight" class="panel active" aria-labelledby="tn-title">
-            <div class="title-row">
-                <h1 class="page-title" id="tn-title">今晚</h1>
-                <div class="title-acts">
-                    <button class="tgl" id="tn-sh" onclick="toggleTn('shower')" aria-pressed="false">洗澡</button>
-                    <button class="tgl feat-shave" id="tn-sv" onclick="toggleTn('shave')" aria-pressed="false">刮胡</button>
-                </div>
-            </div>
+        <!-- ══ 今晚:四层(IA 重排 10/29)——① 夜型标题 + 一句为什么 ② 今晚的情况(洗澡 / 刮胡,问句)③ 最多一张提醒卡,其余折起 ④ 步骤 → 完成今晚。
+             皮肤记录在「完成今晚」之后的 sheet 里;方案、刷酸节奏、未来 7 晚在「顾问」页 ══ -->
+        <section id="tonight" class="panel active" aria-labelledby="tn-h">
+            <h1 class="page-title" id="tn-h"><span class="pre">今晚 · </span><span id="tn-title">今晚</span></h1>
             <p class="say" id="tn-say" aria-live="polite"></p>
-            <div id="tn-change"></div>
-            <div id="safety-alert"></div>
-            <div id="tn-notes"></div>
-            <div id="tn-skin" class="skin"></div>
+            <div class="sit" id="tn-sit" role="group" aria-labelledby="tn-sit-t">
+                <span class="sr" id="tn-sit-t">今晚的情况</span>
+                <div class="sit-qs">
+                    <label class="sw-row sit-q"><span>今晚洗澡吗？</span><span class="sw"><input type="checkbox" role="switch" id="tn-sh" onchange="toggleTn('shower',this.checked)"><i></i></span></label>
+                    <label class="sw-row sit-q feat-shave"><span>今晚刮胡吗？</span><span class="sw"><input type="checkbox" role="switch" id="tn-sv" onchange="toggleTn('shave',this.checked)"><i></i></span></label>
+                </div>
+                <p class="note sit-fx" id="tn-sit-fx" role="status" aria-live="polite" hidden></p>
+            </div>
+            <!-- 提醒卡:优先级 就医 > 注意 > 方案变了 > 顾问的话。arrangeTnCards() 把最高那张留在上面,其余挪进「还有 N 条」 -->
+            <div id="tn-cards"><div id="safety-alert"></div><div id="tn-notes"></div><div id="tn-change"></div><div id="tn-aisay"></div></div>
+            <details class="fold more-cards" id="tn-more" hidden><summary><span class="fold-sum"><span class="lede">还有 <span id="tn-more-n"></span> 条提醒</span></span></summary><div class="fold-body" id="tn-more-b"></div></details>
             <div id="tn-plan"></div>
             <div id="tn-done" class="done-bar"></div>
-            <div class="folds">
-                <details class="fold" id="fold-regimen"><summary><span class="fold-sum"><span class="sec-t">方案 <span class="mono" id="fold-regimen-v"></span></span><span class="lede" id="fold-regimen-sub"></span></span><span class="note">为什么</span></summary><div class="fold-body" id="regimen-card"></div></details>
-                <details class="fold" id="fold-next"><summary><span class="fold-sum"><span class="lede">接下来 7 晚</span></span></summary><div class="fold-body" id="next7"></div></details>
-            </div>
         </section>
 
-        <!-- ══ 顾问:内容全部由 ai.js 渲染;ai.js 没加载上时这里只剩一句话,其余功能照常 ══ -->
+        <!-- ══ 顾问:上半是「现在的方案」(index.html 离线渲染,顾问没开通 / 连不上 / ai.js 没加载都照样有);下半问顾问、复盘(ai.js);最底下「常识」(写死的固定内容) ══ -->
         <section id="coach" class="panel" aria-labelledby="coach-title">
             <h1 class="page-title" id="coach-title">顾问</h1>
-            <div id="coach-content"><p class="lede">顾问没加载出来。</p><p class="note">今晚照上一版方案做，刷新一下再试。</p></div>
+            <div id="coach-plan">
+                <div class="plan-h"><h2 class="sec-t">现在的方案 <span class="mono" id="plan-v"></span></h2></div>
+                <div id="regimen-card"></div>
+                <div class="sec" id="next7-sec">
+                    <div class="sec-h"><h2 class="sec-t">接下来 7 晚</h2></div>
+                    <p class="note">哪晚洗澡、刮胡，在这里点；酸和面膜会跟着重排。</p>
+                    <div id="next7"></div>
+                    <div class="btn-row n7-acts"><button class="btn-link sm quiet" onclick="saveWeekHabit()">存成每周习惯</button><button class="btn-link sm quiet" onclick="fillWeekHabit()">按习惯填</button></div>
+                    <p class="note" id="n7-st" role="status" hidden></p>
+                </div>
+                <div class="sec" id="ladder-card">
+                    <div class="sec-h"><h2 class="sec-t">刷酸节奏</h2><span class="meta" id="cd-badge"></span></div>
+                    <p class="lede" id="cd-left"></p>
+                    <p class="meta" id="cd-pct"></p>
+                    <ul class="list note" id="cd-events"></ul>
+                </div>
+                <details class="fold sec" id="fold-hist"><summary><span class="fold-sum"><span class="lede">版本与撤销</span><span class="note" id="fold-hist-sub"></span></span></summary><div class="fold-body" id="regimen-hist"></div></details>
+            </div>
+            <div id="coach-content" class="sec"><p class="lede">顾问没加载出来。</p><p class="note">方案照上面这版排，刷新一下再试。</p></div>
+            <details class="fold sec" id="guide"><summary><span class="fold-sum"><span class="lede">常识</span><span class="note">写死的固定内容，不是顾问生成的</span></span></summary>
+                <div class="fold-body guide">
+<!-- 「常识」:从老版「指南」页(3d55385)搬来,去掉 emoji,按 10/29 的规则更新。固定内容,不经过顾问;顾问可用时每节末尾多一个「问顾问」 -->
+                    <section class="g-sec" aria-labelledby="g-use"><h3 class="g-t" id="g-use">怎么用</h3>
+                        <ul class="list note"><li>「今晚」：照着做。先答一下今晚洗不洗澡、刮不刮胡，步骤会跟着变。做完点「完成今晚」，顺手记一下皮肤（选填）。只看今晚的用法里，排上的默认算做了，哪一步没做点一下「今晚没做」。</li>
+                            <li>「顾问」：现在这套方案为什么这么排、刷酸节奏、接下来 7 晚（哪晚洗澡、刮胡在这里排），也能直接问顾问。</li>
+                            <li>「记录」：回看皮肤记录、脸上哪里反复、走势。</li>
+                            <li>「产品」：家里有什么，快用完了、用完了，要不要买新的。</li>
+                            <li>皮肤有任何变化（长了什么、发红、刺痛、脱皮），记一下或者问顾问，方案会跟着调。</li></ul>
+                        <button class="btn-link sm g-ask" hidden onclick="guideAsk('怎么用')">问顾问</button></section>
+                    <section class="g-sec" aria-labelledby="g-dont"><h3 class="g-t" id="g-dont">这几件事别做</h3>
+                        <ul class="list note"><li>不要用力搓脸，不要用磨砂。</li>
+                            <li>皮肤刺痛、发红的时候，当天跳过酸，只洗脸、保湿、修护。</li>
+                            <li>设置里选了「要避开的区域」（比如人中、鼻下有红疹的那一块），那里不涂酸。</li></ul>
+                        <button class="btn-link sm g-ask" hidden onclick="guideAsk('这几件事别做')">问顾问</button></section>
+                    <section class="g-sec" aria-labelledby="g-doc"><h3 class="g-t" id="g-doc">什么时候该看医生</h3>
+                        <p class="note">嘴周、鼻下的红疹如果反复两三周不好，或者越来越多，去看 GP。这类问题往往越折腾越糟，不是靠多用产品能解决的。</p>
+                        <p class="note">近两周记了泛红 5 天以上，或者冒痘 10 天以上，而且最近 3 天还在，今晚页会亮就医提醒。亮着的时候所有酸都停（温和酸也停），眼霜照用；看过医生点「看过了」才解除。</p>
+                        <button class="btn-link sm g-ask" hidden onclick="guideAsk('什么时候该看医生')">问顾问</button></section>
+                    <section class="g-sec" aria-labelledby="g-acid"><h3 class="g-t" id="g-acid">刷酸从哪起步</h3>
+                        <p class="note">以前没怎么用过酸，就是还没有耐受史。从每周 1 次温和酸（杏仁酸、乳酸）起步，每次刷完盯两天：没有泛红、刺痛、新冒痘，才往上加一档，别一步到位。猛一点的酸等皮肤稳定 4 周以后再说。</p>
+                        <button class="btn-link sm g-ask" hidden onclick="guideAsk('刷酸从哪起步')">问顾问</button></section>
+                    <section class="g-sec" aria-labelledby="g-shower"><h3 class="g-t" id="g-shower">洗澡夜与刷酸时机</h3>
+                        <p class="note">热水澡后皮肤确实更「通透」，但那是屏障被短暂削弱的表现（研究显示水温 41°C 泡 10 分钟后经皮水分流失翻倍、泛红上升），并不等于「增效」。易泛红、敏感的人建议避开刚洗完热水澡的时候刷酸；不敏感的人这条影响不大。可以在「设置 · 高级 · 手动覆盖 · 刷酸时机」里选。</p>
+                        <button class="btn-link sm g-ask" hidden onclick="guideAsk('洗澡夜与刷酸时机')">问顾问</button></section>
+                    <section class="g-sec" aria-labelledby="g-rest"><h3 class="g-t" id="g-rest">非洗澡夜</h3>
+                        <p class="note">屏障修复的主要时段。微温水、温和的洁面简单洗，修护为主。</p>
+                        <button class="btn-link sm g-ask" hidden onclick="guideAsk('非洗澡夜')">问顾问</button></section>
+                    <section class="g-sec feat-shave" aria-labelledby="g-shave"><h3 class="g-t" id="g-shave">刮胡 = 机械性去角质</h3>
+                        <p class="note">刮胡那晚跳过所有剥脱性的酸和维 A。刮完全脸薄涂修护霜是必须的一步。</p>
+                        <button class="btn-link sm g-ask" hidden onclick="guideAsk('刮胡 = 机械性去角质')">问顾问</button></section>
+                    <section class="g-sec" aria-labelledby="g-order"><h3 class="g-t" id="g-order">叠涂顺序</h3>
+                        <ul class="list note"><li>稀薄到浓厚（晚上）：酸，精华，面霜或乳液，油；早上最后加防晒。</li>
+                            <li>酸之后直接保湿。不必等「pH 恢复」：皮肤自身缓冲很快，皮科指南建议去角质后立即保湿。</li>
+                            <li>修护霜最后封层：大分子结构会挡住后面成分渗透。</li></ul>
+                        <button class="btn-link sm g-ask" hidden onclick="guideAsk('叠涂顺序')">问顾问</button></section>
+                    <section class="g-sec feat-hrt" aria-labelledby="g-hrt"><h3 class="g-t" id="g-hrt">HRT 皮肤变化预警</h3>
+                        <p class="note">进入 E2 周期后，雌激素波动，前 3 到 6 个月可能会经历短暂的爆发期。突然连续长痘的话：</p>
+                        <ul class="list note"><li>酸立刻降到每周 1 次甚至停用，只在痘痘处点涂。</li>
+                            <li>面油先停（如果有），避免滋养痤疮丙酸杆菌。</li>
+                            <li>晚上的基础护肤缩成洁面（洗澡夜用洗面奶，其余温水），保湿面霜，修护霜点涂。</li></ul>
+                        <button class="btn-link sm g-ask" hidden onclick="guideAsk('HRT 皮肤变化预警')">问顾问</button></section>
+                </div>
+            </details>
         </section>
 
-        <!-- ══ 皮肤:状态、唯一的分数口径、刷酸节奏、14 天、走势、记录 ══ -->
+        <!-- ══ 记录(原「皮肤」):只回看——皮肤分、最近 14 天(哪天洗澡 / 刮胡)、脸上哪里、走势、HRT、每天的记录 ══ -->
         <section id="skin" class="panel" aria-labelledby="skin-title">
-            <h1 class="page-title" id="skin-title">皮肤</h1>
-            <div id="skin-status"></div>
+            <h1 class="page-title" id="skin-title">记录</h1>
             <div class="sec" id="assess-card"></div>
-            <div class="sec" id="ladder-card">
-                <div class="sec-h"><span class="sec-t">刷酸节奏</span><span class="meta" id="cd-badge"></span></div>
-                <p class="lede" id="cd-left"></p>
-                <p class="meta" id="cd-pct"></p>
-                <ul class="list note" id="cd-events"></ul>
-            </div>
             <div class="sec">
-                <div class="sec-h"><span class="sec-t">最近 14 天</span><button class="btn-link sm quiet" onclick="openDaySheet(today())">补记今天</button></div>
+                <div class="sec-h"><h2 class="sec-t">最近 14 天</h2></div>
                 <div class="heat" id="heat-grid" role="group" aria-label="最近 14 天，点某一天看那天"></div>
-                <div class="legend" id="heat-legend"><span><i class="dot ok"></i>好些</span><span><i class="dot faint"></i>差不多</span><span><i class="dot caution"></i>差些</span><span><i class="dot hollow"></i>没记</span></div>
+                <div class="legend" id="heat-legend"><span><i class="dot ok"></i>好些</span><span><i class="dot faint"></i>差不多</span><span><i class="dot caution"></i>差些</span><span><i class="dot hollow"></i>没记</span><span><span class="mk">洗</span>洗澡</span><span class="feat-shave"><span class="mk">刮</span>刮胡</span></div>
             </div>
-            <div class="sec" id="face-heat-sec"><div class="sec-h"><span class="sec-t">脸上哪里 · 最近 14 天</span></div><div id="face-heat"></div></div>
+            <div class="sec" id="face-heat-sec"><div class="sec-h"><h2 class="sec-t">脸上哪里 · 最近 14 天</h2></div><div id="face-heat"></div></div>
             <div class="sec" id="stat-grid"></div>
-            <div class="sec"><div class="sec-h"><span class="sec-t">走势</span></div><div class="chart" id="trend-chart-container"></div></div>
-            <div class="sec feat-hrt"><div class="sec-h"><span class="sec-t">HRT 阶段</span></div><div id="hrt-tl"></div></div>
-            <div class="sec"><div class="sec-h"><span class="sec-t">记录</span><button class="btn-link sm quiet" id="jrnl-show-more" onclick="toggleJrnlHistory()">显示全部</button></div><div id="jh-list"></div></div>
+            <div class="sec"><div class="sec-h"><h2 class="sec-t">走势</h2></div><div class="chart" id="trend-chart-container"></div></div>
+            <div class="sec feat-hrt"><div class="sec-h"><h2 class="sec-t">HRT 阶段</h2></div><div id="hrt-tl"></div></div>
+            <div class="sec"><div class="sec-h"><h2 class="sec-t">每天的记录</h2><button class="btn-link sm quiet" id="jrnl-show-more" onclick="toggleJrnlHistory()">显示全部</button></div><div id="jh-list"></div></div>
             <div class="sec btn-row"><button class="btn-link sm quiet" onclick="exportCSV()">导出 CSV</button><button class="btn-link sm quiet" onclick="exportJSON()">导出备份</button><label class="btn-link sm quiet file-btn">恢复备份<input type="file" accept=".json" onchange="importJSON(this)"></label></div>
         </section>
 
@@ -474,7 +561,7 @@
     <nav class="tabbar" aria-label="主导航"><div class="tabbar-in" role="tablist">
         <button class="tab" id="tab-tonight" role="tab" aria-selected="true" aria-controls="tonight" onclick="show('tonight',this)">今晚</button>
         <button class="tab" id="tab-coach" role="tab" aria-selected="false" aria-controls="coach" onclick="show('coach',this)">顾问</button>
-        <button class="tab full-only" id="tab-skin" role="tab" aria-selected="false" aria-controls="skin" onclick="show('skin',this)">皮肤</button>
+        <button class="tab rec-tab" id="tab-skin" role="tab" aria-selected="false" aria-controls="skin" onclick="show('skin',this)">记录</button>
         <button class="tab" id="tab-prods" role="tab" aria-selected="false" aria-controls="prods" onclick="show('prods',this)">产品<i class="badge" id="prods-dot" hidden></i></button>
     </div></nav>
 
@@ -489,7 +576,7 @@
                     <button id="set-mode-full" role="radio" onclick="setMode2(false)">记录并看变化</button>
                 </div>
                 <p class="note" id="set-mode-note"></p>
-                <label class="sw-row min-only"><span>也显示「皮肤」页</span><span class="sw"><input type="checkbox" id="set-showjrnl" onchange="onProfileEdit()"><i></i></span></label>
+                <label class="sw-row min-only"><span>显示「记录」页</span><span class="sw"><input type="checkbox" id="set-showrec" onchange="onProfileEdit()"><i></i></span></label>
             </div>
             <div class="sheet-sec"><div class="sec-t">肤质底色</div><div class="chips" id="set-base"></div><div class="chips syms" id="set-basetraits"></div></div>
             <div class="sheet-sec"><div class="sec-t">想解决的（最多 2 个，按点的先后）</div><div class="chips" id="set-concerns"></div></div>
@@ -795,11 +882,12 @@
         function afterLogChange(date) {
             invalidatePlanCache();
             renderTn();
+            renderTnSkin();
             const sk = document.getElementById('skin');
             if (sk && sk.classList.contains('active')) renderSkin();
             refreshDaySheet(date);
         }
-        // 「今天皮肤」组件:今晚页和某一天的补记共用这一个。ns 区分同一屏上的两份(今晚页 / 当天的 sheet),免得 id 撞车
+        // 「今天皮肤」组件:「完成今晚」之后的 sheet(和「只记皮肤」)与某一天的补记共用这一个。ns 区分同一屏上的两份(今晚页 / 当天的 sheet),免得 id 撞车
         let _symOpen = {};
         function skinLogHtml(date, opts) {
             opts = opts || {};
@@ -883,7 +971,7 @@
         function _fmRedraw(ns, date) {
             _fmKeepFocus(() => {
                 if (ns === 'heat') { renderFaceHeat(); return; }
-                if (ns === 'tn') { const b = document.getElementById('tn-skin'); if (b && date === today()) b.innerHTML = skinLogHtml(today(), { photo: true }); }
+                if (ns === 'tn' && date === today()) renderTnSkin();
                 refreshDaySheet(date);
             });
         }
@@ -1060,15 +1148,30 @@
             return { state: '今晚修护为主', why: nxt ? '下次刷酸在' + nxt : (maxAcidPerWeek() ? '这周的刷酸已经排过了' : '这一版先不刷酸') };
         }
         let _tnStatus = null;
-        // 标题下面那一行:今天顾问的话(有就用它,点了进顾问);没有就用规则写的一句状态 + 一句为什么
+        // ① 标题下面那一行:永远是规则写的一句状态 + 一句为什么(IA 重排 10/29:顾问的话挪成提醒卡里优先级最低的一张)
         function renderTnSay() {
             const el = document.getElementById('tn-say'); if (!el || !_tnStatus) return;
             const st = _tnStatus;
-            const note = (typeof aiNoteToday === 'function') ? aiNoteToday() : '';
-            const rule = esc(cjkSpace(st.state)) + (st.why ? '。<span class="why">' + esc(cjkSpace(st.why)) + '。</span>' : '。');
-            el.innerHTML = note
-                ? `<button onclick="if(typeof aiAsk==='function')aiAsk('关于今天顾问说的：')" aria-label="今天顾问的话，点开问顾问">${esc(cjkSpace(note))}</button>${st.gate ? ' <span class="why">' + esc(st.why) + '。</span>' : ''}`
-                : rule;
+            el.innerHTML = esc(cjkSpace(st.state)) + (st.why ? '。<span class="why">' + esc(cjkSpace(st.why)) + '。</span>' : '。');
+            const box = document.getElementById('tn-aisay');
+            if (box) {
+                const note = (typeof aiNoteToday === 'function') ? aiNoteToday() : '';
+                box.innerHTML = note ? `<div class="say-card"><span class="eyebrow">顾问的话</span><p class="lede">${esc(cjkSpace(note))}</p>${typeof aiAsk === 'function' ? `<button class="btn-link sm" onclick="aiAsk('关于今天顾问说的：')">问顾问</button>` : ''}</div>` : '';
+            }
+            arrangeTnCards();
+        }
+        // ③ 提醒卡最多一张在外面:优先级 就医红线 > 注意 > 方案变了(修订条)> 顾问的话;其余收进「还有 N 条」。
+        // 每个槽位各自重画(id 不变,测试和别处照旧按 id 找),画完调这里按优先级把节点挪到上面或折叠里。
+        const TN_CARD_SLOTS = ['safety-alert', 'tn-notes', 'tn-change', 'tn-aisay'];
+        function arrangeTnCards() {
+            const top = document.getElementById('tn-cards'), more = document.getElementById('tn-more'), mb = document.getElementById('tn-more-b');
+            if (!top || !more || !mb) return;
+            const slots = TN_CARD_SLOTS.map(id => document.getElementById(id)).filter(Boolean);
+            const full = slots.filter(el => el.innerHTML.trim());
+            slots.forEach(el => { const dest = (full.indexOf(el) > 0) ? mb : top; if (el.parentNode !== dest || dest.lastElementChild !== el) dest.appendChild(el); });
+            const n = Math.max(0, full.length - 1);
+            more.hidden = n < 1;
+            const nn = document.getElementById('tn-more-n'); if (nn) nn.textContent = n;
         }
         function renderHeader() {
             const d = document.getElementById('hdr-date');
@@ -1101,7 +1204,8 @@
             return out;
         }
         let _undoNote = null;   // 刚撤销的那一下:8 秒内显示「已撤销」+「重做」
-        function renderChangeBar() {
+        function renderChangeBar() { _renderChangeBar(); arrangeTnCards(); }
+        function _renderChangeBar() {
             const box = document.getElementById('tn-change'); if (!box) return;
             if (_undoNote && Date.now() - _undoNote.t < 8000) {
                 box.innerHTML = `<div class="revbar" role="status"><div><span class="who">${esc(_undoNote.src)} · 已撤销</span><span class="what">已撤销，恢复成上一版。</span></div>
@@ -1174,7 +1278,8 @@
         }
 
         // ══ 就医红线:任何模式都显示;全 App 唯一的红框;三个按钮,点完变成随访状态 ═══════════════════════
-        function renderSafetyAlert() {
+        function renderSafetyAlert() { _renderSafetyAlert(); arrangeTnCards(); }
+        function _renderSafetyAlert() {
             const box = document.getElementById('safety-alert'); if (!box) return;
             const g = safetyGate(), m = PROFILE.medical || {};
             if (!g.medical) { box.innerHTML = ''; return; }
@@ -1206,7 +1311,8 @@
         function medicalLater() { const d = new Date(today() + 'T12:00:00'); d.setDate(d.getDate() + 7); _setMedical({ state: 'later', at: today(), until: localD(d) }); }
 
         // ══ 今晚页主渲染 ══════════════════════════════════════════════════════════════
-        // 首屏顺序(AUDIT-aesthetic 3.10):日期 → 夜型标题(+洗澡/刮胡)→ 一句状态 → 修订条 / 就医 / 注意 → 今天皮肤 → 步骤 → 完成;方案和未来 7 晚折在最下面。
+        // 首屏四层(IA 重排 10/29):① 「今晚 · 夜型」+ 一句为什么 ② 今晚的情况(洗澡吗 / 刮胡吗)③ 最多一张提醒卡 ④ 步骤 → 完成今晚。
+        // 皮肤记录挪到「完成今晚」之后的 sheet;方案、刷酸节奏、未来 7 晚在「顾问」页(renderRegimenCard)。
         // 【要紧】这里**绝不依赖顾问**:顾问连不上 / 没开通 / ai.js 没加载,今晚照离线规则 + 安全闸排。
         const ROLE_SHORT = { precleanse: '卸妆', cleanse: '洁面', acid: '刷酸', scrub: '磨砂', mask: '面膜', soothe: '舒缓', retinol: '维A', serum: '精华', oil: '面油', eye: '眼部', moist: '保湿', repair: '修护', spf: '防晒' };
         function _roleOfStep(name) { const p = PD.find(x => x.name === name); if (!p) return ''; return hasTrait(p, 'scrub') ? '磨砂' : (ROLE_SHORT[p.role] || ''); }
@@ -1217,8 +1323,8 @@
             syncRegimen();
             renderHeader();
             const sBtn = document.getElementById('tn-sh'), vBtn = document.getElementById('tn-sv');
-            if (sBtn) sBtn.setAttribute('aria-pressed', shower ? 'true' : 'false');
-            if (vBtn) vBtn.setAttribute('aria-pressed', shave ? 'true' : 'false');
+            if (sBtn) sBtn.checked = shower;
+            if (vBtn) vBtn.checked = shave;
             const plan = computePlanRolling();
             const slot = plan.find(d => d.date === today()) || { items: [], conflicts: [], date: today() };
             const ni = nightInfo(slot, shower, shave);
@@ -1228,10 +1334,12 @@
             renderTnSay();
             renderChangeBar();
             renderSafetyAlert();
-            const skin = document.getElementById('tn-skin');
-            if (skin) skin.innerHTML = (PROFILE.minimalMode && MINIMAL_LOGGING === 'none') ? '' : skinLogHtml(today(), { photo: true });
             const ns = buildNightSteps(shower, shave, slot);
             const hasShelf = PD.some(p => !p.hidden);
+            // ② 今晚的情况:货架是空的就不问(问了也排不出什么);点过开关之后下面一行说影响了什么
+            const sit = document.getElementById('tn-sit'); if (sit) sit.hidden = !hasShelf;
+            const fx = document.getElementById('tn-sit-fx');
+            if (fx) { const on = !!(_sitFx && _sitFx.date === today() && hasShelf); fx.hidden = !on; fx.textContent = on ? _sitFx.text : ''; }
             // 明早没防晒:安全提醒,注意卡(以前被塞进「今晚不用」还画了删除线 —— AUDIT-aesthetic §1.5-4)
             const ownedSpf = PD.some(p => p.role === 'spf' && !p.hidden && !isExcluded(p) && hasSpfReady(p));
             if (!ownedSpf && hasShelf) ns.warnings.push({ text: (ni.acid || ni.ret ? '今晚上了活性，' : '') + '明早没有防晒可用，去「产品」加一支。', after: -1 });
@@ -1268,30 +1376,64 @@
                 }
             }
             renderTnDone(ns, st);
-            renderRegimenCard();
-            renderNext7(plan);
+            renderRegimenCard();   // 顾问页的方案段(含未来 7 晚)跟着今晚的开关一起刷新
             _tickTimers();
             if (typeof aiRenderTonight === 'function') { try { aiRenderTonight(); } catch (e) { console.warn('ai tonight', e); } }
         }
-        // 不挂在某一步上的安全提示:注意卡,插在「顾问的话」和「今天皮肤」之间;一屏最多两条,多了并成一条
+        // 不挂在某一步上的安全提示:合成一张注意卡(提醒卡第二优先级,见 arrangeTnCards)
         function renderTnNotes(list) {
             const box = document.getElementById('tn-notes'); if (!box) return;
-            if (!list.length) { box.innerHTML = ''; return; }
-            const items = list.length > 2 ? [list.join('')] : list;
-            box.innerHTML = items.map(t => `<div class="note-caution" role="note"><div class="eyebrow">注意</div><p>${esc(cjkSpace(t))}</p></div>`).join('');
+            box.innerHTML = list.length ? `<div class="note-caution" role="note"><div class="eyebrow">注意</div>${list.map(t => `<p>${esc(cjkSpace(t))}</p>`).join('')}</div>` : '';
+            arrangeTnCards();
         }
+        // ══ ② 今晚的情况:洗澡吗 / 刮胡吗。点了以后拿「点之前 / 点之后」两份真实排班比一下,说影响了什么(不写死) ══
+        let _sitFx = null;   // {date, k, text}
+        const ACT_N = { acid: '酸', retinol: '维 A', mask: '面膜' };
+        function _joinCn(a) { return a.length <= 1 ? a.join('') : a.slice(0, -1).join('、') + '和' + a[a.length - 1]; }
+        function _tnSnap() {
+            const slot = computePlanRolling().find(d => d.date === today()) || { items: [], conflicts: [], date: today() };
+            return { steps: buildNightSteps(!!TN.shower, !!TN.shave && !!PROFILE.shaving, slot).steps.map(x => ({ p: x.p, kind: x.kind })) };
+        }
+        function sitEffectText(k, on, b, a) {
+            const lead = k === 'shave' ? (on ? '刮胡夜' : '今晚不刮') : (on ? '洗澡夜' : '今晚不洗澡');
+            const has = (L, p) => L.some(x => x.p === p);
+            const gone = b.steps.filter(x => !has(a.steps, x.p)), come = a.steps.filter(x => !has(b.steps, x.p));
+            const kinds = L => [...new Set(L.filter(x => ACT_N[x.kind]).map(x => ACT_N[x.kind]))];
+            const parts = [];
+            const kg = kinds(gone), kc = kinds(come);
+            if (kg.length) {
+                const why = (k === 'shower' && on && acidTiming() === 'avoid' && kg.indexOf('酸') >= 0) ? '（刚洗完热水澡皮肤更容易刺激）' : '';
+                const nxt = kg.indexOf('酸') >= 0 ? nextActiveNight() : '';
+                parts.push(_joinCn(kg) + '今晚不上' + why + (nxt ? '，下次刷酸在' + nxt : ''));
+            }
+            if (kc.length) parts.push(_joinCn(kc) + '今晚排上' + (k === 'shower' && on && acidTiming() === 'prefer' && kc.indexOf('酸') >= 0 ? '（按你设的「优先洗澡夜」）' : ''));
+            const pOf = x => x && PD.find(q => q.name === x.p);
+            const isCl = x => { const q = pOf(x); return !!q && (q.role === 'cleanse' || q.role === 'precleanse'); };
+            const cb = b.steps[0], ca = a.steps[0];
+            const swapped = isCl(cb) && isCl(ca) && cb.p !== ca.p;
+            if (swapped) { const cs = cleanseStrength(pOf(ca)); parts.push('洁面换成' + (cs === 'strong' ? '清洁力强一点的' : cs === 'gentle' ? '温和的' : '') + '「' + ca.p + '」'); }
+            const base = L => L.filter(x => !ACT_N[x.kind] && !(swapped && (x.p === cb.p || x.p === ca.p)));
+            if (base(come).some(x => /^凉水冲洗/.test(x.p))) parts.push('刮完先用凉水冲');
+            const roles = L => [...new Set(L.map(x => _roleOfStep(x.p)).filter(Boolean))];
+            const rg = roles(base(gone)), rc = roles(base(come));
+            if (rg.length) parts.push(rg.join('、') + '今晚不用');
+            if (rc.length) parts.push(rc.join('、') + '排回来');
+            return lead + '：' + (parts.length ? parts.join('，') : '今晚步骤不变') + '。';
+        }
+        // ④ 完成今晚。皮肤记录在点完之后的 sheet 里;没点完成也想记,用旁边不显眼的「只记皮肤」
         function renderTnDone() {
             const box = document.getElementById('tn-done'); if (!box) return;
             const en = (lg(K.jrnl) || []).find(x => x && x.date === today());
             if (!PD.some(p => !p.hidden)) { box.innerHTML = ''; return; }
+            const skinOnly = (PROFILE.minimalMode && MINIMAL_LOGGING === 'none') ? '' : `<button class="btn-link sm quiet" onclick="openSkinSheet()">只记皮肤</button>`;
             if (PROFILE.minimalMode) {
                 box.innerHTML = `<p class="note">排上的默认算做了。哪一步没做，点一下「今晚没做」。</p>` +
-                    (en && en.done ? `<button class="btn-link" onclick="openDoneSheet()">今晚做完了 · 看看顾问怎么说</button>` : `<button class="btn-link" onclick="checkinTonight()">做完了</button>`);
+                    (en && en.done ? `<button class="btn-link" onclick="openDoneSheet()">今晚做完了 · 皮肤和反馈</button>` : `<div class="btn-row"><button class="btn-link" onclick="checkinTonight()">做完了</button>${skinOnly}</div>`);
                 return;
             }
             box.innerHTML = (en && en.done)
-                ? `<div class="row"><span class="row-main"><span class="lede">今晚做完了</span>${en.doneAt ? `<span class="meta">${_hm(en.doneAt)}</span>` : ''}</span><span class="btn-row"><button class="btn-link" onclick="openDoneSheet()">反馈和备注</button><button class="btn-link quiet" onclick="checkinTonight(true)">撤回</button></span></div>`
-                : `<button class="btn btn-primary btn-block" onclick="checkinTonight()">完成今晚</button>`;
+                ? `<div class="row"><span class="row-main"><span class="lede">今晚做完了</span>${en.doneAt ? `<span class="meta">${_hm(en.doneAt)}</span>` : ''}</span><span class="btn-row"><button class="btn-link" onclick="openDoneSheet()">皮肤和反馈</button><button class="btn-link quiet" onclick="checkinTonight(true)">撤回</button></span></div>`
+                : `<div class="btn-row"><button class="btn btn-primary" onclick="checkinTonight()">完成今晚</button>${skinOnly}</div>`;
         }
         // ══ 完成今晚:一次提交,弹出反馈 sheet(顾问的反馈 / 备注 / 照片)══════════════════════
         function todayEntry() { return (lg(K.jrnl) || []).find(x => x.date === today()) || null; }
@@ -1303,20 +1445,33 @@
             else { en.done = true; en.doneAt = new Date().toISOString(); }
             saveJrnl(list);
             renderTnDone();
-            if (!undo) { openDoneSheet(); if (typeof aiAfterCheckin === 'function') aiAfterCheckin(t); }
+            if (!undo) openDoneSheet();   // 顾问反馈等她记完皮肤、关掉这个 sheet 再要(反馈要看得到今天的皮肤)
         }
-        function openDoneSheet() {
+        // 完成之后的流程(一个 sheet):做了什么 → 今天皮肤(选填;状态、具体情况、标在脸上)→ 备注 / 照片 → 顾问反馈。
+        // 「只记皮肤」= 同一个 sheet 去掉头尾(不算完成、不要反馈)。两者共用 #tn-skin(ns='tn'),同一时间只开一个。
+        function openSkinSheet() { return openDoneSheet({ skinOnly: true }); }
+        function renderTnSkin() { const b = document.getElementById('tn-skin'); if (b) b.innerHTML = skinLogHtml(today(), { label: '今天皮肤' }); }
+        function openDoneSheet(opts) {
+            opts = opts || {};
+            const only = !!opts.skinOnly, minimal = !!PROFILE.minimalMode;
             const st = tnStepState(), en = todayEntry() || {};
-            const sum = PROFILE.minimalMode
+            const sum = minimal
                 ? (st.skipped.size ? '没做：' + [...st.skipped].join('、') : '排上的都算做了')
                 : (st.done.size ? '做了 ' + st.done.size + ' 步' : '') + (st.skipped.size ? (st.done.size ? '，' : '') + '没做：' + [...st.skipped].join('、') : '');
-            openSheet({ id: 'done-sheet', title: '今晚做完了', html:
-                `${sum ? `<p class="note">${esc(cjkSpace(sum))}</p>` : ''}
-                <div id="ai-feedback"></div>
-                <label class="field"><span>备注（选填）</span><textarea id="done-note" rows="2" placeholder="今天有什么特别的？">${esc(en.note || '')}</textarea></label>
-                <div class="btn-row syms"><label class="btn file-btn">${ico('camera')}加一张照片<input type="file" accept="image/*" onchange="addDayPhoto(today(),this)"></label></div>`,
-                actions: [{ label: '好', primary: true, fn: ov => { const v = (ov.querySelector('#done-note') || {}).value; if (v !== undefined && v !== (en.note || '')) { const r = jrnlEntry(today(), true); r.en.note = String(v).trim(); saveJrnl(r.list); } } }] });
-            if (typeof aiRenderTonight === 'function') { try { aiRenderTonight(); } catch (e) { } }
+            const logOn = !(minimal && MINIMAL_LOGGING === 'none');
+            closeSheet(only ? 'done-sheet' : 'skin-sheet');
+            const saveNote = ov => { const v = (ov.querySelector('#done-note') || {}).value; if (v !== undefined && v !== ((todayEntry() || {}).note || '')) { const r = jrnlEntry(today(), true); r.en.note = String(v).trim(); saveJrnl(r.list); } };
+            const finish = ov => { saveNote(ov); if (!only && (todayEntry() || {}).done && typeof aiAfterCheckin === 'function') aiAfterCheckin(today()); };
+            const ov = openSheet({ id: only ? 'skin-sheet' : 'done-sheet', title: only ? '今天皮肤' : '今晚做完了', html:
+                `${!only && sum ? `<p class="note">${esc(cjkSpace(sum))}</p>` : ''}
+                ${logOn ? `<div class="sheet-sec">${only ? '' : `<p class="note">${minimal ? '想记就记一下皮肤，不记也没关系。' : '顺手记一下今天皮肤，顾问会参考。'}</p>`}<div id="tn-skin" class="skin"></div></div>` : ''}
+                <div class="sheet-sec"><label class="field"><span>备注（选填）</span><textarea id="done-note" rows="2" placeholder="今天有什么特别的？">${esc(en.note || '')}</textarea></label>
+                <div class="btn-row syms"><label class="btn file-btn">${ico('camera')}加一张照片<input type="file" accept="image/*" onchange="addDayPhoto(today(),this)"></label></div></div>
+                ${only ? '' : '<div class="sheet-sec" id="done-ai"><div id="ai-feedback"></div></div>'}`,
+                actions: [{ label: '好', primary: true, fn: finish }], onClose: () => finish(ov) });
+            renderTnSkin();
+            if (!only && typeof aiRenderTonight === 'function') { try { aiRenderTonight(); } catch (e) { } }
+            return ov;
         }
         function addDayPhoto(date, input) {
             const f = input.files && input.files[0]; input.value = '';
@@ -1389,19 +1544,78 @@
             } catch (e) { }
         }
 
-        // ══ 接下来 7 晚(折叠区):一晚一行,点开看那晚的步骤 ═══════════════════════════════════
+        // ══ 顾问页 · 接下来 7 晚:一晚一行,点左边看那晚的步骤;右边直接点「洗澡」「刮胡」(写 sk_wk1,今晚那行和今晚页开关同一份)══
+        // 点完酸 / 面膜按现有排班逻辑(含刷酸时机偏好)立刻重排;排的变了的那几行标「原来:…」,点的那一行没变就说「排的没变」。
+        let _n7Prev = null;   // {date: 点之前的标签, __t: 点的是哪一天}
+        function _n7Label(d) {
+            const ni = nightInfo(d, d.shower, d.shave && PROFILE.shaving);
+            const it = ni.acid || ni.mask || ni.ret;
+            return ni.type.replace(/夜$/, '') + (it ? ' · ' + _itemName(it) : '');
+        }
+        function _n7Snap() { const o = {}; computePlanRolling().filter(d => !d.isPast).slice(0, 7).forEach(d => { o[d.date] = _n7Label(d); }); return o; }
         function renderNext7(plan) {
             const box = document.getElementById('next7'); if (!box) return;
             plan = plan || computePlanRolling();
             const days = plan.filter(d => !d.isPast).slice(0, 7);
             box.innerHTML = days.map(d => {
-                const ni = nightInfo(d, d.shower, d.shave && PROFILE.shaving);
-                const it = ni.acid || ni.mask || ni.ret;
-                const lbl = ni.type.replace(/夜$/, '') + (it ? ' · ' + _itemName(it) : '');
-                return `<button class="n7" onclick="openDaySheet('${d.date}')"><span class="meta">${d.isToday ? '今晚' : mdOf(d.date) + ' ' + weekdayOf(d.date)}</span><span class="lede">${esc(cjkSpace(lbl))}</span><span class="prod-go">${ico('chev', 'sm')}</span></button>`;
+                const lbl = _n7Label(d), when = d.isToday ? '今晚' : mdOf(d.date) + ' ' + weekdayOf(d.date);
+                const was = _n7Prev ? _n7Prev[d.date] : undefined;
+                const chg = was !== undefined && was !== lbl, same = !chg && _n7Prev && _n7Prev.__t === d.date;
+                const sv = !!d.shave && !!PROFILE.shaving;
+                return `<div class="n7${chg ? ' chg' : ''}" data-date="${d.date}">
+                    <button class="n7-go" onclick="openDaySheet('${d.date}')" aria-label="${esc(when + '：' + lbl + '，看那晚的步骤')}"><span class="meta">${esc(when)}</span><span class="lede">${esc(cjkSpace(lbl))}</span></button>
+                    <span class="n7-tg"><button class="tgl" aria-pressed="${!!d.shower}" aria-label="${esc(when)}洗澡" onclick="setNightState('${d.date}','shower')">洗澡</button><button class="tgl feat-shave" aria-pressed="${sv}" aria-label="${esc(when)}刮胡" onclick="setNightState('${d.date}','shave')">刮胡</button></span>
+                    ${chg ? `<span class="n7-chg" role="status">原来：${esc(cjkSpace(was))}</span>` : same ? `<span class="n7-chg" role="status">排的没变</span>` : ''}</div>`;
             }).join('');
         }
-
+        function setNightState(date, k) {
+            if (date < today()) return;
+            const prev = _n7Snap(); prev.__t = date;
+            _n7Prev = prev;
+            if (date === today()) toggleTn(k, !TN[k]);
+            else {
+                const st = getDayState(date);
+                st[k] = !st[k];
+                setDayState(date, st.shower, st.shave);
+                invalidatePlanCache();
+                renderTn();
+            }
+            renderRegimenCard();
+            const b = document.querySelector(`#next7 .n7[data-date="${date}"] .tgl${k === 'shave' ? '.feat-shave' : ':not(.feat-shave)'}`);
+            if (b) try { b.focus({ preventScroll: true }); } catch (e) { }
+        }
+        // 存成每周习惯 / 按习惯填(老版「排班」页的保存模版 / 填入模版):按星期几存进 sk_preset1(本来就在 CLOUD_KEYS 里)
+        function _habitSt(t) { const el = document.getElementById('n7-st'); if (el) { el.textContent = t; el.hidden = !t; } }
+        function saveWeekHabit() {
+            const preset = [];
+            for (let i = 0; i < 7; i++) { const ds = offsetDate(i), cur = getDayState(ds); preset.push({ shower: cur.shower, shave: cur.shave, dow: new Date(ds + 'T12:00:00').getDay() }); }
+            ls(K.preset, preset);
+            _habitSt('存好了：这 7 晚的' + (PROFILE.shaving ? '洗澡、刮胡' : '洗澡') + '按星期几记下了，以后点「按习惯填」就照这个排。');
+        }
+        function fillWeekHabit() {
+            const preset = lg(K.preset);
+            if (!Array.isArray(preset) || preset.length !== 7) {
+                openSheet({ title: '还没存过习惯', html: '<p class="note">先把这 7 晚哪晚洗澡' + (PROFILE.shaving ? '、刮胡' : '') + '点好，再点「存成每周习惯」。</p>', actions: [{ label: '好', primary: true }] });
+                return;
+            }
+            openSheet({ title: '按习惯填？', html: `<p class="note">接下来 7 晚（含今晚）的${PROFILE.shaving ? '洗澡和刮胡' : '洗澡'}会按存过的习惯重填，现在点过的会被盖掉。酸和面膜跟着重排。</p>`,
+                actions: [{ label: '取消' }, { label: '按习惯填', primary: true, fn: applyWeekHabit }] });
+        }
+        function applyWeekHabit() {
+            const preset = lg(K.preset); if (!Array.isArray(preset)) return;
+            const prev = _n7Snap();
+            for (let i = 0; i < 7; i++) {
+                const ds = offsetDate(i), dow = new Date(ds + 'T12:00:00').getDay();
+                const p = preset.find(x => x && x.dow === dow) || { shower: false, shave: false };
+                setDayState(ds, !!p.shower, !!p.shave);
+            }
+            const t = getDayState(today());
+            TN = { shower: t.shower, shave: t.shave, date: today(), manual: false };
+            ls(K.tn, TN);
+            _n7Prev = prev; _sitFx = null;
+            invalidatePlanCache(); renderTn(); renderRegimenCard();
+            _habitSt('按习惯填好了。');
+        }
 
         // Single versioned keys — migrate old keys on load
         let _jrnlShowAll = false;
@@ -1906,14 +2120,17 @@
         // ══ 用户档案（per-user 刮胡 / HRT / 肤质） ══════════════════
         let PROFILE = lg(K.profile) || { shaving: false, hrt: false, skinType: '', name: '', onboarded: false };
         function saveProfile(origin) { return ls(K.profile, PROFILE, origin || 'user'); }
-        // 模式裁剪:完整模式 4 个 tab(今晚 · 顾问 · 皮肤 · 产品),极简 3 个(皮肤页可在设置里打开)
+        // 模式裁剪(IA 重排 10/29):两种模式都是 4 个 tab(今晚 · 顾问 · 记录 · 产品)。
+        // 「记录」只回看、不催:极简模式下她偶尔记过的皮肤也得有地方看,所以默认显示;设置里「显示「记录」页」能关(PROFILE.hideRecords)。
+        // 旧的 showJournal(「也显示皮肤页」,默认关)不再决定这个 tab —— 那是「打卡页」时代的开关,她从没自己点过。
         function applyProfileVisibility() {
             document.body.classList.toggle('hide-shave', !PROFILE.shaving);
             document.body.classList.toggle('hide-hrt', !PROFILE.hrt);
             document.body.classList.toggle('minimal', !!PROFILE.minimalMode);
-            document.body.classList.toggle('show-skin', !!PROFILE.minimalMode && PROFILE.showJournal === true);
+            const hideRec = !!PROFILE.minimalMode && PROFILE.hideRecords === true;
+            document.body.classList.toggle('hide-rec', hideRec);
             const sk = document.getElementById('skin');
-            if (sk && sk.classList.contains('active') && PROFILE.minimalMode && PROFILE.showJournal !== true) show('tonight', document.getElementById('tab-tonight'));
+            if (sk && sk.classList.contains('active') && hideRec) show('tonight', document.getElementById('tab-tonight'));
             if (typeof renderHeader === 'function') renderHeader();
         }
         const SKIN_BASE = [['oily', '油'], ['combo', '混'], ['normal', '中'], ['dry', '干']];
@@ -1931,10 +2148,11 @@
             btn = btn || document.getElementById('tab-' + id);
             if (btn) btn.setAttribute('aria-selected', 'true');
             window.scrollTo(0, 0);
+            if (id !== 'coach') _n7Prev = null;
             if (id === 'skin') renderSkin();
             if (id === 'prods') renderProds();
             if (id === 'tonight') renderTn();
-            if (id === 'coach' && typeof renderCoach === 'function') renderCoach();
+            if (id === 'coach') { renderRegimenCard(); if (typeof renderCoach === 'function') renderCoach(); }
         }
         // ── 设置 sheet ──
         function openSettings() { syncSettingsUI(); const s = document.getElementById('settings-sheet'); if (s) s.hidden = false; }
@@ -1948,14 +2166,14 @@
         function _press(el, on) { if (el) el.setAttribute('aria-pressed', on ? 'true' : 'false'); }
         // 极简模式是什么,全 App 只有这一种说法(引导、设置、今晚页底下那句都照它)
         const MINIMAL_DESC = '排上的默认算做了，哪步没做点一下「今晚没做」；皮肤想记就记，不会催。';
-        const FULL_DESC = '每晚点一下做了哪几步、皮肤怎么样，「皮肤」页能看到走势。';
+        const FULL_DESC = '每晚点一下做了哪几步，做完记一下皮肤，「记录」页能看到走势。';
         const chipHtml = (on, label, onclick) => `<button class="chip" aria-pressed="${!!on}" onclick="${onclick}">${ico('check', 'ck sm')}${label}</button>`;
         function syncSettingsUI() {
             renderZoneUI();
             const $ = id => document.getElementById(id);
             if ($('set-mode-min')) { $('set-mode-min').setAttribute('aria-checked', PROFILE.minimalMode ? 'true' : 'false'); $('set-mode-full').setAttribute('aria-checked', PROFILE.minimalMode ? 'false' : 'true'); }
             if ($('set-mode-note')) $('set-mode-note').textContent = PROFILE.minimalMode ? MINIMAL_DESC : FULL_DESC;
-            if ($('set-showjrnl')) $('set-showjrnl').checked = PROFILE.showJournal === true;
+            if ($('set-showrec')) $('set-showrec').checked = PROFILE.hideRecords !== true;
             if ($('set-shave')) $('set-shave').checked = !!PROFILE.shaving;
             if ($('set-hrt')) $('set-hrt').checked = !!PROFILE.hrt;
             if ($('set-premakeup')) $('set-premakeup').checked = !!PROFILE.useMakeupRemoval;
@@ -1977,7 +2195,7 @@
             if ($('set-shave')) PROFILE.shaving = !!$('set-shave').checked;
             if ($('set-hrt')) PROFILE.hrt = !!$('set-hrt').checked;
             if ($('set-premakeup')) PROFILE.useMakeupRemoval = !!$('set-premakeup').checked;
-            if ($('set-showjrnl')) PROFILE.showJournal = !!$('set-showjrnl').checked;
+            if ($('set-showrec')) { if ($('set-showrec').checked) delete PROFILE.hideRecords; else PROFILE.hideRecords = true; }
             if ($('set-acidtiming')) PROFILE.acidTiming = $('set-acidtiming').value;
             if ($('set-repairuse')) PROFILE.repairUse = $('set-repairuse').value;
             const al = $('set-acidlevel');
@@ -2166,7 +2384,7 @@
             if (PROFILE.tour3 || !hasLegacyData() || _oobe) return;
             const cards = PROFILE.minimalMode
                 ? [['今晚页变简单了', '照着做就行。哪一步没做，点一下「今晚没做」。'], ['有个顾问可以问', '它会直接改方案，改了你随时能撤销。']]
-                : [['今晚页变简单了', '标题下面一句话说今晚为什么这样排；分数、走势都挪到「皮肤」页。'], ['顾问会直接改方案', '改了会在今晚页顶上标出来，随时能撤销。'], ['产品可以拍成分表', '在「产品」页点添加，拍一下就认出是什么。']];
+                : [['今晚页变简单了', '标题下面一句话说今晚为什么这样排；分数、走势在「记录」页，方案和接下来 7 晚在「顾问」页。'], ['顾问会直接改方案', '改了会在今晚页的提醒里标出来，随时能撤销。'], ['产品可以拍成分表', '在「产品」页点添加，拍一下就认出是什么。']];
             openSheet({ id: 'tour', title: '新版本', html: `<div class="rows">${cards.map((c, i) => `<div class="row"><span class="row-main"><span class="meta">${String(i + 1).padStart(2, '0')}</span><span class="lede">${esc(c[0])}</span><span class="note">${esc(c[1])}</span></span></div>`).join('')}</div>`,
                 actions: [{ label: '知道了', primary: true, fn: () => { PROFILE.tour3 = true; saveProfile(); } }], onClose: () => { PROFILE.tour3 = true; saveProfile(); } });
         }
@@ -2973,12 +3191,10 @@
             const from = offsetDate(-6), to = today();
             return new Set((lg(K.jrnl) || []).filter(x => x && x.date && x.date >= from && x.date <= to && (x.status || []).length).map(x => x.date)).size;
         }
-        // ══ 皮肤页(完整模式;极简模式开了「也显示皮肤页」也有):状态句、唯一的分数口径、刷酸节奏、14 天、走势、记录 ══
+        // ══ 记录页(原「皮肤」,IA 重排 10/29):只回看 —— 唯一的分数口径、14 天(含哪天洗澡 / 刮胡)、脸上哪里、走势、HRT、每天的记录。
+        //    今晚的状态句在今晚页,刷酸节奏在顾问页,这里都不再放。极简模式默认也显示(设置里能关),见 applyProfileVisibility ══
         function renderSkin() {
-            const ss = document.getElementById('skin-status');
-            if (ss) { const st = skinStatus(); ss.innerHTML = `<p class="lede">${esc(cjkSpace(st.state + (st.product ? '：' + st.product : '')))}。</p>${st.why ? `<p class="note">${esc(cjkSpace(st.why))}。</p>` : ''}`; }
             renderAssessment();
-            updateCd();
             renderStats();
             renderJrnl();
         }
@@ -2987,11 +3203,11 @@
         function renderAssessment() {
             const box = document.getElementById('assess-card'); if (!box) return;
             const a = assessSkin();
-            if (a.overall === null) { box.innerHTML = `<div class="sec-h"><span class="sec-t">皮肤分</span></div><p class="lede">近 7 天还没记过皮肤状态。</p><p class="note">在今晚页点一下「好些 / 差不多 / 差些」就行。</p>`; return; }
+            if (a.overall === null) { box.innerHTML = `<div class="sec-h"><span class="sec-t">皮肤分</span></div><p class="lede">近 7 天还没记过皮肤状态。</p>${PROFILE.minimalMode ? '' : '<p class="note">完成今晚之后，顺手点一下「好些 / 差不多 / 差些」就行。</p>'}`; return; }
             const ax = a.axes.map(x => `<div class="ax"><span class="ax-name">${x.name}</span><span class="ax-bar"><span class="ax-fill" style="width:${x.score === null ? 0 : x.score}%"></span></span><span class="ax-num">${x.score === null ? '—' : x.score}${x.trend.enough ? (x.trend.dir === 'up' ? ' 升' : x.trend.dir === 'down' ? ' 降' : '') : ''}</span></div>`).join('');
             const recs = a.recs.filter(r => r.level !== 'safety').map(r => `<li>${esc(cjkSpace(r.text))}</li>`).join('');
             const g = goalProgress();
-            box.innerHTML = `<div class="sec-h"><span class="sec-t">皮肤分 · 近 7 天</span><span class="meta">记了 ${weekLoggedCount()}/7 天</span></div>
+            box.innerHTML = `<div class="sec-h"><span class="sec-t">皮肤分 · 近 7 天</span>${PROFILE.minimalMode ? '' : `<span class="meta">记了 ${weekLoggedCount()}/7 天</span>`}</div>
                 <div class="score"><span class="num">${a.overall}</span><span class="lede">${skinScoreLabel(a.overall)}</span>${a.sampleN < SCORE_FULL_N ? `<span class="note">只记了 ${a.sampleN} 天</span>` : ''}</div>
                 <div class="axes">${ax}</div>
                 ${g ? `<p class="note">目标 · ${esc(g.concern.split('/')[0])}：${g.startScore} 到 ${g.cur === null ? '—' : g.cur}（目标 ${g.target}，${g.pct}%）</p>` : ''}
@@ -3015,8 +3231,9 @@
                 const days = Array.from({ length: 14 }, (_, i) => offsetDate(i - 13));
                 hg.innerHTML = days.map(ds => {
                     const e = byDate[ds], st = (e && e.status) || [];
-                    const lbl = mdOf(ds) + ' ' + (st.length ? st.map(tagLabel).join('、') : '没记');
-                    return `<button class="${ds === today() ? 'today' : ''}" onclick="openDaySheet('${ds}')" aria-label="${esc(lbl)}"><span>${+ds.slice(8)}</span><i class="dot ${dayTone(e)}"></i></button>`;
+                    const dsx = getDayState(ds), sh = !!dsx.shower, sv = !!dsx.shave && !!PROFILE.shaving;
+                    const lbl = mdOf(ds) + ' ' + (st.length ? st.map(tagLabel).join('、') : '没记') + (sh ? '，洗澡' : '') + (sv ? '，刮胡' : '');
+                    return `<button class="${ds === today() ? 'today' : ''}" onclick="openDaySheet('${ds}')" aria-label="${esc(lbl)}"><span>${+ds.slice(8)}</span><i class="dot ${dayTone(e)}"></i><span class="mks" aria-hidden="true">${sh ? '<span class="mk">洗</span>' : ''}${sv ? '<span class="mk">刮</span>' : ''}</span></button>`;
                 }).join('');
             }
             const sg = document.getElementById('stat-grid');
@@ -3074,11 +3291,17 @@
                     const t = trendOf(x);
                     const bits = [tags.filter(s => s !== '好些' && s !== '差不多' && s !== '差些').join('、'), (x.products || []).join('、'), (x.skipped || []).length ? '没做：' + x.skipped.join('、') : ''].filter(Boolean);
                     return `<button class="row" onclick="openDaySheet('${esc(x.date)}')"><span class="row-main">
-                        <span class="note">${esc(mdOf(x.date))} ${weekdayOf(x.date)}${PROFILE.hrt && x.phase ? ' · ' + esc(x.phase) : ''}${photos[x.date] ? ' · 有照片' : ''}</span>
+                        <span class="note">${esc(mdOf(x.date))} ${weekdayOf(x.date)}${_dayKindTxt(x.date)}${PROFILE.hrt && x.phase ? ' · ' + esc(x.phase) : ''}${photos[x.date] ? ' · 有照片' : ''}</span>
                         <span class="lede">${t ? `<i class="dot ${TREND_TONE[t]}"></i>${TRENDS.find(r => r[0] === t)[1]}${bits.length ? '，' : ''}` : ''}${esc(cjkSpace(bits.join('；'))) || (t ? '' : '没写什么')}${x.auto ? '<span class="note">（按计划推定）</span>' : ''}</span>
                         ${x.note ? `<span class="note">${esc(cjkSpace(x.note))}</span>` : ''}</span><span class="prod-go">${ico('chev', 'sm')}</span></button>`;
                 }).join('')}</div>`;
             });
+        }
+        // 那天洗澡 / 刮胡了没有(sk_wk1 只留 12 周,更早的就不写)
+        function _dayKindTxt(date) {
+            if (date < offsetDate(-83)) return '';
+            const d = getDayState(date);
+            return (d.shower ? ' · 洗澡' : '') + (d.shave && PROFILE.shaving ? ' · 刮胡' : '');
         }
         function editEntry(date) { openDaySheet(date); }
         function delEntry(date) {
@@ -3198,13 +3421,16 @@
 
         // 手动覆盖必须回写到排班本身：旧版只改 K.tn，而周计划页/日详情读的是 getDayState()，
         // 结果"今天点了刮胡"后今晚面板跳过所有酸，周计划页却仍显示酸类 tag 并把它算进周计数。
-        function toggleTn(k) {
-            TN[k] = !TN[k]; TN.date = today();
+        // 今晚页「今晚洗澡吗 / 刮胡吗」和顾问页「接下来 7 晚」的今晚那行是同一份数据:TN + sk_wk1 当天,两边都走这里
+        function toggleTn(k, v) {
+            const before = _tnSnap();
+            TN[k] = (v === undefined) ? !TN[k] : !!v; TN.date = today();
             const st = getDayState(today());
             TN.manual = (TN.shower !== st.shower || TN.shave !== st.shave);
             setDayState(today(), TN.shower, TN.shave);
             ls(K.tn, TN);
             invalidatePlanCache();
+            _sitFx = { date: today(), k, text: sitEffectText(k, !!TN[k], before, _tnSnap()) };
             renderTn();
         }
         function resetTnToSchedule() {
@@ -3913,12 +4139,25 @@
                 if (typeof renderCoach === 'function' && document.getElementById('coach').classList.contains('active')) renderCoach();
             }, { ok: '回到 v' + src.v });
         }
+        // 顾问页上半「现在的方案」:为什么这么排(kv)、接下来 7 晚、刷酸节奏、版本与撤销。全是离线数据,**不依赖顾问**
+        // (没开通 / 连不上 / ai.js 没加载照样能看);顾问可用时多「问顾问」「让顾问出方案」两个按钮(aiRegimenActionsHtml)。
         function renderRegimenCard() {
             const box = document.getElementById('regimen-card'); if (!box) return;
             const reg = currentRegimen();
-            const sub = document.getElementById('fold-regimen-sub'), ver = document.getElementById('fold-regimen-v');
-            if (sub) sub.textContent = reg ? regimenOneLine(reg) : '还没有方案';
+            const hasShelf = PD.some(p => !p.hidden);
+            const ver = document.getElementById('plan-v'), hsub = document.getElementById('fold-hist-sub'), hist = document.getElementById('regimen-hist');
             if (ver) ver.textContent = reg ? 'v' + reg.v + ' · ' + mdOf(reg.date || today()) : '';
+            ['next7-sec', 'ladder-card'].forEach(id => { const el = document.getElementById(id); if (el) el.hidden = !hasShelf; });
+            const fh = document.getElementById('fold-hist'); if (fh) fh.hidden = !reg;
+            if (hist) hist.innerHTML = reg ? regimenHistoryHtml(8) : '';
+            if (hsub) hsub.textContent = reg ? '一共 ' + regimenHistory().length + ' 版，最新一版能撤销' : '';
+            renderGuideAsk();
+            if (!hasShelf) {
+                box.innerHTML = `<div class="empty"><p class="lede">还没有方案。</p><p class="note">先在「产品」里加一支洁面和一支保湿，方案就排出来了。</p><div class="btn-row"><button class="btn" onclick="show('prods')">去「产品」添加</button></div></div>`;
+                return;
+            }
+            updateCd();
+            renderNext7();
             if (!reg) { box.innerHTML = '<p class="note">还没有方案。加几样产品就会排出来。</p>'; return; }
             const r = reg.rules || {}, isAI = reg.source === 'ai', g = safetyGate();
             const cap = maxAcidPerWeek(), planned = Math.max(0, Math.round(+regimenRules().acidCap || 0));
@@ -3927,7 +4166,6 @@
             const kv = [];
             kv.push(['刷酸', (cap ? '每周 ' + cap + ' 次' + (r.acidName ? '，用' + esc(cjkSpace(r.acidName)) : '') + (zonesA.length ? '，避开' + esc(zonesA.join('、')) : '') : '这周先停') +
                 (cap < planned ? `<span class="note">方案是 ${planned} 次，安全闸先压到 ${cap} 次。</span>` : '')]);
-            if (!isAI) kv.push(['节奏', esc(cjkSpace(acidLadder().why))]);
             if (r.cleanse) kv.push(['洗脸', esc(cjkSpace(r.cleanse))]);
             kv.push(['修护霜', (repairUse() === 'spot' ? '只点涂' : '全脸薄涂') + `<span class="note">${esc(cjkSpace(repairReason()))}</span>`]);
             if ((r.include || []).length) kv.push(['排进来', r.include.map(x => esc(cjkSpace(x))).join('、')]);
@@ -3940,10 +4178,15 @@
                 <p class="lede">${esc(cjkSpace(isAI && reg.rationale ? reg.rationale : (reg.reason || '')))}</p>
                 ${isAI && reg.rationale && reg.reason ? `<p class="note">${esc(cjkSpace(reg.reason))}</p>` : ''}
                 <dl class="kv">${kv.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
-                <div class="sec"><div class="sec-h"><span class="sec-t">历史</span></div>${regimenHistoryHtml(4)}</div>
                 ${actions}
             </div>`;
         }
+        // 「常识」每节末尾的「问顾问」:顾问可用时才露出来;点了打开对话,预填「这条『节名』对我现在意味着什么？」
+        function renderGuideAsk() {
+            const on = typeof aiReady === 'function' && aiReady();
+            document.querySelectorAll('#guide .g-ask').forEach(b => { b.hidden = !on; });
+        }
+        function guideAsk(name) { if (typeof aiAsk === 'function') aiAsk('这条『' + name + '』对我现在意味着什么？'); }
 
         // 开封天数(没填开封日期返回 null —— 不能当成"刚开始用",否则所有产品会同时报警)
         function openedDays(p) {

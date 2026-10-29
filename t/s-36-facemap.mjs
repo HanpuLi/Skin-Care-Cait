@@ -1,4 +1,5 @@
 // 脸部地图(Cait 10/29):打卡里勾了问题标签才出现「标在脸上(可选)」,点开才展开(极简模式也默认收起);
+// (10/29 IA 重排后打卡在「只记皮肤」/「完成今晚」的 sheet 里,这里先 openSkinSheet())
 // 11 个区可点(≥44)、读屏念区名;点区选类型(可多选)、能改能删,存进 sk_jrnl1 当天的 spots;顾问快照每天带 spots;
 // 皮肤页近 14 天热度(深浅 + 数字,点区看哪几天);就医红线不看位置(Cait 10/29 撤掉了口周提前亮);ZONE_PRESETS 补口周 / 下颌线;0 emoji,深浅色都看得清。
 import fs from 'node:fs';
@@ -13,6 +14,8 @@ export default async function ({ origin, S, open }) {
         await p.nav(origin + '/index.html', 200);
         await p.eval(`return __seed.${seed}`);
         await p.reload(800);
+        // IA 重排 10/29:「今天皮肤」(连同标在脸上)挪进「只记皮肤」/「完成今晚」之后的 sheet,#tn-skin 在 sheet 里
+        await p.eval(`openSkinSheet();return 1`);
         return p;
     };
     // jrnl 生成器:days = {相对天数: {status:[], spots:[[区,类型],...]}}
@@ -54,7 +57,7 @@ export default async function ({ origin, S, open }) {
         await p.eval(`document.getElementById('tn-fz-chin-${d}')||document.querySelector('#tn-skin .fm-entry button').click();${wait(20)}document.getElementById('tn-fz-chin-${d}').click();${wait(20)}
             [...document.querySelectorAll('#tn-skin .fm-pick .chip')].find(c=>c.textContent.trim()==='脓头').click();return 1`);
         await p.reload(900);
-        const r5 = await p.eval(`const en=(lg(K.jrnl)||[]).find(x=>x.date===today());const b=document.querySelector('#tn-skin .fm-entry button');
+        const r5 = await p.eval(`openSkinSheet();const en=(lg(K.jrnl)||[]).find(x=>x.date===today());const b=document.querySelector('#tn-skin .fm-entry button');
             const ctx=buildSkincareContext();return {spots:en.spots,btn:b.textContent,fm:!!document.querySelector('#tn-skin .fm'),ctx0:ctx.recentLogs[0],ctxOther:ctx.recentLogs.slice(1).every(x=>Array.isArray(x.spots)&&!x.spots.length)}`);
         S.ok(JSON.stringify(r5.spots) === JSON.stringify([{ zone: '下巴', type: '脓头' }]) && /已标 1 处/.test(r5.btn) && r5.fm, '刷新后还在(走信封);完整模式当天标过 → 脸自动展开,按钮写「已标 1 处」', r5);
         const r5b = await p.eval(`document.querySelector('#tn-skin .fm-entry button').click();${wait(30)}return {fm:!!document.querySelector('#tn-skin .fm'),exp:document.querySelector('#tn-skin .fm-entry button').getAttribute('aria-expanded')}`);

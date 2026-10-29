@@ -143,4 +143,45 @@ export default async function ({ origin, S, open }) {
         S.ok(r.off.length > 0 && !r.offHidden && r.redo, 'ai.js 没加载:离线清单照常,没有「重新判断」', r);
         S.ok(!p.errors.filter(e => !/ai\.js|Failed to load/.test(e)).length, 'ai.js 没加载:没有别的报错', p.errors);
     }
+
+    // ── 守住「只在本机操作后自动判断」(IA 重排 10/29 加):加载 / 同步 / 自动重出方案 / 迁移 / 首次渲染这些路径都碰不到 shopLocalChange ──
+    // 静态:从这些入口出发,沿 index.html 里「函数名(」的直接调用往下走(模板里 onclick="…" 和 sheet 按钮 fn: 是用户点的,不算),走不到 shopLocalChange / aiShopLocal。
+    {
+        const html = fs.readFileSync(path.join(DIR, '..', 'index.html'), 'utf8');
+        const app = html.slice(html.indexOf('id="skincare-app-source"'));
+        const bodyOf = name => {
+            const m = new RegExp('function ' + name + '\\s*\\(').exec(app); if (!m) return null;
+            let i = app.indexOf('{', m.index), d = 0, j = i;
+            for (; j < app.length; j++) { const c = app[j]; if (c === '{') d++; else if (c === '}') { d--; if (!d) break; } }
+            return app.slice(i, j + 1).replace(/on[a-z]+="[^"]*"/g, '').replace(/\bfn:\s*(\([^)]*\)|\w+)\s*=>[^}]*\}?/g, '').replace(/\/\/.*$/gm, '');
+        };
+        const names = [...new Set([...app.matchAll(/function ([A-Za-z_$][\w$]*)\s*\(/g)].map(m => m[1]))];
+        const ROOTS = ['migrate', 'syncRegimen', 'setupRealtimeSync', 'onCloudSnapshot', 'handlePendingSnapshot', 'settleLegacy', 'applyCloudData', 'applyCloudThenRender', 'renderAll',
+            'handleAuthChange', 'reloadFromStore', 'applyShelfMigrations', 'sanitizePS', 'initTN', 'absorbPrescribedHistory', 'computePlanRolling', 'renderTn', 'renderProds', 'renderShop',
+            'renderRegimenCard', 'renderSkin', 'show', 'checkDayRollover', 'touchFirstSeen', 'autoMatchProfile', 'bootSkincareApp', 'startSkincareApp'];
+        const seen = new Set(), path0 = {}, q = ROOTS.filter(n => bodyOf(n) !== null);
+        q.forEach(n => { seen.add(n); path0[n] = n; });
+        while (q.length) {
+            const n = q.shift(), b = bodyOf(n) || '';
+            names.forEach(m => { if (!seen.has(m) && new RegExp('(^|[^\\w$.])' + m + '\\s*\\(').test(b)) { seen.add(m); path0[m] = path0[n] + ' → ' + m; q.push(m); } });
+        }
+        const missing = ROOTS.filter(n => bodyOf(n) === null);
+        S.ok(missing.length <= 1, '静态守卫:入口函数都找得到(migrate 是 IIFE 也算)', missing);
+        S.ok(!seen.has('shopLocalChange') && !seen.has('aiShopLocal'), `静态:从加载 / 同步 / 自动重出方案 / 迁移 / 渲染这 ${ROOTS.length - missing.length} 个入口走 ${seen.size} 个函数,都走不到 shopLocalChange`, path0.shopLocalChange || '');
+        const ai = fs.readFileSync(path.join(DIR, '..', 'ai.js'), 'utf8');
+        const aiBody = n => { const i = ai.indexOf('function ' + n + '('); if (i < 0) return ''; let k = ai.indexOf('{', i), d = 0, j = k; for (; j < ai.length; j++) { if (ai[j] === '{') d++; else if (ai[j] === '}') { d--; if (!d) break; } } return ai.slice(k, j + 1); };
+        S.ok(['aiOnAuth', '_aiRefresh', 'aiRenderTonight', 'renderCoach', '_aiMaybeNote', '_aiMaybeAutoReview', 'aiProbe'].every(n => !/aiShopLocal\(|shopLocalChange\(/.test(aiBody(n))), 'ai.js 的登录 / 重画 / 自动复盘入口不直接调 aiShopLocal');
+    }
+    // 行为:包一层计数,跑一遍加载后的各种自动路径(重画、云端落地、方案自动重出、切 tab、顾问页),计数一直是 0;本机标一次快用完 → 1(证明计数器是好的)
+    {
+        const p = await boot('on');
+        const r = await p.eval(`let n=0;const o1=window.shopLocalChange,o2=window.aiShopLocal;window.shopLocalChange=w=>{n++;return o1(w)};window.aiShopLocal=w=>{n++;return o2(w)};
+            renderAll();applyCloudThenRender();
+            _applyingCloud=true;try{const j=lg(K.jrnl)||[];j.push({date:__d(-1),status:['泛红','敏感'],products:[],note:'',phase:''});ls(K.jrnl,j);ls(K.low,['lacura']);renderAll();}finally{_applyingCloud=false}
+            invalidatePlanCache();syncRegimen();renderTn();['coach','skin','prods','tonight'].forEach(t=>show(t));renderCoach();renderRegimenCard();checkDayRollover&&checkDayRollover();
+            ${wait(300)}const auto=n;toggleLow(PD.find(x=>!x.hidden&&!isLow(x.id)).id);${wait(50)}return {auto,after:n}`);
+        S.ok(r.auto === 0, '行为:加载后的重画 / 云端落地 / 方案自动重出 / 切 tab,一次都不调 shopLocalChange', r);
+        S.ok(r.after === 2, '对照:本机点一次「快用完了」→ shopLocalChange 和 aiShopLocal 各一次(计数器是好的)', r);
+        S.ok(!p.errors.length, '守卫场景 0 报错', p.errors);
+    }
 }

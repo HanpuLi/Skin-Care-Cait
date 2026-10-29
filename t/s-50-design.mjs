@@ -47,6 +47,11 @@ export default async function ({ origin, S, open }) {
         ['full', '顾问页 · 没开通', `__seed.full()`, `__login();window.__AIF={mode:'none'};await aiProbe(true);show('coach')`],
         ['full', '顾问页 · 连不上', `__seed.full()`, `__login();window.__AIF={mode:'down'};await aiProbe(true);show('coach')`],
         ['full', '修订条 + 计时', `__seed.full()`, `aiApplyTonight({id:'t1',changes:[{op:'skip',product:PD.find(p=>p.role==='eye'&&!p.hidden).name,why:'今晚想简单点'}]});show('tonight');const b=document.querySelector('.tmr');if(b)b.click();await new Promise(r=>setTimeout(r,200));timerDone(Object.keys(_timers)[0]);document.querySelector('.skips')&&(document.querySelector('.skips').open=true)`],
+        // IA 重排(10/29)新增的几屏
+        ['minimal', '提醒卡 · 「还有 N 条」展开', `__seed.minimal({status:i=>i>=-6?['泛红']:[]})`, `aiApplyTonight({id:'t1',changes:[{op:'skip',product:PD.find(p=>p.role==='eye'&&!p.hidden).name,why:'测'}]});PD.filter(p=>p.role==='spf').forEach(p=>{p.hidden=true});invalidatePlanCache();renderTn();document.getElementById('tn-more').open=true`],
+        ['full', '今晚的情况 · 点了刮胡', `__seed.full()`, `document.getElementById('tn-sv').click()`],
+        ['full', '只记皮肤', `__seed.full({today:true,status:i=>i===0?['爆痘']:['出油']})`, `openSkinSheet();document.querySelector('#tn-skin .skin-h .btn-link').click()`],
+        ['full', '顾问页 · 7 晚点过 + 常识展开', `__seed.full()`, `show('coach');await new Promise(r=>setTimeout(r,200));setNightState(offsetDate(2),'shower');document.getElementById('guide').open=true;document.getElementById('fold-hist').open=true`],
         ['fresh', '引导 · 欢迎', `__seed.fresh()`, `startOOBE({})`],
         ['fresh', '引导 · 怎么用', `__seed.fresh()`, `startOOBE({});oobeGo('mode')`],
         ['fresh', '引导 · 家里有什么', `__seed.fresh()`, `startOOBE({});oobeGo('shelf')`],
