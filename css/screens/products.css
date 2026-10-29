@@ -1,1 +1,61 @@
-/* products 屏的样式:P2 写。只放这一屏自己的规则;通用组件进 css/components.css,token 只在 css/tokens.css */
+/* ══ 产品屏(js/ui/products.js)═════════════════════════════════════════════════════════════
+   货架一行一件:左边两字角色、右边名字 + 状态点 + 开封几周。状态点只用 --ok / --caution / 空心,不用红。
+   「要不要买新的」:summary 一句 → 按紧急程度分组(现在就缺带一个 --caution 点)→ 型号可点 → 这些不用买。 */
+#products .note.ink{color:var(--ink)}
+.pr-top{margin-top:var(--sp-3);column-gap:var(--sp-4)}
+.pr-h{font:18px/var(--lh-item) var(--serif);color:var(--ink)}
+
+/* ── 读完的成分表 ── */
+.pr-label{margin-top:var(--sp-4);border-top:1px solid var(--line);padding-top:var(--sp-3)}
+.pr-label .sec-t.rev{color:var(--rev)}
+.pr-label-name{margin-top:var(--sp-1);font:22px/var(--lh-head) var(--serif);color:var(--ink-strong);overflow-wrap:anywhere}
+.pr-kv{display:grid;grid-template-columns:4em minmax(0,1fr);margin:var(--sp-2) 0 0}
+.pr-kv dt,.pr-kv dd{margin:0;padding:6px 0;border-top:1px solid var(--line)}
+.pr-kv dt{font:14px/26px var(--serif);color:var(--muted)}
+.pr-kv dd{font:16px/var(--lh-body) var(--serif);color:var(--ink);padding-left:var(--sp-3)}
+.pr-label .acts{margin-top:var(--sp-3)}
+.pr-label.done{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-3);padding-top:var(--sp-2)}
+
+/* ── 要不要买新的 ── */
+#pr-shop-meta{margin-top:var(--sp-1)}
+#pr-shop .shop-st{margin-top:var(--sp-1)}
+.pr-shop-sum{margin-top:var(--sp-2)}
+.shop-g{margin-top:var(--sp-4)}
+.shop-gh{display:flex;align-items:center;gap:6px}
+.shop-gh .dot{margin:0}
+.shop-it{display:flex;flex-direction:column;padding-top:var(--sp-1)}
+.shop-it+.shop-it{margin-top:var(--sp-3)}
+.shop-need{font:18px/var(--lh-item) var(--serif);color:var(--ink)}
+.picks{margin-top:var(--sp-1)}
+.picks li{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:var(--sp-3);align-items:baseline;padding:var(--sp-2) 0;border-bottom:1px solid var(--line)}
+.picks a,.pick-n{font:16px/var(--lh-item) var(--serif);color:var(--ink);overflow-wrap:anywhere}
+.picks a{text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:1px;text-decoration-color:var(--line-ctl)}
+.shop-skip{margin-top:var(--sp-4)}
+.shop-skip .list{margin-top:var(--sp-1)}
+.shop-off{margin-top:var(--sp-2);counter-reset:so}
+.shop-off li{display:flex;flex-direction:column;padding:var(--sp-3) 0 var(--sp-3) 2.5em;border-top:1px solid var(--line);position:relative;counter-increment:so}
+.shop-off li::before{content:counter(so,decimal-leading-zero);position:absolute;left:0;top:var(--sp-3);font:12px/var(--lh-body) var(--mono);color:var(--faint)}
+
+/* ── 货架 ── */
+.prods{margin-top:var(--sp-1)}
+.prod{display:grid;grid-template-columns:2.5em minmax(0,1fr);column-gap:var(--sp-3);width:100%;min-height:64px;padding:14px 0;border-top:1px solid var(--line);text-align:left;color:var(--ink)}
+.prod-role{font:14px/26px var(--serif);color:var(--muted);white-space:nowrap}
+.prod-main{display:flex;flex-direction:column;min-width:0}
+.prod-name{font:18px/var(--lh-item) var(--serif);color:var(--ink);overflow-wrap:anywhere}
+.prod-sub{display:flex;justify-content:space-between;align-items:baseline;gap:var(--sp-2)}
+.prod-state{display:inline-flex;align-items:center;font:14px/22px var(--serif);color:var(--muted);min-width:0}
+.prod-state .dot{margin-right:6px}
+.prod:active{background:var(--tint)}
+#pr-dropped .row-main .note,#pr-empties .row-main .meta{display:block}
+
+/* ── sheet 里的 ── */
+.add-q{margin:var(--sp-4) 0 var(--sp-2)}
+.add-roles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--sp-2)}
+.add-roles .btn{padding:0 var(--sp-2)}
+.pr-pre{border-left:2px solid var(--rev);padding:var(--sp-1) 0 var(--sp-1) var(--sp-3);color:var(--ink)}
+.pr-adv{margin-top:var(--sp-4)}
+.pr-adv .chips{margin-top:var(--sp-2)}
+.pr-warn{border-left:2px solid var(--caution);padding:var(--sp-2) 0 var(--sp-2) var(--sp-3);margin-top:var(--sp-3)}
+.pr-low{margin-top:var(--sp-3)}
+.pr-notes{margin-top:var(--sp-3)}
+.pr-why{margin-top:var(--sp-3)}

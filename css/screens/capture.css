@@ -1,0 +1,27 @@
+/* ══ 拍照全套分析(全屏 sheet)═════════════════════════════════════════════════════════════
+   拍前提醒 → 正 / 左 / 右三张(实时画面 + 脸部轮廓框)→ 顾问逐区看 → 预填今天的记录。
+   画面区是全 App 唯一的大块「底」:用 --tint,不加阴影;轮廓框是虚线,不闪不动。 */
+.cap{display:flex;flex-direction:column}
+.cap>*+*{margin-top:var(--sp-3)}
+.cap-tips li{font:16px/var(--lh-body) var(--serif);color:var(--ink)}
+.cap-acts{display:grid;grid-template-columns:1fr;gap:var(--sp-2)}
+.cap-acts .btn{min-height:48px}
+.cap-views{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--sp-2)}
+.cap-view{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:56px;border-radius:var(--r-ctl);
+  box-shadow:inset 0 0 0 1px var(--line-ctl);transition:background-color .15s,box-shadow .15s}
+.cap-view .lede{font-size:16px;line-height:22px}
+.cap-view[aria-pressed="true"]{background:var(--tint);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.cap-guide{color:var(--ink)}
+.cap-frame{position:relative;width:100%;max-width:360px;margin-left:auto;margin-right:auto;aspect-ratio:3/4;border-radius:var(--r-card);overflow:hidden;background:var(--tint)}
+.cap-video,.cap-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.cap-video{transform:scaleX(-1)}   /* 只是预览像照镜子;存下来的照片不镜像 */
+.cap-ph{position:absolute;left:var(--sp-4);right:var(--sp-4);bottom:var(--sp-4);text-align:center}
+.cap-oval{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.cap-oval ellipse{fill:none;stroke:var(--line-ctl);stroke-width:1.5;stroke-dasharray:6 6}
+.cap-frame.live .cap-oval ellipse{stroke:var(--paper)}
+.cap-count{text-align:center}
+.cap-why{color:var(--ink)}
+.cap-zones{margin-top:var(--sp-2)}
+.cap-zones .row{grid-template-columns:minmax(0,1fr)}
+.cap-zones .row-main>.note{display:block}
+.cap-fill>.btn-link{margin-top:var(--sp-1)}

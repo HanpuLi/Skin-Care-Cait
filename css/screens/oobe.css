@@ -1,0 +1,18 @@
+/* ══ 新用户引导 + 改版说明(js/ui/oobe.js)═══════════════════════════════════════════════════
+   引导是全屏 sheet:一屏一个问题,上面一排进度点(--ink 实心 = 走过),每屏都能跳过。 */
+.ob-dots{display:flex;gap:6px;margin:var(--sp-1) 0 var(--sp-4)}
+.ob-dots i{width:6px;height:6px;border-radius:50%;box-shadow:inset 0 0 0 1px var(--faint)}
+.ob-dots i.on{background:var(--ink);box-shadow:none}
+.ob-lede{font:22px/var(--lh-head) var(--serif);color:var(--ink-strong);margin:var(--sp-2) 0 var(--sp-4)}
+.ob .acts{margin-top:var(--sp-4)}
+.ob .acts+.note{margin-top:var(--sp-3)}
+.ob-choices{display:flex;flex-direction:column;gap:var(--sp-2)}
+.ob-choice{display:flex;flex-direction:column;gap:var(--sp-1);padding:var(--sp-4);border-radius:var(--r-ctl);text-align:left;box-shadow:inset 0 0 0 1px var(--line-ctl);
+  transition:background-color .15s,box-shadow .15s}
+.ob-choice[aria-checked="true"]{background:var(--tint);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.ob-choices+.note{margin-top:var(--sp-3)}
+.ob-list{margin-top:var(--sp-5)}
+.ob-list .sec-t{margin-bottom:var(--sp-1)}
+.ob-next{margin-top:var(--sp-5)}
+.ob-foot{display:flex;justify-content:flex-start;margin-top:var(--sp-3)}
+.wn .row-main .meta,.wn .row-main .lede,.wn .row-main .note{display:block}

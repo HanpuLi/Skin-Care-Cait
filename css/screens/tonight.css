@@ -1,1 +1,84 @@
-/* tonight 屏的样式:P2 写。只放这一屏自己的规则;通用组件进 css/components.css,token 只在 css/tokens.css */
+/* ══ 今晚 ══════════════════════════════════════════════════════════════════════════════
+   四层:① 夜型标题 + 一句为什么 ② 今晚的情况(问句开关 + 即时影响)③ 最多一张提醒卡 ④ 步骤 → 完成今晚。
+   纸墨:层级靠字号和墨色;不铺色块、没有阴影;红只在就医卡(这一屏它加 tab 点 = 两处);修订线用 --rev。
+   只放这一屏自己的规则;token 只在 css/tokens.css。 */
+#tonight .page-title{margin-top:var(--sp-1)}
+.tn-lead{margin-top:var(--sp-1);font:16px/var(--lh-body) var(--serif);color:var(--muted)}
+
+/* 修订线:顾问改了今晚 · 撤销(单独一行,始终可见;不铺底、不加圆角、不用红)*/
+.revbar{margin-top:var(--sp-4);border-left:2px solid var(--rev);padding:var(--sp-2) 0 var(--sp-2) var(--sp-3);
+  display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:var(--sp-3);align-items:center}
+.revbar .rev-main{display:flex;flex-direction:column;min-width:0}
+.revbar .who{font:12px/var(--lh-meta) var(--mono);color:var(--rev)}
+.revbar .what{font:16px/var(--lh-item) var(--serif);color:var(--ink)}
+
+/* ② 今晚的情况:问句 + 两个选项;下面一行说影响 */
+.tn-sit{margin-top:var(--sp-5);border-top:1px solid var(--line);padding-top:var(--sp-3)}
+.tn-sit .sec-h .note{font-size:14px}
+.sit-q{padding:var(--sp-2) 0 var(--sp-1)}
+.sit-row{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-3)}
+.sit-l{font:18px/var(--lh-item) var(--serif);color:var(--ink)}
+.sit-btns{display:flex;gap:var(--sp-2);flex:none}
+.sit-btns>button{min-width:60px;min-height:44px;padding:0 var(--sp-3);border-radius:var(--r-ctl);font:16px/22px var(--serif);color:var(--ink);text-align:center;
+  box-shadow:inset 0 0 0 1px var(--line-ctl);transition:background-color .15s,box-shadow .15s}
+.sit-btns>button[aria-pressed="true"]{background:var(--tint);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.sit-fx{margin-top:var(--sp-1)}
+.sit-fx.changed{color:var(--ink)}
+
+/* ③ 提醒卡:就医(全 App 唯一的红框)> 注意 > 其余;其余折成「还有 N 条」 */
+.tn-cards{margin-top:var(--sp-5)}
+.note-medical{border:1px solid var(--medical);border-radius:var(--r-card);padding:var(--sp-4)}
+.med-h{display:flex;justify-content:space-between;align-items:baseline;gap:var(--sp-2);flex-wrap:wrap}
+.med-eb{font:14px/22px var(--serif);color:var(--medical)}
+.note-medical p{margin-top:var(--sp-1);font:16px/var(--lh-body) var(--serif);color:var(--ink)}
+.med-acts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--sp-2);margin-top:var(--sp-3)}
+.med-acts .btn{padding:0 var(--sp-1)}
+.med-acts .btn[aria-pressed="true"]{background:var(--tint);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.note-caution{border-left:2px solid var(--caution);padding:var(--sp-3) 0 var(--sp-3) var(--sp-3)}
+.note-info{border-left:2px solid var(--line-ctl);padding:var(--sp-3) 0 var(--sp-3) var(--sp-3)}
+.nc-eb{font:14px/22px var(--serif);color:var(--caution)}
+.ni-eb{font:14px/22px var(--serif);color:var(--muted)}
+.note-caution p,.note-info p{font:16px/var(--lh-body) var(--serif);color:var(--ink)}
+.tn-more-b{margin-top:var(--sp-1)}
+.tn-more-b .ico{transition:transform .15s}
+.tn-more-b[aria-expanded="true"] .ico{transform:rotate(90deg)}
+.tn-more{padding-bottom:var(--sp-2)}
+.tn-more li{font:14px/var(--lh-note) var(--serif);color:var(--ink)}
+.tn-more li+li{margin-top:var(--sp-1)}
+.tn-more .nc-eb{display:inline}
+
+/* ④ 步骤:整行就是一个 checkbox;序号下面是角色(页边批注栏);每步一句为什么 */
+.tn-steps{margin-top:var(--sp-5)}
+.tn-src{margin-top:var(--sp-1)}
+.tn-src .btn-link{min-height:44px;vertical-align:middle}
+.tn-mini-hint{margin-top:var(--sp-1)}
+.steps{margin-top:var(--sp-2)}
+.step{position:relative;display:grid;grid-template-columns:2.5em minmax(0,1fr) 32px;column-gap:var(--sp-3);align-items:start;width:100%;
+  min-height:64px;padding:var(--sp-4) 0;border-top:1px solid var(--line);text-align:left;color:var(--ink)}
+.step.mini{grid-template-columns:2.5em minmax(0,1fr) auto}
+.step-idx{display:flex;flex-direction:column;padding-top:var(--sp-1);font:12px/var(--lh-meta) var(--mono);color:var(--faint)}
+.step-role{font:14px/22px var(--serif);color:var(--muted)}
+.step-body{display:flex;flex-direction:column;min-width:0}
+.step-name{font:18px/var(--lh-item) var(--serif);color:var(--ink);overflow-wrap:anywhere}
+.step-how{font:14px/var(--lh-note) var(--serif);color:var(--muted)}
+.step-why{font:14px/var(--lh-note) var(--serif);color:var(--ink)}
+.step-box{justify-self:end;width:24px;height:24px;margin-top:var(--sp-1);border-radius:var(--r-ctl);box-shadow:inset 0 0 0 1.5px var(--line-ctl);
+  display:grid;place-items:center;color:transparent;transition:background-color .15s,box-shadow .15s}
+.step[aria-checked="true"] .step-box{background:var(--ink);box-shadow:none;color:var(--paper)}
+.step[aria-checked="true"] .step-name{color:var(--faint);text-decoration:line-through;text-decoration-thickness:1px}
+.step[aria-checked="true"] .step-idx{color:var(--ok)}
+.step.changed::before{content:"";position:absolute;left:calc(-1 * var(--sp-3));top:var(--sp-4);bottom:var(--sp-4);width:2px;background:var(--rev)}
+.step.missed .step-name{color:var(--muted)}
+.step-miss{white-space:nowrap;align-self:center}
+.step-miss[aria-pressed="true"]{color:var(--ink)}
+.tn-steps .skips{margin-top:var(--sp-2);border-top:1px solid var(--line)}
+.tn-steps .skips .row{grid-template-columns:minmax(0,1fr) auto}
+.skip-name{color:var(--muted)}
+
+/* 完成今晚 / 记一下皮肤 */
+.tn-finish{display:flex;flex-direction:column;gap:var(--sp-2);margin-top:var(--sp-2);padding-top:var(--sp-5);border-top:1px solid var(--line)}
+.tn-finish-n{text-align:center}
+.tn-finish>.btn-link{align-self:center}
+.tn-done-at{color:var(--ok)}
+.tn-finish .fb-box:empty{display:none}
+#tn-empty{padding-top:var(--sp-5)}

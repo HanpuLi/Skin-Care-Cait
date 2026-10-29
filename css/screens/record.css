@@ -1,1 +1,103 @@
-/* record 屏的样式:P2 写。只放这一屏自己的规则;通用组件进 css/components.css,token 只在 css/tokens.css */
+/* ══ 记录 + 记皮肤的 sheet + 脸部地图 ══════════════════════════════════════════════════════
+   记录页:顶部随时记一笔,下面回看(今天、近 14 天、脸部热度、走势、HRT、照片分析、历史)。
+   记皮肤的 sheet 在 #sheet-root 里(这份样式全局加载,所以也管得到它)。脸部地图两处共用(.fm)。
+   纸墨:标签是纯文字 + 6px 色点;热度只用同一种墨色的深浅;没有阴影、没有色块。 */
+#record .page-title{margin-top:var(--sp-1)}
+
+/* ① 随时记一笔 */
+.rec-quick{display:flex;flex-direction:column;margin-top:var(--sp-4)}
+.rec-q-l{font:18px/var(--lh-item) var(--serif);color:var(--ink)}
+.rec-quick textarea,.sheet textarea,.sheet input[type="text"]{display:block;width:100%;margin-top:var(--sp-2);min-height:44px;padding:var(--sp-2) 0;resize:none;
+  font:16px/24px var(--serif);color:var(--ink);background:transparent;border:0;border-bottom:1px solid var(--line-ctl);border-radius:0;outline:none}
+.rec-quick textarea:focus,.sheet textarea:focus,.sheet input[type="text"]:focus{border-bottom:1.5px solid var(--ink)}
+.rec-quick textarea::placeholder,.sheet textarea::placeholder,.sheet input::placeholder{color:var(--faint)}
+.rec-q-acts{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-2);margin-top:var(--sp-3)}
+.rec-q-acts .btn{min-height:48px}
+.rec-quick>.btn-link{align-self:flex-start;margin-top:var(--sp-1)}
+.rec-parse{margin-top:var(--sp-3);border-left:2px solid var(--line-ctl);padding:var(--sp-2) 0 var(--sp-2) var(--sp-3)}
+.rec-parse .sec-t{display:block}
+.rec-parse .btn-row{margin-top:var(--sp-2)}
+
+/* ② 今天记下的 + 顾问反馈 */
+.rec-day{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:var(--sp-3);margin-top:var(--sp-2)}
+.rec-day-main>*+*{margin-top:var(--sp-1)}
+.rec-thumb,.sk-thumb{width:64px;height:80px;object-fit:cover;border-radius:var(--r-ctl);box-shadow:inset 0 0 0 1px var(--line)}
+.tags{display:flex;flex-wrap:wrap;column-gap:var(--sp-4);font:14px/var(--lh-note) var(--serif);color:var(--ink)}
+.tag{display:inline-flex;align-items:center}
+.fb-box{margin-top:var(--sp-3)}
+.fb-box:empty{margin-top:0}
+.fb{display:flex;flex-direction:column}
+.fb-who{font:12px/var(--lh-meta) var(--mono);color:var(--rev)}
+.fb-text{font:16px/var(--lh-body) var(--serif);color:var(--ink);white-space:pre-wrap}
+.fb-adj{margin-top:var(--sp-1)}
+.fb .btn-link{align-self:flex-start}
+
+/* ③ 近 14 天:一列一天(色点 / 日 / 酸 / 澡 / 刮),只看不点(改某一天走下面的历史) */
+.legend{display:flex;gap:var(--sp-3);font:14px/22px var(--serif);color:var(--muted)}
+.legend>span{display:inline-flex;align-items:center}
+.legend .dot{margin-right:var(--sp-1)}
+.dot.none{background:transparent}
+.d14{display:grid;grid-template-columns:repeat(14,minmax(0,1fr));margin-top:var(--sp-3)}
+.d14-c{display:flex;flex-direction:column;align-items:center}
+.d14-c .dot{margin:0 0 var(--sp-1);width:8px;height:8px}
+.d14-n{font:12px/var(--lh-meta) var(--mono);color:var(--faint)}
+.d14-c.today .d14-n{color:var(--ink)}
+.d14-m{font:12px/var(--lh-meta) var(--serif);color:var(--muted)}
+#rec-14>.note{margin-top:var(--sp-2)}
+
+/* ④ 脸部热度 + 常出现的位置 */
+.heat-top{margin-top:var(--sp-3)}
+.heat-top li{display:grid;grid-template-columns:5em minmax(0,1fr) 3.5em;column-gap:var(--sp-3);align-items:center;min-height:32px}
+.heat-top .bar{position:relative;height:4px;border-radius:2px;background:var(--tint);overflow:hidden}
+.heat-top .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--muted)}
+.heat-top .meta{text-align:right}
+
+/* ⑤ 走势 */
+.trend-rows{margin-top:var(--sp-2)}
+.trend-rows li{display:grid;grid-template-columns:6em 3.5em 1.5em 3.5em auto;align-items:baseline;column-gap:var(--sp-2);min-height:32px}
+.trend-arr{color:var(--faint);font:14px/22px var(--serif)}
+
+/* ⑦⑧ 照片分析 / 历史 */
+.pa-rows,.rows.hist{margin-top:var(--sp-2)}
+.rows.hist>li>.row{grid-template-columns:minmax(0,1fr) auto}
+.rows.hist .row-main>.note{display:block}
+.sec>.note{margin-top:var(--sp-2)}
+.sec .sec-h .btn-link{min-height:44px}
+
+/* ══ 记皮肤的 sheet ══ */
+.sk-lead{margin-bottom:var(--sp-2)}
+.sk-sec{border-top:1px solid var(--line);padding:var(--sp-4) 0 0;margin-top:var(--sp-4)}
+#sk-top>.sk-sec:first-child{border-top:0;margin-top:0;padding-top:0}
+.sk-sec>.sec-t{margin-bottom:var(--sp-2)}
+.sk-trend>button .dot{margin:0}
+.sk-syms{margin-top:var(--sp-3)}
+.chip.hint{box-shadow:inset 0 0 0 1px var(--line-ctl);border-bottom:0}
+.hint-t{font:12px/var(--lh-meta) var(--mono);color:var(--rev);margin-left:var(--sp-1)}
+.sk-map>.note{margin-top:var(--sp-1)}
+.fm-pick{margin-top:var(--sp-3);border-top:1px solid var(--line);padding-top:var(--sp-3)}
+.fm-pick .chips{margin-top:var(--sp-2)}
+.fm-pick-acts{margin-top:var(--sp-2);justify-content:flex-end}
+.fm-sum{margin-top:var(--sp-3)}
+.sk-photo-row{display:flex;align-items:center;gap:var(--sp-3);flex-wrap:wrap}
+.sk-photo .meta{margin-top:var(--sp-2)}
+.sheet .field textarea,.sheet .field input[type="text"]{margin-top:var(--sp-1)}
+
+/* ══ 脸部地图(点选 / 热度)══ */
+.fm{position:relative;width:100%;max-width:320px;aspect-ratio:320/400;margin:var(--sp-3) auto 0;color:var(--ink)}
+.fm-svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible}
+.fm-line{fill:none;stroke:var(--muted);stroke-width:1.2;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.fz{fill:var(--ink);fill-opacity:0;stroke:var(--line-ctl);stroke-width:.8;stroke-dasharray:2 4;cursor:pointer;transition:fill-opacity .15s}
+.fz.h1{fill-opacity:.08} .fz.h2{fill-opacity:.16} .fz.h3{fill-opacity:.26} .fz.h4{fill-opacity:.38}
+.fz.on{fill-opacity:.14;stroke:var(--ink);stroke-width:1.5;stroke-dasharray:none}
+.fm-lr{font-family:var(--mono);font-size:12px;fill:var(--muted)}
+.fm-b{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;display:grid;place-items:center;border-radius:50%}
+.fm-mk{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--paper);box-shadow:inset 0 0 0 1px var(--line-ctl);font:14px/1 var(--mono);color:var(--ink)}
+.sheet .fm-mk{background:var(--sheet)}
+.fm-mk.on{background:var(--ink);color:var(--paper);box-shadow:none}
+.sheet .fm-mk.on{background:var(--ink);color:var(--sheet)}
+.fm-mk.heat.on,.sheet .fm-mk.heat.on{background:var(--paper);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.fm-mk.hint{box-shadow:inset 0 0 0 1.5px var(--rev)}
+.fm-b[aria-pressed="true"] .fm-mk{outline:2px solid var(--ink);outline-offset:2px}
+.fz-hair{left:50%;top:11%} .fz-fore{left:50%;top:23.5%} .fz-glab{left:50%;top:35.5%} .fz-nose{left:50%;top:48.5%}
+.fz-cheekR{left:28.125%;top:53%} .fz-cheekL{left:71.875%;top:53%} .fz-phil{left:50%;top:62.5%} .fz-peri{left:50%;top:75%}
+.fz-chin{left:50%;top:87.5%} .fz-jawR{left:25.625%;top:76.5%} .fz-jawL{left:74.375%;top:76.5%}

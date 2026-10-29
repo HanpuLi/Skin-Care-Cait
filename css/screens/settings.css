@@ -1,0 +1,24 @@
+/* ══ 设置 sheet(js/ui/settings.js)═════════════════════════════════════════════════════════
+   全在一个 sheet 里,一段一件事;开关只用 components.css 的 .sw-row,单选用 .seg,多选用 .chip。 */
+#settings-sheet .set-seg{margin-top:var(--sp-1)}
+#settings-sheet .set-seg[data-seg="timing"]{grid-auto-flow:row;grid-template-columns:repeat(2,minmax(0,1fr))}
+#settings-sheet .set-seg>button{padding:0 var(--sp-1);font-size:14px}
+.set-mode-note{margin-top:var(--sp-2)}
+.set-sub{margin-top:var(--sp-4)}
+.set-sub>.sec-t{margin-bottom:var(--sp-2)}
+.set-sub>.note{margin-top:var(--sp-2)}
+.set-traits{margin-top:var(--sp-2)}
+.set-hint{margin:calc(-1 * var(--sp-1)) 0 var(--sp-2)}
+.set-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:var(--sp-1)}
+.set-days+.set-days{margin-top:var(--sp-2)}
+.set-days .chip{min-width:0;padding:0;font-size:14px}
+#settings-sheet .sheet-sec>.note{margin-top:var(--sp-2)}
+#settings-sheet .sheet-sec>.btn-row{margin-top:var(--sp-1)}
+.set-adv{margin-top:var(--sp-3)}
+#settings-sheet select{width:100%;min-height:44px;font:16px/22px var(--serif);color:var(--ink);background:transparent;border:0;border-bottom:1px solid var(--line-ctl);border-radius:0;padding:0}
+#settings-sheet input[type="text"]{min-height:44px;font:16px/24px var(--serif);color:var(--ink);background:transparent;border:0;border-bottom:1px solid var(--line-ctl);border-radius:0;padding:0;width:100%}
+#set-privacy{margin-top:var(--sp-3)}
+#set-privacy .list li+li{margin-top:var(--sp-2)}
+.set-end{border-top:1px solid var(--line)}
+#mem-sheet .row-main .meta{display:block}
+.mem-acts{margin-top:var(--sp-2)}
