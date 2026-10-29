@@ -1,6 +1,7 @@
-const CACHE_NAME = 'skincare-app-v22';
+const CACHE_NAME = 'skincare-app-v23';
 const ASSETS = [
   './index.html',
+  './ai.js',
   './护肤计划.html',
   './icon.svg',
   './manifest.json'

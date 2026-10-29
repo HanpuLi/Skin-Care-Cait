@@ -51,7 +51,9 @@ jobs:
             "function buildNightSteps", "function renderTn", "function renderAm",
             "function assessSkin", "const AXES", "function renderAssessment",
             "const PLAN_TEMPLATES", "function applyPlanTemplate",
-            "const PHASES", "function updatePhase", "function goalProgress",
+            "const PHASES", "function currentPhase", "function goalProgress",
+            "function safetyGate", "function gateBlocks", "function acidLadder", "function traitsOf",
+            "function regimenRules", "function commitAiRegimen", "function undoRegimen",
             "const ONBOARD_SKIN", "function finishOnboarding",
             "const CLOUD_KEYS", "function clearLocalUserData", "function assignRoles"
           ];
@@ -66,7 +68,15 @@ jobs:
           const fs = require("fs");
           JSON.parse(fs.readFileSync("manifest.json", "utf8"));
           JSON.parse(fs.readFileSync("firebase.json", "utf8"));
-          if (!fs.readFileSync("sw.js", "utf8").includes("skincare-app-v")) throw new Error("sw.js 缓存版本缺失");
-          console.log("manifest/firebase/sw ✓");
+          const sw = fs.readFileSync("sw.js", "utf8");
+          if (!sw.includes("skincare-app-v")) throw new Error("sw.js 缓存版本缺失");
+          if (!sw.includes("./ai.js")) throw new Error("sw.js 没缓存 ai.js");
+          const ai = fs.readFileSync("ai.js", "utf8");
+          new Function(ai);
+          const hooks = ["function renderCoach", "function aiRenderTonight", "function aiRegimenActionsHtml", "function aiOnAuth", "function aiClearLocal", "function aiAfterCheckin", "function buildSkincareContext"];
+          const missAi = hooks.filter(s => !ai.includes(s));
+          if (missAi.length) throw new Error("ai.js 缺: " + missAi.join(", "));
+          if (/test:[A-Za-z0-9_-]{8,}/.test(ai)) throw new Error("ai.js 里不能写死测试 token");
+          console.log("manifest/firebase/sw/ai.js ✓");
           '
           test -z "$(git ls-files AGENTS.md CLAUDE.md LIVING_TODO.md '家中护肤品清单.md' '审计报告_*.json')"
