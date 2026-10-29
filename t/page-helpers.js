@@ -84,7 +84,26 @@
         if (p === '/api/note') return wrap(F.note || { note: '今晚照常，记得等脸干了再涂酸。' });
         if (p === '/api/feedback') return wrap(F.feedback || { text: '做得不错。', note_add: '', next_adjust: [], dropped: [] });
         if (p === '/api/swap') return wrap(F.swap || { to: '', why: '' });
+        // 要不要买新的:F.shop 顶替固定返回;F.shopErr 回 502;F.shopMs 让它慢一点(测「顾问在查…」)
+        if (p === '/api/shop') {
+            if (F.shopMs) await new Promise(r => setTimeout(r, F.shopMs));
+            if (F.shopErr) return json(502, { error: F.shopErr });
+            return wrap(F.shop || window.__SHOP);
+        }
         return json(404, { error: 'nf' });
+    };
+    // 假顾问的「要不要买新的」固定返回(三档都有、有接班、有不带链接的型号、有 skip)
+    window.__SHOP = {
+        verdict: 'buy', summary: '缺一支洗澡夜用的强清洁，保湿快用完前备上。',
+        items: [
+            { need: '强清洁洁面', urgency: 'now', what: '洗澡夜用的清洁力强一点的洁面，无香精', why: '近两周常出油，洗澡夜要洗干净', cover: '暂时用温和洁面洗两遍',
+              replaces: '', picks: [{ name: 'CeraVe Foaming Cleanser 236ml', where: 'Boots', price: '£12', why: '无香精、清洁力够', url: 'https://www.boots.com/cerave-foaming-cleanser' },
+                                    { name: 'La Roche-Posay Effaclar Gel', where: 'Superdrug', price: '£15', why: '控油', url: '' }] },
+            { need: '轻薄保湿', urgency: 'before_out', what: '无香精的 fluid', why: '你标了它快用完了', cover: '用完前照常用', replaces: 'La Roche-Posay Toleriane Sensitive Fluide',
+              picks: [{ name: 'Avène Tolérance Hydra-10 Fluid', where: 'LookFantastic', price: '£18', why: '9 个成分', url: 'https://www.lookfantastic.com/avene-hydra-10' }] },
+            { need: '防晒备用', urgency: 'optional', what: 'SPF50 清爽型', why: '现在这支还够用两个月', cover: '现在这支', replaces: '', picks: [] }
+        ],
+        skip: [{ name: 'B5 修复霜', why: '只点涂，用得很慢' }, { name: '杏仁酸', why: '家里这支还有大半瓶' }]
     };
     // 「登录」:只顶替 ai.js 用来取当前用户的那个函数。index.html 的 Firebase 本身被掐断,不登录
     window.__login = function (uid) {

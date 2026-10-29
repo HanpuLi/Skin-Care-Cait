@@ -271,6 +271,17 @@
       .prod-state{display:block;font:14px/22px var(--serif);color:var(--muted);margin-top:2px}
       .prod-go{align-self:center;color:var(--faint)}
       .shop li{padding:var(--sp-3) 0;border-top:1px solid var(--line)}
+      .sec-acts{display:flex;gap:var(--sp-3);align-items:baseline}
+      .shop-st{margin-top:var(--sp-2)}
+      .shop-g{margin-top:var(--sp-4)}
+      .shop-g>.sec-t{display:block;margin-bottom:var(--sp-1)}
+      .shop .lede>.note{display:inline}
+      .picks{margin-top:var(--sp-2)}
+      .shop .picks li{padding:0 0 var(--sp-2);border-top:0}
+      .picks a{display:flex;align-items:center;min-height:44px;font:16px/22px var(--serif);color:var(--ink);text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:1px;text-decoration-color:var(--line-ctl)}
+      .pick-n{display:block;font:16px/var(--lh-body) var(--serif);color:var(--ink)}
+      .picks .note{display:block}
+      .shop-skip{margin-top:var(--sp-4)}
 
       /* ── 皮肤 ── */
       .score{display:flex;align-items:baseline;gap:var(--sp-3);margin-top:var(--sp-2)}
@@ -288,6 +299,30 @@
       .legend{display:flex;flex-wrap:wrap;gap:var(--sp-1) var(--sp-4);margin-top:var(--sp-2);font:14px/22px var(--serif);color:var(--muted)}
       .chart svg{display:block;width:100%;height:auto}
       .chart text{font-family:var(--mono);font-size:12px;fill:var(--faint)}
+      /* 脸部地图:纸墨线描正脸;区块平时只是虚线,选中 / 热度用墨色深浅(不用红);按钮 44×44,里面一个 24px 的小圈 */
+      .fm-entry{margin-top:var(--sp-2)}
+      .fm-wrap>.note{margin-top:var(--sp-1)}
+      .fm{position:relative;width:100%;max-width:320px;aspect-ratio:320/400;margin:var(--sp-3) auto 0;color:var(--ink)}
+      .fm-svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible}
+      .fm-line{fill:none;stroke:var(--muted);stroke-width:1.2;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+      .fm-hl{fill:none;stroke:var(--line-ctl);stroke-width:1;stroke-dasharray:3 4;pointer-events:none}
+      .fz{fill:var(--ink);fill-opacity:0;stroke:var(--line-ctl);stroke-width:.8;stroke-dasharray:2 4;cursor:pointer;transition:fill-opacity .15s}
+      .fz.h1{fill-opacity:.08} .fz.h2{fill-opacity:.16} .fz.h3{fill-opacity:.26} .fz.h4{fill-opacity:.38}
+      .fz.on{fill-opacity:.14;stroke:var(--ink);stroke-width:1.5;stroke-dasharray:none}
+      .fm-lr{font-family:var(--mono);font-size:12px;fill:var(--muted)}
+      .fm-b{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;display:grid;place-items:center;border-radius:50%}
+      .fm-mk{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--paper);box-shadow:inset 0 0 0 1px var(--line-ctl);font:14px/1 var(--mono);color:var(--ink)}
+      .fm-mk.on{background:var(--ink);color:var(--paper);box-shadow:none}
+      .fm-mk.heat.on{background:var(--paper);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+      .fm-b[aria-pressed="true"] .fm-mk{outline:2px solid var(--ink);outline-offset:2px}
+      .fz-hair{left:50%;top:11%} .fz-fore{left:50%;top:23.5%} .fz-glab{left:50%;top:35.5%} .fz-nose{left:50%;top:48.5%}
+      .fz-cheekR{left:28.125%;top:53%} .fz-cheekL{left:71.875%;top:53%} .fz-phil{left:50%;top:62.5%} .fz-peri{left:50%;top:75%}
+      .fz-chin{left:50%;top:87.5%} .fz-jawR{left:25.625%;top:76.5%} .fz-jawL{left:74.375%;top:76.5%}
+      .fm-pick{margin-top:var(--sp-3);border-top:1px solid var(--line);padding-top:var(--sp-3)}
+      .fm-pick .chips{margin-top:var(--sp-2)}
+      .fm-pick .btn-row{margin-top:var(--sp-2);justify-content:flex-end}
+      .fm-sum{margin-top:var(--sp-3)}
+      #face-heat>.note{margin-top:var(--sp-2)}
 
       /* ── Sheet:全 App 唯一的对话框 ── */
       .sheet-ov{position:fixed;inset:0;z-index:300;background:var(--scrim);display:flex;align-items:flex-end;justify-content:center}
@@ -411,6 +446,7 @@
                 <div class="heat" id="heat-grid" role="group" aria-label="最近 14 天，点某一天看那天"></div>
                 <div class="legend" id="heat-legend"><span><i class="dot ok"></i>好些</span><span><i class="dot faint"></i>差不多</span><span><i class="dot caution"></i>差些</span><span><i class="dot hollow"></i>没记</span></div>
             </div>
+            <div class="sec" id="face-heat-sec"><div class="sec-h"><span class="sec-t">脸上哪里 · 最近 14 天</span></div><div id="face-heat"></div></div>
             <div class="sec" id="stat-grid"></div>
             <div class="sec"><div class="sec-h"><span class="sec-t">走势</span></div><div class="chart" id="trend-chart-container"></div></div>
             <div class="sec feat-hrt"><div class="sec-h"><span class="sec-t">HRT 阶段</span></div><div id="hrt-tl"></div></div>
@@ -423,10 +459,13 @@
             <div class="title-row"><h1 class="page-title" id="prods-title">产品</h1><button class="btn" onclick="openAddProduct()">添加</button></div>
             <div id="pao-alert"></div>
             <div id="prod-list"></div>
-            <div class="sec">
-                <div class="sec-h"><span class="sec-t">要不要买新的</span><button class="btn-link sm quiet" id="cpb" onclick="copyShop()">复制清单</button></div>
-                <p class="note">看的是这套方案缺不缺一环。家里剩下的东西都顶不了的那一项，才需要买。</p>
-                <ul class="shop" id="shop-pending"></ul>
+            <div class="sec" id="shop-sec">
+                <div class="sec-h"><span class="sec-t">要不要买新的</span><span class="sec-acts"><button class="btn-link sm quiet" id="shop-redo" onclick="aiShopRedo()" hidden>重新判断</button><button class="btn-link sm quiet" id="cpb" onclick="copyShop()">复制清单</button></span></div>
+                <div id="shop-ai" aria-live="polite"></div>
+                <div id="shop-off">
+                    <p class="note">看的是这套方案缺不缺一环。家里剩下的东西都顶不了的那一项，才需要买。</p>
+                    <ul class="shop" id="shop-pending"></ul>
+                </div>
             </div>
             <details class="fold sec"><summary><span class="fold-sum"><span class="lede">空瓶记录</span></span></summary><div class="fold-body" id="empty-log"></div></details>
         </section>
@@ -775,13 +814,157 @@
                     `<button role="radio" aria-checked="${trend === k}" onclick="setTrend('${d}','${k}')"><i class="dot ${trend === k ? TREND_TONE[k] : 'hollow'}"></i>${l}</button>`).join('')}</div>
                 <div class="chips syms" id="${ns}-sym-${d}"${open ? '' : ' hidden'}>${SYMPTOM_TAGS.map(t =>
                     `<button class="chip" aria-pressed="${syms.indexOf(t) >= 0}" onclick="toggleSym('${d}','${t}')">${ico('check', 'ck sm')}${tagLabel(t)}</button>`).join('')}
-                    ${opts.photo ? `<label class="chip file-btn">${ico('camera', 'sm')}拍一张<input type="file" accept="image/*" onchange="addDayPhoto('${d}',this)"></label>` : ''}</div>`;
+                    ${opts.photo ? `<label class="chip file-btn">${ico('camera', 'sm')}拍一张<input type="file" accept="image/*" onchange="addDayPhoto('${d}',this)"></label>` : ''}</div>`
+                + faceEntryHtml(date, ns, st);
         }
         function toggleSymOpen(btn, date) {
             const box = document.getElementById(btn.getAttribute('aria-controls')); if (!box) return;
             const open = box.hidden;
             box.hidden = !open; btn.setAttribute('aria-expanded', open ? 'true' : 'false');
             _symOpen[date] = open;
+        }
+
+        // ══ 脸部地图(Cait 10/29):打卡里可选地「标在脸上」;皮肤页同一张脸看近 14 天各区出现几天 ══════════════
+        // 只到区域,不做精确点。左右一律按**她自己的**左右:图上右边是她的左脸(图上标了小字「左」「右」)。
+        // 数据存在已有的 sk_jrnl1 当天条目里:spots:[{zone:'口周', type:'泛红'}](不新增云键,走 jrnlEntry/saveJrnl → ls())。
+        // 区名和 ZONE_PRESETS / 顾问的 zonesAdd 对得上(左右下颌线在「要避开的区域」里合成一个「下颌线」)。
+        // 线稿:viewBox 320×400;每个区一块 SVG 形状(点得到,读屏不念)+ 一个 44×44 的真按钮(读屏念区名和标了什么)。
+        const FACE_ZONES = [
+            { k: 'hair',   name: '发际线',   d: 'M54 110C56 60 104 28 160 28C216 28 264 60 266 110C246 82 210 66 160 66C110 66 74 82 54 110Z' },
+            { k: 'fore',   name: '额头',     d: 'M64 112C80 84 116 70 160 70C204 70 240 84 256 112L250 126L70 126Z' },
+            { k: 'cheekR', name: '右脸颊',   d: 'M54 212a38 34 0 1 0 76 0a38 34 0 1 0 -76 0Z' },
+            { k: 'cheekL', name: '左脸颊',   d: 'M190 212a38 34 0 1 0 76 0a38 34 0 1 0 -76 0Z' },
+            { k: 'jawR',   name: '右下颌线', d: 'M56 238C60 274 76 312 116 354L126 340C92 306 78 272 74 238Z' },
+            { k: 'jawL',   name: '左下颌线', d: 'M264 238C260 274 244 312 204 354L194 340C228 306 242 272 246 238Z' },
+            { k: 'peri',   name: '口周',     d: 'M110 286a50 30 0 1 0 100 0a50 30 0 1 0 -100 0Z' },
+            { k: 'chin',   name: '下巴',     d: 'M120 344a40 24 0 1 0 80 0a40 24 0 1 0 -80 0Z' },
+            { k: 'nose',   name: '鼻子',     d: 'M150 154L170 154L186 226C178 238 142 238 134 226Z' },
+            { k: 'phil',   name: '人中/鼻下', d: 'M136 254a24 12 0 1 0 48 0a24 12 0 1 0 -48 0Z' },
+            { k: 'glab',   name: '眉间',     d: 'M145 140a15 12 0 1 0 30 0a15 12 0 1 0 -30 0Z' }
+        ];
+        const FACE_ZONE_NAMES = FACE_ZONES.map(z => z.name);
+        const SPOT_TYPES = ['闭口', '红痘', '脓头', '泛红', '干皮', '痘印'];
+        const FM_TRIGGER = ['泛红', '爆痘', '闭口', '干燥', '敏感'];   // 勾了这些才出现「标在脸上」(出油不是位置问题)
+        // 线稿本身(轮廓、耳、发际线、眉、眼、鼻、嘴):纯装饰
+        const FACE_LINES = 'M160 24C226 24 272 72 272 150C272 214 260 262 236 306C212 348 188 376 160 378C132 376 108 348 84 306C60 262 48 214 48 150C48 72 94 24 160 24Z' +
+            'M48 156C34 150 30 178 36 196C40 206 47 208 51 202M272 156C286 150 290 178 284 196C280 206 273 208 269 202' +
+            'M102 136C114 128 134 128 146 134M174 134C186 128 206 128 218 136' +
+            'M106 160C116 152 132 152 142 160C132 166 116 166 106 160ZM178 160C188 152 204 152 214 160C204 166 188 166 178 160Z' +
+            'M154 150C152 180 146 204 140 220C146 230 154 228 160 232C166 228 174 230 180 220' +
+            'M130 282C144 276 154 278 160 280C166 278 176 276 190 282C176 294 144 294 130 282ZM132 283C150 287 170 287 188 283';
+        function cleanSpots(a) {
+            const out = [];
+            (Array.isArray(a) ? a : []).forEach(s => {
+                if (!s || FACE_ZONE_NAMES.indexOf(s.zone) < 0 || SPOT_TYPES.indexOf(s.type) < 0) return;
+                if (!out.some(x => x.zone === s.zone && x.type === s.type)) out.push({ zone: s.zone, type: s.type });
+            });
+            return out;
+        }
+        function _spotsByZone(spots) { const m = {}; cleanSpots(spots).forEach(s => { (m[s.zone] = m[s.zone] || []).push(s.type); }); return m; }
+        // 一张脸。o = {ns, date, sel, marks:{区名: 数字或''}, tone:{区名: 0-4}, label:{区名: 读屏文字}, pressed:bool}
+        function faceSvgHtml(o) {
+            const d = esc(o.date || ''), ns = o.ns;
+            const shapes = FACE_ZONES.map(z => `<path class="fz${o.sel === z.name ? ' on' : ''}${o.tone && o.tone[z.name] ? ' h' + o.tone[z.name] : ''}" data-zone="${esc(z.name)}" d="${z.d}"/>`).join('');
+            const btns = FACE_ZONES.map(z => {
+                const mk = o.marks && o.marks[z.name];
+                return `<button type="button" class="fm-b fz-${z.k}" id="${ns}-fz-${z.k}-${d}" aria-pressed="${o.sel === z.name}" aria-label="${esc(o.label[z.name] || z.name)}" onclick="fmTap('${ns}','${d}','${esc(z.name)}')"><span class="fm-mk${mk ? ' on' : ''}${o.heat ? ' heat' : ''}">${mk ? esc(String(mk)) : ''}</span></button>`;
+            }).join('');
+            return `<div class="fm" role="group" aria-label="${esc(o.groupLabel || '脸部地图')}">
+                <svg class="fm-svg" viewBox="0 0 320 400" aria-hidden="true" onclick="fmTapSvg(event,'${ns}','${d}')">${shapes}<path class="fm-line" d="${FACE_LINES}"/><path class="fm-hl" d="M66 96C92 62 228 62 254 96"/>
+                <text class="fm-lr" x="22" y="40">右</text><text class="fm-lr" x="298" y="40" text-anchor="end">左</text></svg>${btns}</div>`;
+        }
+        let _fmOpen = {}, _fmSel = {}, _fmHeatSel = '';
+        // 重画前后把焦点放回同一个按钮(读屏 / 键盘不至于每点一下就跳回页首)
+        function _fmKeepFocus(fn) {
+            const id = document.activeElement && document.activeElement.id;
+            fn();
+            if (id) { const el = document.getElementById(id); if (el) try { el.focus({ preventScroll: true }); } catch (e) { } }
+        }
+        function _fmRedraw(ns, date) {
+            _fmKeepFocus(() => {
+                if (ns === 'heat') { renderFaceHeat(); return; }
+                if (ns === 'tn') { const b = document.getElementById('tn-skin'); if (b && date === today()) b.innerHTML = skinLogHtml(today(), { photo: true }); }
+                refreshDaySheet(date);
+            });
+        }
+        // 打卡里的入口:勾了新痘 / 泛红 / 闭口 / 干 / 刺痛(或这天已经标过)才出现;点开才展开,不点照常打卡
+        function faceEntryHtml(date, ns, st) {
+            const en = (lg(K.jrnl) || []).find(x => x && x.date === date) || {};
+            const spots = cleanSpots(en.spots);
+            if (!(st || []).some(t => FM_TRIGGER.indexOf(t) >= 0) && !spots.length) return '';
+            const key = ns + '|' + date, d = esc(date);
+            const open = !!_fmOpen[key];   // 默认收起(极简模式也是);她点开才展开
+            const by = _spotsByZone(spots), zones = Object.keys(by);
+            let h = `<div class="fm-entry"><button type="button" class="btn-link sm quiet" aria-expanded="${open}" aria-controls="${ns}-fm-${d}" onclick="toggleFaceMap('${ns}','${d}')">标在脸上（可选）${zones.length ? ' · 已标 ' + zones.length + ' 处' : ''}</button>`;
+            if (!open) return h + '</div>';
+            const sel = FACE_ZONE_NAMES.indexOf(_fmSel[key]) >= 0 ? _fmSel[key] : '';
+            const marks = {}, label = {};
+            FACE_ZONES.forEach(z => { marks[z.name] = by[z.name] ? by[z.name].length : ''; label[z.name] = z.name + (by[z.name] ? '，已标：' + by[z.name].join('、') : '，没标'); });
+            h += `<div class="fm-wrap" id="${ns}-fm-${d}"><p class="note">点脸上的位置，再选是什么。左右按你自己的：图上右边是你的左脸。</p>`
+                + faceSvgHtml({ ns, date, sel, marks, label, groupLabel: '脸部地图：点一个位置标出来' });
+            if (sel) {
+                const zk = FACE_ZONES.find(z => z.name === sel).k;
+                h += `<div class="fm-pick" role="group" aria-label="${esc(sel)}：是什么（可多选）"><div class="sec-t">${esc(sel)} · 是什么（可多选）</div><div class="chips">${SPOT_TYPES.map((t, i) =>
+                    `<button type="button" class="chip" id="${ns}-ft-${zk}-${i}-${d}" aria-pressed="${(by[sel] || []).indexOf(t) >= 0}" onclick="toggleSpot('${ns}','${d}','${esc(sel)}','${t}')">${ico('check', 'ck sm')}${t}</button>`).join('')}</div>
+                    <div class="btn-row">${(by[sel] || []).length ? `<button type="button" class="btn-link sm quiet" onclick="clearZoneSpots('${ns}','${d}','${esc(sel)}')">清掉这一处</button>` : ''}<button type="button" class="btn-link sm" onclick="fmTap('${ns}','${d}','${esc(sel)}')">好</button></div></div>`;
+            }
+            if (zones.length) h += `<ul class="list note fm-sum">${zones.map(z => `<li>${esc(z)}：${esc(by[z].join('、'))}</li>`).join('')}</ul>`;
+            return h + '</div></div>';
+        }
+        function toggleFaceMap(ns, date) { const key = ns + '|' + date; _fmOpen[key] = !_fmOpen[key]; if (!_fmOpen[key]) _fmSel[key] = ''; _fmRedraw(ns, date); }
+        function fmTap(ns, date, zone) {
+            if (FACE_ZONE_NAMES.indexOf(zone) < 0) return;
+            if (ns === 'heat') { _fmHeatSel = _fmHeatSel === zone ? '' : zone; _fmRedraw(ns, date); return; }
+            const key = ns + '|' + date;
+            _fmSel[key] = _fmSel[key] === zone ? '' : zone;
+            _fmRedraw(ns, date);
+        }
+        function fmTapSvg(e, ns, date) { const t = e.target && e.target.closest && e.target.closest('[data-zone]'); if (t) fmTap(ns, date, t.getAttribute('data-zone')); }
+        function toggleSpot(ns, date, zone, type) {
+            if (date > today() || FACE_ZONE_NAMES.indexOf(zone) < 0 || SPOT_TYPES.indexOf(type) < 0) return;
+            const { list, en } = jrnlEntry(date, true);
+            const sp = cleanSpots(en.spots);
+            const i = sp.findIndex(s => s.zone === zone && s.type === type);
+            if (i >= 0) sp.splice(i, 1); else sp.push({ zone, type });
+            if (sp.length) en.spots = sp; else delete en.spots;
+            saveJrnl(list);
+            _fmKeepFocus(() => afterLogChange(date));
+        }
+        function clearZoneSpots(ns, date, zone) {
+            const { list, en } = jrnlEntry(date, false);
+            if (!en) return;
+            const sp = cleanSpots(en.spots).filter(s => s.zone !== zone);
+            if (sp.length) en.spots = sp; else delete en.spots;
+            _fmSel[ns + '|' + date] = '';
+            saveJrnl(list);
+            _fmKeepFocus(() => afterLogChange(date));
+        }
+        // 皮肤页:近 14 天每个区有几天标过(深浅 + 数字);点一个区看哪几天、什么类型
+        function faceHeatData() {
+            const z = {};
+            jrnlLastNDays(14).forEach(e => { const by = _spotsByZone(e.spots); Object.keys(by).forEach(n => { (z[n] = z[n] || []).push({ date: e.date, types: by[n] }); }); });
+            return z;
+        }
+        function renderFaceHeat() {
+            const box = document.getElementById('face-heat'); if (!box) return;
+            const z = faceHeatData();
+            if (!Object.keys(z).length) { _fmHeatSel = ''; box.innerHTML = '<p class="note">还没在脸上标过位置。打卡时勾了新痘、泛红、闭口这些，可以顺手标在脸上。</p>'; return; }
+            const marks = {}, tone = {}, label = {};
+            FACE_ZONES.forEach(f => {
+                const n = (z[f.name] || []).length;
+                marks[f.name] = n || '';
+                tone[f.name] = !n ? 0 : n === 1 ? 1 : n <= 3 ? 2 : n <= 6 ? 3 : 4;
+                label[f.name] = f.name + '，近 14 天' + (n ? '有 ' + n + ' 天标过' : '没标过');
+            });
+            const sel = FACE_ZONE_NAMES.indexOf(_fmHeatSel) >= 0 ? _fmHeatSel : '';
+            let h = faceSvgHtml({ ns: 'heat', date: '', sel, marks, tone, label, heat: true, groupLabel: '近 14 天脸上各处标过几天：点一个位置看哪几天' });
+            h += `<p class="note">数字是近 14 天里标过几天，颜色越深越多。左右按你自己的：图上右边是你的左脸。</p>`;
+            if (sel) {
+                const rows = z[sel] || [];
+                h += `<div class="fm-pick" role="status"><div class="sec-t">${esc(sel)} · ${rows.length ? '近 14 天 ' + rows.length + ' 天' : '近 14 天没标过'}</div>${rows.length ? `<ul class="list note">${rows.map(r =>
+                    `<li>${esc(mdOf(r.date))} ${weekdayOf(r.date)}：${esc(r.types.join('、'))}</li>`).join('')}</ul>` : ''}</div>`;
+            }
+            box.innerHTML = h;
         }
 
         // ══ 步骤三态:已做 / 没做 / 还没点 ══════════════════════════════════════════════
@@ -989,7 +1172,7 @@
             const box = document.getElementById('safety-alert'); if (!box) return;
             const g = safetyGate(), m = PROFILE.medical || {};
             if (!g.medical) { box.innerHTML = ''; return; }
-            const days = medicalRedLine().days;
+            const why = g.medicalWhy;
             const stopTxt = MEDICAL_STOPS_ALL_ACID ? '在那之前所有酸先停，今晚只做清洁、保湿、修护。' : '在那之前猛料先停。';
             if (m.state === 'booked') {
                 box.innerHTML = `<div class="note-medical"><div class="eyebrow">就医 · 约了${m.date ? ' ' + esc(mdOf(m.date)) : ''}</div><p>${stopTxt}</p>
@@ -1001,7 +1184,7 @@
                     <div class="acts"><button class="btn" onclick="medicalSeen()">看过了</button><button class="btn" onclick="medicalBooked()">已约了</button></div></div>`;
                 return;
             }
-            box.innerHTML = `<div class="note-medical" role="alert"><div class="eyebrow">就医 · 近两周有 ${days} 天</div><p>${esc(g.medicalText)}${stopTxt}</p>
+            box.innerHTML = `<div class="note-medical" role="alert"><div class="eyebrow">就医 · ${esc(why)}</div><p>${esc(g.medicalText)}${stopTxt}</p>
                 <div class="acts three"><button class="btn" onclick="medicalBooked()">已约了</button><button class="btn" onclick="medicalSeen()">看过了</button><button class="btn" onclick="medicalLater()">先不</button></div></div>`;
         }
         function _setMedical(m) { PROFILE.medical = m; saveProfile(); invalidatePlanCache(); renderAll(); }
@@ -1619,7 +1802,10 @@
             { name: '眼周',     avoid: ['acid', 'mask', 'retinol'], care: '只用眼部产品' },
             { name: '两颊',     avoid: ['acid', 'mask'],            care: '干、易泛红时避开刷酸' },
             { name: '下巴',     avoid: ['mask'],                    care: '易闭口，避免厚重封闭' },
-            { name: '发际线',   avoid: ['mask'],                    care: '易长闭口，冲洗要彻底' }
+            { name: '发际线',   avoid: ['mask'],                    care: '易长闭口，冲洗要彻底' },
+            // 10/29 脸部地图加的两个(区名和 FACE_ZONES 一致,顾问的 zonesAdd 用同样的名字)
+            { name: '口周',     avoid: ['acid', 'mask', 'retinol'], care: '反复泛红、小红疹时只温和清洁 + 保湿，酸、面膜、维 A 都避开' },
+            { name: '下颌线',   avoid: ['mask'],                    care: '易冒痘，避开面膜和厚重封闭的产品' }
         ];
         function userZones() { return (PROFILE.zones || []).filter(z => z && z.name); }
         // 分区避开项 = 她自己设的 + 顾问方案加的。【要紧】只能加不能减:顾问的方案里漏了某个区,也照样避开(安全闸 ⑤)
@@ -2171,6 +2357,26 @@
                 `<div class="empty"><p class="lede">货架还是空的。</p><p class="note">先放一支洁面和一支保湿，今晚就能排。</p><div class="btn-row"><button class="btn" onclick="openAddProduct()">添加</button></div></div>`) +
                 (dropped.length ? `<details class="fold sec"><summary><span class="fold-sum"><span class="lede">不要了的（${dropped.length}）</span></span></summary><div class="fold-body rows">${dropped.map(p =>
                     `<div class="row"><span class="row-main"><span class="lede">${esc(cjkSpace(p.name))}</span>${p.dropped && p.dropped.why ? `<span class="note">${esc(p.dropped.why)}</span>` : ''}</span><button class="btn-link" onclick="restoreProduct('${esc(p.id)}')">恢复</button></div>`).join('')}</div></details>` : '');
+            renderShop();
+            const elog = document.getElementById('empty-log');
+            if (elog) {
+                const rows = emptyLogRows();
+                elog.innerHTML = rows.length ? `<div class="rows">${rows.map(r => `<div class="row"><span class="row-main"><span class="lede">${esc(cjkSpace(r.name))}</span><span class="meta">${esc(mdOf(r.date))} 用完${r.weeks !== null && r.weeks !== undefined ? ' · 开封 ' + r.weeks + ' 周' : ''} · 用过 ${r.uses} 次</span></span>${isGone(r.id) ? `<button class="btn-link" onclick="unGone('${esc(r.id)}')">买回来了</button>` : ''}</div>`).join('')}</div>` : '<p class="note">还没有用完的产品。</p>';
+            }
+        }
+        // 「要不要买新的」:有顾问的判断就显示顾问版(ai.js 的 aiShopView),否则 / 顾问出错就是下面这套离线清单(regimenNeeds → SHOP_ADVICE / SHOP_PICKS)。
+        // 顺手让顾问核一下货架签名(变了才在后台重判,不卡界面)。ai.js 没加载到时这里照样出离线清单。
+        function renderShop() {
+            const box = document.getElementById('shop-ai'), off = document.getElementById('shop-off'), redo = document.getElementById('shop-redo');
+            let v = null;
+            if (typeof aiShopView === 'function') { try { v = aiShopView(); } catch (e) { console.warn('shop view', e); v = null; } }
+            if (redo) { redo.hidden = !(v && v.redo); redo.disabled = !!(v && v.busy); redo.textContent = v && v.busy ? '在查…' : '重新判断'; }
+            if (box) box.innerHTML = v ? (v.fallback ? (v.status ? `<p class="note shop-st" role="status">${esc(v.status)}</p>` : '') : v.html) : '';
+            if (off) off.hidden = !!(v && !v.fallback);
+            if (!v || v.fallback) renderShopOffline();
+            if (typeof aiShopCheck === 'function') { try { aiShopCheck(); } catch (e) { console.warn('shop check', e); } }
+        }
+        function renderShopOffline() {
             const shop = shopItems();
             const sp = document.getElementById('shop-pending');
             if (sp) sp.innerHTML = shop.length ? shop.map((g, i) => `<li>
@@ -2179,11 +2385,6 @@
                     ${g.how ? `<p class="note">挑选标准：${esc(cjkSpace(g.how))}</p>` : ''}
                     ${g.pick ? `<p class="note">参考：${esc(cjkSpace(g.pick.name))}${g.pick.price ? '（' + esc(g.pick.price) + '）' : ''}，${esc(cjkSpace(g.pick.why))}</p>` : ''}
                 </li>`).join('') : '<li><p class="note">家里现有的东西够凑一套完整方案，暂时不用买。</p></li>';
-            const elog = document.getElementById('empty-log');
-            if (elog) {
-                const rows = emptyLogRows();
-                elog.innerHTML = rows.length ? `<div class="rows">${rows.map(r => `<div class="row"><span class="row-main"><span class="lede">${esc(cjkSpace(r.name))}</span><span class="meta">${esc(mdOf(r.date))} 用完${r.weeks !== null && r.weeks !== undefined ? ' · 开封 ' + r.weeks + ' 周' : ''} · 用过 ${r.uses} 次</span></span>${isGone(r.id) ? `<button class="btn-link" onclick="unGone('${esc(r.id)}')">买回来了</button>` : ''}</div>`).join('')}</div>` : '<p class="note">还没有用完的产品。</p>';
-            }
         }
         function updateProdUI() {}
         // 一件产品的 sheet:状态、为什么(备注 / 快用完时谁能接上)、动作
@@ -2373,10 +2574,16 @@
             if (dot) dot.hidden = !rows.some(x => x.s.cls === 'over');
         }
         function copyShop() {
+            const b = document.getElementById('cpb');
+            const ai = typeof aiShopCopyText === 'function' ? aiShopCopyText() : null;   // 有顾问的判断就复制顾问版
+            if (ai) {
+                if (ai.none) { sysAlert(ai.text); return; }
+                navigator.clipboard.writeText(ai.text).then(() => { if (b) { b.textContent = '复制好了'; setTimeout(() => { b.textContent = '复制清单'; }, 2000); } }).catch(() => sysAlert(ai.text));
+                return;
+            }
             const shop = shopItems();
             if (!shop.length) { sysAlert('家里现有的东西够凑一套完整方案，暂时不用买。'); return; }
             const txt = '护肤要买的（按方案缺口）\n\n' + shop.map((g, i) => `${i + 1}. ${g.what}\n   为什么：${g.why}\n   挑选标准：${g.how || ''}` + (g.pick ? `\n   参考：${g.pick.name}${g.pick.price ? '（' + g.pick.price + '）' : ''}，${g.pick.why}` : '')).join('\n\n');
-            const b = document.getElementById('cpb');
             navigator.clipboard.writeText(txt).then(() => { if (b) { b.textContent = '复制好了'; setTimeout(() => { b.textContent = '复制清单'; }, 2000); } }).catch(() => sysAlert(txt));
         }
 
@@ -2537,13 +2744,24 @@
             const first = used[0];
             return recent.some(e => e.date >= first && (e.status || []).some(s => IRRITATION_TAGS.indexOf(s) >= 0));
         }
-        // 就医红线只看硬事实:近 14 天泛红/新痘 ≥5 天、而且最近 3 天还在。点了「看过了」之后只数那天以后的
+        // 就医红线只看硬事实,痘和泛红分开算(Cait 10/29 拍板):近 14 天里
+        //   · 记了「泛红」的天数 ≥ 5,而且最近 3 天里还有泛红 → 亮;
+        //   · 记了「新痘」(爆痘)的天数 ≥ 10,而且最近 3 天里还在冒 → 亮(一颗痘一周左右走完,两周还在冒才算;旧口径痘 + 泛红合计 5 天会误报)。
+        //   点了「看过了」之后只数那天以后的。
+        // 脸部地图标的位置**不参与**红线(Cait 10/29 撤掉了「口周 ≥3 天提前亮」:一颗痘从冒到成熟三天很正常,会误报);位置只给顾问看。
+        const MEDICAL_RED_DAYS = 5, MEDICAL_ACNE_DAYS = 10;
         function medicalRedLine() {
             const m = PROFILE.medical || {};
             const since = (m.state === 'seen' && m.seenAt) ? m.seenAt : '';
-            const inflam = jrnlLastNDays(14).filter(e => e.date > since && (e.status || []).some(s => s === '泛红' || s === '爆痘'));
-            const still = inflam.some(e => e.date >= offsetDate(-2));
-            return { on: inflam.length >= 5 && still, days: inflam.length };
+            const r14 = jrnlLastNDays(14).filter(e => e.date > since);
+            const has = (e, t) => (e.status || []).indexOf(t) >= 0;
+            const recent = list => list.some(e => e.date >= offsetDate(-2));
+            const red = r14.filter(e => has(e, '泛红')), acne = r14.filter(e => has(e, '爆痘'));
+            const byRed = red.length >= MEDICAL_RED_DAYS && recent(red);
+            const byAcne = acne.length >= MEDICAL_ACNE_DAYS && recent(acne);
+            const why = [byRed ? '泛红 ' + red.length + ' 天' : '', byAcne ? '冒痘 ' + acne.length + ' 天' : ''].filter(Boolean).join('、');
+            return { on: byRed || byAcne, by: byRed && byAcne ? 'both' : byRed ? 'red' : byAcne ? 'acne' : '',
+                     redDays: red.length, acneDays: acne.length, days: new Set(red.concat(acne).map(e => e.date)).size, why: why ? '近两周' + why : '' };
         }
         function safetyGate() {
             const key = _gateKey();
@@ -2562,7 +2780,7 @@
             const firstNight = !!PROFILE.oobeAt && PROFILE.oobeAt === today();
             let acidCapMax = 7;
             const notes = [];
-            if (medical && MEDICAL_STOPS_ALL_ACID) { acidCapMax = 0; notes.push('就医提醒亮着：所有酸先停，看过医生点「看过了」才解除'); }
+            if (medical && MEDICAL_STOPS_ALL_ACID) { acidCapMax = 0; notes.push('就医提醒亮着（' + red.why + '）：所有酸先停，看过医生点「看过了」才解除'); }
             if (firstNight) { acidCapMax = 0; notes.push('第一晚：先不上任何活性'); }
             if (irritated) {
                 const cap = (worsening || react) ? 0 : 1;
@@ -2574,7 +2792,8 @@
             if (hrtFlare) { acidCapMax = Math.min(acidCapMax, 1); notes.push('HRT 波动期：酸最多每周 1 次，面油先停'); }
             const val = {
                 irritated, tags, worsening, react, inflamed14, clogged14, hrtFlare, medical, firstNight, acidCapMax, notes,
-                medicalText: `近两周有 ${red.days} 天泛红或新痘，最近还在。要是集中在嘴周、鼻下，可能是口周皮炎，越刷酸越糟，这种要医生看。`,
+                medicalText: `${red.why}，最近还在。要是集中在嘴周、鼻下，可能是口周皮炎，越刷酸越糟，这种要医生看。`,
+                medicalWhy: red.why,
                 banStrong: irritated || inflamed14 || hrtFlare || medical || firstNight,
                 banScrub: irritated || inflamed14 || clogged14 || medical || firstNight,
                 banRetinol: irritated || hrtFlare || medical || firstNight,
@@ -2798,6 +3017,7 @@
                     <dt>刷酸</dt><dd>近 4 周 ${acids} 次<span class="note">（含面膜）</span></dd></dl>`;
             }
             renderTrendChart();
+            renderFaceHeat();
             const ht = document.getElementById('hrt-tl');
             if (ht) {
                 const rows = (lg(K.jrnl) || []).filter(e => e && e.phase).slice(0, 12);

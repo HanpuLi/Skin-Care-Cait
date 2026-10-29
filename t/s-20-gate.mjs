@@ -1,4 +1,4 @@
-// 安全闸:近 3 天爆痘 → 猛酸不上(并说为什么);就医红线 → 所有酸都停(含温和酸),今晚只留清洁 / 保湿 / 修护,
+// 安全闸:近 3 天爆痘 → 猛酸不上(并说为什么);就医红线(泛红 ≥5 天 / 新痘 ≥10 天分开算)→ 所有酸都停(含温和酸),今晚只留清洁 / 保湿 / 修护,
 // 顾问方案和离线兜底都过这道闸,点「看过了」才解除;极简模式的阶梯从不自己升档;屏障分不被「出油 + 闭口」拖垮;inferRole。
 const STEPS = `const plan=computePlanRolling().find(d=>d.isToday);const ns=buildNightSteps(TN.shower,TN.shave,plan);
     return {steps:ns.steps.map(s=>({p:s.p,kind:s.kind,role:(PD.find(x=>x.name===s.p)||{}).role||''})),skips:ns.skips,
@@ -62,6 +62,44 @@ export default async function ({ origin, S, open }) {
             return {on:medicalRedLine().on,m:PROFILE.medical,card:!!document.querySelector('#safety-alert .note-medical'),cap:safetyGate().acidCapMax}`);
         S.ok(!seen.on && seen.m.state === 'seen' && /测试备注/.test(seen.m.note) && !seen.card && seen.cap > 0, `${who}:点「看过了」并记下医生的话 → 红线解除`, seen);
         S.ok(!p.errors.length, `${who}:就医场景 0 报错`, p.errors);
+    }
+
+    // ── 就医红线的口径:痘和泛红分开算(Cait 10/29)──
+    //   泛红 ≥5 天 + 最近 3 天还有泛红 → 亮;新痘 ≥10 天 + 最近 3 天还在冒 → 亮;看过医生后只数那天以后的
+    {
+        const days = (n, tag, from = -1, step = 1) => '[' + Array.from({ length: n }, (_, k) => `{date:__d(${from - k * step}),status:${JSON.stringify(tag)},products:[],note:'',phase:''}`).join(',') + ']';
+        const red = async (jr, extra) => {
+            const p = await open();
+            await p.nav(origin + '/index.html', 200);
+            await p.eval(`return __seed.full({jrnl:${jr}${extra ? ',' + extra : ''}})`);
+            await p.reload(700);
+            return p.eval(`const r=medicalRedLine();const g=safetyGate();const box=document.querySelector('#safety-alert .note-medical');
+                return {on:r.on,by:r.by,redDays:r.redDays,acneDays:r.acneDays,why:r.why,cap:g.acidCapMax,notes:g.notes,eb:box&&box.querySelector('.eyebrow').textContent,txt:box&&box.innerText}`);
+        };
+        const a = await red(days(7, ['爆痘']));
+        S.ok(!a.on && a.acneDays === 7, '单颗痘拖 7 天(只记新痘):红线不亮(旧口径合计 5 天会误报)', a);
+        const b = await red(days(10, ['爆痘']));
+        S.ok(b.on && b.by === 'acne' && b.eb === '就医 · 近两周冒痘 10 天' && /近两周冒痘 10 天，最近还在/.test(b.txt || '') && b.notes.some(x => /就医提醒亮着（近两周冒痘 10 天）/.test(x)) && b.cap === 0,
+            '新痘 10 天、最近还在:亮,卡片和 notes 写「近两周冒痘 10 天」', b);
+        const b2 = await red(days(10, ['爆痘'], -4));
+        S.ok(!b2.on, '新痘 10 天但最近 3 天没冒:不亮', b2);
+        const c = await red(days(5, ['泛红']));
+        S.ok(c.on && c.by === 'red' && c.eb === '就医 · 近两周泛红 5 天' && c.notes.some(x => /近两周泛红 5 天/.test(x)), '泛红 5 天、最近还在:亮,写「近两周泛红 5 天」', c);
+        const c2 = await red(days(4, ['泛红']));
+        S.ok(!c2.on, '泛红 4 天:不亮', c2);
+        const c3 = await red(days(5, ['泛红'], -4));
+        S.ok(!c3.on, '泛红 5 天但最近 3 天没有:不亮', c3);
+        // 泛红走泛红、痘走痘:泛红 5 天(都在一周前)+ 最近还在冒痘 → 两条都不达标
+        const mix = '[' + [-1, -2].map(i => `{date:__d(${i}),status:['爆痘'],products:[],note:'',phase:''}`).concat([-5, -6, -7, -8, -9].map(i => `{date:__d(${i}),status:['泛红'],products:[],note:'',phase:''}`)).join(',') + ']';
+        const d = await red(mix);
+        S.ok(!d.on, '泛红 5 天但都在 5 天前、最近 3 天只有痘:不亮(那一类自己最近 3 天要还在)', d);
+        const e = await red(days(6, ['泛红', '爆痘']));
+        S.ok(e.on && e.by === 'red' && e.redDays === 6 && e.acneDays === 6, '泛红 + 新痘同一天记 6 天:按泛红那条亮(痘才 6 天不够)', e);
+        // 看过医生后重新计数
+        const f = await red(days(8, ['泛红']), `profile:{medical:{state:'seen',seenAt:__d(-5)}}`);
+        S.ok(!f.on && f.redDays === 4, '看过医生(5 天前)后重新计数:之后只有 4 天泛红,不亮', f);
+        const f2 = await red(days(12, ['泛红']), `profile:{medical:{state:'seen',seenAt:__d(-7)}}`);
+        S.ok(f2.on && f2.redDays === 6, '看过医生后又泛红 6 天、最近还在:重新亮', f2);
     }
 
     // ── 极简模式的离线阶梯:没记录就不升档(对照:完整模式记了「稳定」会升)──

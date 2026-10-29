@@ -10,8 +10,8 @@
 
 const AI_BASE = (['127.0.0.1', 'localhost'].indexOf(location.hostname) >= 0) ? 'http://127.0.0.1:8808' : 'https://node.tail95239f.ts.net/skin';
 const AI_CHAT_MAX = 40, AI_CHAT_SEND = 24;
-// 本机缓存(不进云;换账号时 aiClearLocal 清掉):对话、今日顾问的话、开通状态、模型选择
-const AIK = { chat: 'sk_aichat1', note: 'sk_ainote1', acc: 'sk_aiacc1', opts: 'sk_aiopts1', privacy: 'sk_aiprivacy1' };
+// 本机缓存(不进云;换账号时 aiClearLocal 清掉):对话、今日顾问的话、开通状态、模型选择、「要不要买新的」的顾问判断
+const AIK = { chat: 'sk_aichat1', note: 'sk_ainote1', acc: 'sk_aiacc1', opts: 'sk_aiopts1', privacy: 'sk_aiprivacy1', shop: 'sk_ai_shop1' };
 const AI_LOCKED = ['not_allowed', 'mismatch'];
 const AI_ROLE_FROM_CN = { '洁面': 'cleanse', '卸妆': 'precleanse', '去角质': 'acid', '精华': 'serum', '眼部': 'eye', '修护': 'repair', '防晒': 'spf', '面膜': 'mask', '保湿': 'moist', '舒缓': 'soothe' };
 
@@ -162,6 +162,7 @@ async function aiProbe(force) {
 }
 function _aiRefresh() {
     if (typeof renderRegimenCard === 'function') renderRegimenCard();
+    if (typeof renderShop === 'function') renderShop();   // 产品页「要不要买新的」:开通状态一变,顾问版 / 离线版跟着换;里面会排一次后台判断
     aiRenderTonight();
     if (typeof renderTnSay === 'function') renderTnSay();
     if (typeof oobeRefresh === 'function') oobeRefresh();
@@ -203,6 +204,8 @@ function buildSkincareContext() {
         if ((e.skipped || []).length) o.notDone = e.skipped.slice(0, 8);   // 那晚她点了「没做」的
         if (e.done) o.done = true;
         if (PROFILE.hrt && e.phase) o.hrtPhase = e.phase;
+        // 脸部地图:她标在脸上的位置(区域名照 FACE_ZONES,左右是她自己的左右);没标就是空数组,顾问别猜位置
+        o.spots = (typeof cleanSpots === 'function' ? cleanSpots(e.spots) : []).map(s => ({ zone: s.zone, type: s.type }));
         return o;
     });
     const axes = {}; a.axes.forEach(x => { axes[x.key] = x.score; });
@@ -236,6 +239,12 @@ function buildSkincareContext() {
     // 就医提醒的状态(数据说明里写了「看过医生的记录(如果有)」会给顾问看)
     if (PROFILE.medical && PROFILE.medical.state) ctx.medical = { state: PROFILE.medical.state, date: PROFILE.medical.date || '', seenAt: PROFILE.medical.seenAt || '', note: PROFILE.medical.note || '' };
     if (PROFILE.hrt) ctx.hrt = { on: true, flare: g.hrtFlare, recent: jrnlLastNDays(14).filter(e => e.phase).map(e => ({ date: e.date, phase: e.phase })) };
+    // 「要不要买新的」要看的:标了快用完的、近 60 天的空瓶、在哪个国家买(顾问按这个查能买到的型号)
+    ctx.low = PD.filter(p => !p.hidden && typeof isLow === 'function' && isLow(p.id)).map(p => p.name);
+    const from60 = offsetDate(-59);
+    ctx.emptied = (typeof emptyLogRows === 'function' ? emptyLogRows() : []).filter(r => r.date && r.date >= from60)
+        .map(r => ({ name: r.name, date: r.date, weeks: (r.weeks === undefined || r.weeks === null) ? null : r.weeks }));
+    ctx.region = 'GB';
     return ctx;
 }
 // 每条对话另带的「此刻」:对话开头拍的快照整段不变(缓存命中省钱),会变的放这里
@@ -1046,8 +1055,156 @@ function aiFeedbackNote() {
     aiRenderTonight();
 }
 
+// ══ 要不要买新的:顾问判断(Cait 10/29 拍板)══════════════════════════════════════════
+// 后端 POST /api/shop {context, trigger} → {data:{verdict, summary, items[], skip[]}}。真跑一次约 70 秒、$0.26,
+// 所以**只在后台跑**,不进 _aiSerial 那条队(后端给它单独的忙碌位,不挡对话);界面上一直有东西看(上次的结果或离线清单)。
+// 什么时候跑:货架签名(在架产品 + 快用完的 + 方案版本)变了 → 防抖 _aiShopDelay 后跑一次;签名没变不跑;产品页有「重新判断」。
+// 结果按账号存本机 sk_ai_shop1({uid, sig, at, trigger, data, parts}),不进 CLOUD_KEYS;换账号 aiClearLocal 会清,读的时候也核 uid。
+// 顾问用不了 / 出错 → 产品页退回 index.html 的离线 regimenNeeds / SHOP_ADVICE / SHOP_PICKS(那套一行没删)。
+let _aiShopDelay = 5000;           // 防抖(毫秒)
+let _aiShopT = null, _aiShopTSig = '';   // 排着的那一次
+let _aiShopRun = null;             // 正在跑的 {uid, sig}
+let _aiShopErr = null;             // 最近一次失败 {uid, sig, msg}:同一个签名失败过就不自动重试(手动「重新判断」可以)
+const AI_SHOP_URG = [['now', '现在就缺'], ['before_out', '快用完前备上'], ['optional', '可买可不买']];
+function _aiShopReset() { clearTimeout(_aiShopT); _aiShopT = null; _aiShopTSig = ''; _aiShopRun = null; _aiShopErr = null; }
+// 货架签名的组成(名字留着,下次好写「为什么重判」)
+function _aiShopParts() {
+    const shelf = {};
+    shelfProducts().forEach(p => { shelf[p.id] = p.name; });
+    const reg = currentRegimen();
+    return { shelf, low: LOW.filter(id => PD.some(p => p.id === id)).sort(), v: reg ? (reg.v || 0) : 0 };
+}
+function aiShopSig() {
+    const reg = currentRegimen();
+    return shelfSignature() + '|low:' + LOW.filter(id => PD.some(p => p.id === id)).sort().join(',') + '|v' + (reg ? (reg.v || 0) : 0);
+}
+function _aiShopRec() { const r = _aiMine(AIK.shop); return (r && r.data && typeof r.data === 'object') ? r : null; }
+// 这次为什么重判(写进 trigger 给顾问看):比上次存的组成
+function _aiShopWhy(prev, cur) {
+    if (!prev || !prev.parts) return '第一次判断';
+    const P = prev.parts, bits = [];
+    const nm = id => (PD.find(p => p.id === id) || DEFAULT_PD.find(p => p.id === id) || {}).name || (P.shelf || {})[id] || id;
+    cur.low.forEach(id => { if ((P.low || []).indexOf(id) < 0) bits.push('标了「' + nm(id) + '」快用完了'); });
+    Object.keys(P.shelf || {}).forEach(id => {
+        if (cur.shelf[id]) return;
+        bits.push((typeof isGone === 'function' && isGone(id) ? '「' + P.shelf[id] + '」用完了' : '「' + P.shelf[id] + '」从货架上拿掉了'));
+    });
+    Object.keys(cur.shelf).forEach(id => { if (!(P.shelf || {})[id]) bits.push('多了「' + cur.shelf[id] + '」'); });
+    (P.low || []).forEach(id => { if (cur.low.indexOf(id) < 0 && cur.shelf[id]) bits.push('「' + nm(id) + '」又够用了'); });
+    if (cur.v !== P.v) bits.push('方案换成了 v' + cur.v);
+    return bits.length ? bits.slice(0, 4).join('；') : '货架有变化';
+}
+// 货架变了就排一次(防抖);签名没变、正在跑同一个签名、同一个签名刚失败过,都不排
+function aiShopCheck() {
+    if (!aiReady()) { clearTimeout(_aiShopT); _aiShopT = null; _aiShopTSig = ''; return; }
+    const uid = _aiUid(), sig = aiShopSig(), rec = _aiShopRec();
+    if (rec && rec.sig === sig) { clearTimeout(_aiShopT); _aiShopT = null; _aiShopTSig = ''; return; }
+    if (_aiShopRun) return;   // 跑完会再核一次签名
+    if (_aiShopErr && _aiShopErr.uid === uid && _aiShopErr.sig === sig) return;
+    if (_aiShopT && _aiShopTSig === sig) return;
+    clearTimeout(_aiShopT);
+    _aiShopTSig = sig;
+    _aiShopT = setTimeout(() => { _aiShopT = null; _aiShopTSig = ''; if (aiReady() && _aiUid() === uid && aiShopSig() === sig) aiShopRun(); else aiShopCheck(); }, _aiShopDelay);
+}
+function aiShopRedo() { clearTimeout(_aiShopT); _aiShopT = null; _aiShopTSig = ''; return aiShopRun('她点了「重新判断」'); }
+async function aiShopRun(why) {
+    if (!aiReady() || _aiShopRun) return;
+    const uid = _aiUid(), sig = aiShopSig(), parts = _aiShopParts();
+    const trigger = why || _aiShopWhy(_aiShopRec(), parts);
+    _aiShopRun = { uid, sig }; _aiShopErr = null;
+    _aiShopPaint();
+    try {
+        let r;
+        for (let i = 0; ; i++) {
+            try { r = _aiClean(await aiFetch('/api/shop', Object.assign({ context: buildSkincareContext(), trigger }, _aiOpts()))); break; }
+            catch (e) { if (e.code === 429 && /还没跑完/.test(e.message) && i < 2) { await new Promise(res => setTimeout(res, 8000)); continue; } throw e; }
+        }
+        const d = _aiShopNorm(r && r.data);
+        if (!d) throw new Error('顾问这次没给出结论');
+        if (_aiUid() === uid) _aiSet(AIK.shop, { uid, sig, at: new Date().toISOString(), trigger, data: d, parts, model: r.model || '', cost: r.cost || 0 });
+    } catch (e) {
+        if (_aiUid() === uid) _aiShopErr = { uid, sig, msg: e.message || '顾问出错了' };
+    }
+    _aiShopRun = null;
+    _aiShopPaint();
+    if (_aiUid() === uid) aiShopCheck();   // 跑的时候货架又变了 → 再排一次
+}
+// 后端已经 clean_shop 过;这里只保证形状,url 只认 https
+function _aiShopNorm(d) {
+    if (!d || typeof d !== 'object') return null;
+    const str = x => String(x == null ? '' : x).trim();
+    const items = (Array.isArray(d.items) ? d.items : []).filter(x => x && typeof x === 'object' && (str(x.need) || str(x.what))).map(x => ({
+        need: str(x.need), urgency: ['now', 'before_out', 'optional'].indexOf(x.urgency) >= 0 ? x.urgency : 'optional',
+        what: str(x.what), why: str(x.why), cover: str(x.cover), replaces: str(x.replaces),
+        picks: (Array.isArray(x.picks) ? x.picks : []).filter(k => k && str(k.name)).map(k => ({
+            name: str(k.name), where: str(k.where), price: str(k.price), why: str(k.why), url: /^https:\/\//.test(str(k.url)) ? str(k.url) : '' }))
+    }));
+    const skip = (Array.isArray(d.skip) ? d.skip : []).filter(x => x && str(x.name)).map(x => ({ name: str(x.name), why: str(x.why) }));
+    return { verdict: items.length ? 'buy' : 'none', summary: str(d.summary), items, skip };
+}
+function _aiShopPaint() { if (typeof renderShop === 'function') { try { renderShop(); } catch (e) { console.warn('shop', e); } } }
+function _aiShopWhen(iso) { const d = new Date(iso); if (isNaN(d)) return ''; return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + _aiHM(iso); }
+// 产品页「要不要买新的」的顾问版。返回 null = 用离线那套;否则 {html, busy, redo}
+// 显示顾问版:有这个账号的结果,而且(签名没变 / 正在重判 / 没有失败过)。签名变了、重判又失败 → 退回离线(旧结果已经不对得上货架了)
+function aiShopView() {
+    if (aiAccess() !== 'on') return null;
+    const ready = aiReady(), uid = _aiUid(), rec = _aiShopRec();
+    const busy = !!(_aiShopRun && _aiShopRun.uid === uid);
+    const sig = aiShopSig();
+    const err = (_aiShopErr && _aiShopErr.uid === uid) ? _aiShopErr : null;
+    const fresh = !!rec && rec.sig === sig;
+    if (!rec || (!fresh && err && !busy)) {
+        // 没有可用的顾问结果:离线版照常,上面只挂一行状态
+        const line = busy ? '顾问在查型号，大约一分钟。下面先按离线规则看。'
+            : err ? '顾问这次没查成（' + err.msg + '），下面先按离线规则看。' : '';
+        return { html: '', status: line, busy, redo: ready, fallback: true };
+    }
+    const d = rec.data;
+    const st = busy ? '顾问在查…（上次的结果先留着）' : !fresh ? '货架变了，结果可能过时' : '';
+    let h = `<p class="lede">${d.verdict === 'none' ? '现在不用买。' : ''}${_aiEsc(cjkSpace(d.summary || ''))}</p>`;
+    h += `<p class="meta">顾问 · ${_aiEsc(_aiShopWhen(rec.at))} 判断${rec.trigger ? '<span class="shop-trig">，因为' + _aiEsc(cjkSpace(rec.trigger)) + '</span>' : ''}</p>`;
+    if (st) h += `<p class="note shop-st" role="status">${_aiEsc(st)}</p>`;
+    AI_SHOP_URG.forEach(([u, label]) => {
+        const list = d.items.filter(x => x.urgency === u);
+        if (!list.length) return;
+        h += `<div class="shop-g"><div class="sec-t">${label}</div><ul class="shop">${list.map(x => `<li>
+            <p class="lede">${_aiEsc(cjkSpace(x.need || x.what))}${x.replaces ? `<span class="note">，接班「${_aiEsc(cjkSpace(x.replaces))}」</span>` : ''}</p>
+            ${x.what && x.need ? `<p class="note">${_aiEsc(cjkSpace(x.what))}</p>` : ''}
+            ${x.why ? `<p class="note">为什么：${_aiEsc(cjkSpace(x.why))}</p>` : ''}
+            ${x.cover ? `<p class="note">买到之前：${_aiEsc(cjkSpace(x.cover))}</p>` : ''}
+            ${x.picks.length ? `<ul class="picks">${x.picks.map(k => `<li>${k.url ? `<a href="${_aiEsc(k.url)}" target="_blank" rel="noopener">${_aiEsc(cjkSpace(k.name))}</a>` : `<span class="pick-n">${_aiEsc(cjkSpace(k.name))}</span>`}
+                <span class="note">${_aiEsc(cjkSpace([k.price, k.where].filter(Boolean).join(' · ')))}${k.why ? (k.price || k.where ? '。' : '') + _aiEsc(cjkSpace(k.why)) : ''}</span></li>`).join('')}</ul>` : ''}
+        </li>`).join('')}</ul></div>`;
+    });
+    if (d.skip.length) h += `<details class="fold shop-skip"><summary><span class="fold-sum"><span class="lede">这些不用买：${_aiEsc(cjkSpace(d.skip.map(x => x.name).join('、')))}</span></span></summary>
+        <ul class="fold-body list note">${d.skip.map(x => `<li>${_aiEsc(cjkSpace(x.name))}${x.why ? '：' + _aiEsc(cjkSpace(x.why)) : ''}</li>`).join('')}</ul></details>`;
+    return { html: h, status: '', busy, redo: ready, fallback: false };
+}
+// 复制清单:有顾问版就复制顾问版;返回 null = 用离线那份
+function aiShopCopyText() {
+    const v = aiShopView();
+    if (!v || v.fallback) return null;
+    const rec = _aiShopRec(), d = rec.data;
+    if (d.verdict === 'none') return { none: true, text: '现在不用买。' + (d.summary || '') };
+    const lines = ['护肤要买的（顾问 ' + _aiShopWhen(rec.at) + ' 判断）', d.summary || ''];
+    AI_SHOP_URG.forEach(([u, label]) => {
+        const list = d.items.filter(x => x.urgency === u);
+        if (!list.length) return;
+        lines.push('', label);
+        list.forEach((x, i) => {
+            lines.push((i + 1) + '. ' + (x.need || x.what) + (x.replaces ? '（接班「' + x.replaces + '」）' : ''));
+            if (x.what && x.need) lines.push('   ' + x.what);
+            if (x.why) lines.push('   为什么：' + x.why);
+            if (x.cover) lines.push('   买到之前：' + x.cover);
+            x.picks.forEach(k => lines.push('   型号：' + k.name + ([k.price, k.where].filter(Boolean).length ? '（' + [k.price, k.where].filter(Boolean).join('，') + '）' : '') + (k.url ? ' ' + k.url : '')));
+        });
+    });
+    if (d.skip.length) lines.push('', '这些不用买：' + d.skip.map(x => x.name + (x.why ? '（' + x.why + '）' : '')).join('；'));
+    return { none: false, text: lines.filter((l, i) => !(i === 1 && !l)).join('\n') };
+}
+
 // ── 钩子:登录 / 换账号 / 清本机 ──
-function aiClearLocal() { Object.values(AIK).forEach(k => localStorage.removeItem(k)); AI_ME = null; _aiMeUid = null; _aiProbeUid = null; _aiMem = null; _aiResult = null; }
+function aiClearLocal() { Object.values(AIK).forEach(k => localStorage.removeItem(k)); AI_ME = null; _aiMeUid = null; _aiProbeUid = null; _aiMem = null; _aiResult = null; _aiShopReset(); }
 function aiOnAuth(user) {
     if (!user) { AI_ME = null; _aiMeUid = null; _aiProbeUid = null; _aiRefresh(); return; }
     // 本机缓存属于别的账号 → 清掉(换账号时 index.html 也会调 aiClearLocal,这里是双保险)
