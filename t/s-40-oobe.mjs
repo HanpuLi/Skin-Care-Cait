@@ -53,16 +53,16 @@ export default async function ({ origin, S, open }) {
         const r = await p.eval(`startOOBE({});oobeGo('skin');const b=[...document.querySelectorAll('#oobe button')].find(x=>x.textContent.trim()==='有发红刺痛');b.click();const e=lg(K.jrnl).find(x=>x.date===today());return {st:e&&e.status,irr:safetyGate().irritated}`);
         S.ok((r.st || []).indexOf('泛红') >= 0 && r.irr, '引导里选「有发红刺痛」:记进今天,安全闸当晚就生效', r);
     }
-    // 老账号:货架不动,不重做引导;没看过新版的弹一次导览
+    // 老账号:货架不动,不重做引导;没看过改版说明的弹一次(IA 重排 10/29 起是「这一版改了什么」4 条,取代 B3 那版 3 / 2 条导览)
     for (const who of ['full', 'minimal']) {
         const p = await open();
         await p.nav(origin + '/index.html', 200);
-        await p.eval(`return __seed.${who}({profile:{tour3:false}})`);
+        await p.eval(`return __seed.${who}({profile:{tour3:false,tourIA:false}})`);
         await p.reload(2100);
         const r = await p.eval(`const t=document.getElementById('tour');return {oobe:!!document.getElementById('oobe'),tour:!!t,n:t?t.querySelectorAll('.row').length:0,pd:PD.filter(x=>!x.hidden).length,
             txt:t?t.innerText:''}`);
         S.ok(!r.oobe && r.pd >= 12, `${who} 老账号:不进引导,货架原样(${r.pd} 件)`, r);
-        S.ok(r.tour && r.n === (who === 'full' ? 3 : 2) && !/分数|记录/.test(who === 'minimal' ? r.txt : ''), `${who} 老账号:弹一次新版导览(${who === 'full' ? 3 : 2} 条${who === 'minimal' ? ',不提记录和分数' : ''})`, r);
+        S.ok(r.tour && r.n === (who === 'full' ? 4 : 3) && !/分数/.test(who === 'minimal' ? r.txt : ''), `${who} 老账号:弹一次改版说明(${who === 'full' ? 4 : 3} 条${who === 'minimal' ? ',不提分数' : ''})`, r);
         await p.eval(`const b=[...document.querySelectorAll('#tour button')].find(x=>/知道了/.test(x.textContent));b&&b.click();return 1`);
         await p.reload(2100);
         const r2 = await p.eval(`return !!document.getElementById('tour')`);

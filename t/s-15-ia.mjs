@@ -75,14 +75,21 @@ export default async function ({ origin, S, open }) {
             return {cards,inMore,moreHidden:more.hidden,open:more.open,n:document.getElementById('tn-more-n').textContent,sum:more.querySelector('summary').textContent.trim(),
                 btns:med?[...med.querySelectorAll('button')].map(b=>b.textContent):[],vis:[...top.querySelectorAll('.note-medical,.note-caution,.revbar,.say-card')].length}`);
         S.ok(JSON.stringify(r.cards) === '["safety-alert"]' && r.vis === 1, '就医红线亮着:外面只有就医卡一张', r);
-        S.ok(JSON.stringify(r.inMore) === '["tn-notes","tn-change","tn-aisay"]' && !r.moreHidden && !r.open && r.n === '3' && /还有 3 条/.test(r.sum), '其余按优先级(注意 > 方案变了 > 顾问的话)收进「还有 3 条」,默认折着', r);
+        S.ok(JSON.stringify(r.inMore) === '["tn-notes","tn-aisay"]' && !r.moreHidden && !r.open && r.n === '2' && /还有 2 条/.test(r.sum), '其余按优先级(注意 > 顾问的话)收进「还有 2 条」,默认折着', r);
+        // 「顾问改了今晚」不算提醒卡、不收进折叠(Cait 10/29):红线亮着时也单独一行露在外面,撤销看得见、点得到
+        const rv = await p.eval(`const ch=document.getElementById('tn-change');const b=[...ch.querySelectorAll('button')].find(x=>/撤销/.test(x.textContent));
+            const vis=el=>{if(!el)return false;const r=el.getBoundingClientRect();if(!r.width||!r.height)return false;for(let e=el;e;e=e.parentElement){if(getComputedStyle(e).display==='none'||(e.tagName==='DETAILS'&&!e.open&&e!==el))return false}return true};
+            const after=[...document.getElementById('tonight').children].map(x=>x.id);
+            return {inMore:!!ch.closest('#tn-more'),vis:vis(b),who:(ch.querySelector('.who')||{}).textContent,order:after.indexOf('tn-change')>after.indexOf('tn-more')&&after.indexOf('tn-change')<after.indexOf('tn-plan'),
+                w:b?Math.round(b.getBoundingClientRect().width):0,h:b?Math.round(b.getBoundingClientRect().height):0}`);
+        S.ok(!rv.inMore && rv.vis && rv.order && /^顾问改了今晚/.test(rv.who || '') && rv.w >= 44 && rv.h >= 44, '红线亮 + 有修订:「顾问改了今晚 · 撤销」单独一行在提醒卡下面,撤销按钮可见、≥44', rv);
         S.ok(JSON.stringify(r.btns) === '["已约了","看过了","先不"]', '就医卡三个按钮不变', r.btns);
         const r2 = await p.eval(`medicalSeen();${wait(60)}const ok=[...document.querySelectorAll('#sheet-root button')].find(b=>/解除/.test(b.textContent));ok.click();${wait(150)}
             const top=document.getElementById('tn-cards');return {cards:[...top.children].filter(x=>x.innerHTML.trim()).map(x=>x.id),n:document.getElementById('tn-more-n').textContent}`);
-        S.ok(r2.cards[0] === 'tn-notes' && r2.n === '2', '点「看过了」解除后:注意卡升到外面,「还有 2 条」', r2);
+        S.ok(r2.cards[0] === 'tn-notes' && r2.n === '1', '点「看过了」解除后:注意卡升到外面,「还有 1 条」', r2);
         const r3 = await p.eval(`const b=[...document.querySelectorAll('#tn-change button')].find(x=>/撤销/.test(x.textContent));b.click();${wait(120)}
             return {undone:!tonightOverride(),bar:document.getElementById('tn-change').textContent}`);
-        S.ok(r3.undone && /已撤销/.test(r3.bar), '收在「还有 N 条」里的修订条照样能撤销', r3);
+        S.ok(r3.undone && /已撤销/.test(r3.bar), '点修订行的「撤销」:今晚回到改之前,同一行变「已撤销」可重做', r3);
         S.ok(!p.errors.length, '提醒卡 0 报错', p.errors);
     }
     {
@@ -124,24 +131,57 @@ export default async function ({ origin, S, open }) {
             return {n:(__AIF.log||[]).filter(x=>x.p==='/api/feedback').length,saved:!!(_aiState().feedback||{})[today()]}`);
         S.ok(r.n === 1 && r.saved, '没点「记好了」直接关掉:后台照样要一次反馈,存下来', r);
     }
+    // 极简模式(Cait 10/29 原话「护肤品不打卡，排了就当全用了。皮肤状况记录等等要保留」):
+    //   步骤不能勾、没有「完成今晚 / 做完了」;活性步骤的「今晚没做」还在;一个看得见的「记一下皮肤」→ 同一个记皮肤 sheet,记完要顾问反馈;不催、不因记不记升降档
     {
-        const p = await boot(`minimal()`);
-        const r = await p.eval(`const bar=document.getElementById('tn-done');const btns=[...bar.querySelectorAll('button')].map(b=>b.textContent);
-            [...bar.querySelectorAll('button')].find(b=>b.textContent==='做完了').click();${wait(120)}const ov=document.getElementById('done-sheet');
-            return {btns,txt:ov.innerText,seg:!!ov.querySelector('#tn-skin .seg'),nag:/未记录|还没记|记了 \\d/.test(document.body.innerText),checkable:document.querySelectorAll('#tn-plan [role=checkbox]').length}`);
-        S.ok(JSON.stringify(r.btns) === '["做完了","只记皮肤"]' && r.checkable === 0, '极简:还是默认全做(步骤不用点),完成栏「做完了」+「只记皮肤」', r);
-        S.ok(r.seg && /想记就记一下皮肤，不记也没关系/.test(r.txt) && !r.nag, '极简:做完后记皮肤是选填,不催', r);
-        S.ok(!p.errors.length, '极简完成 0 报错', p.errors);
+        const p = await boot(`minimal()`, { ai: 'on' });
+        const r = await p.eval(`const bar=document.getElementById('tn-done');const btns=[...bar.querySelectorAll('button')].map(b=>b.textContent.trim());
+            const b=document.getElementById('tn-logskin');const br=b.getBoundingClientRect();const cs=getComputedStyle(b);
+            const L0={lv:acidLadder().level,cap:maxAcidPerWeek()};
+            return {btns,bw:Math.round(br.width),bh:Math.round(br.height),fs:parseFloat(cs.fontSize),boxed:cs.boxShadow!=='none',
+                checkable:document.querySelectorAll('#tn-plan [role=checkbox]').length,skip:document.querySelectorAll('#tn-plan .skip-btn').length,
+                txt:document.getElementById('tonight').innerText,L0}`);
+        S.ok(JSON.stringify(r.btns) === '["记一下皮肤"]' && r.bw >= 300 && r.bh >= 44 && r.fs >= 16 && r.boxed, '极简:完成栏只有一个整宽、带框的「记一下皮肤」(看得见,不是小字)', r);
+        S.ok(r.checkable === 0 && !/完成今晚|做完了/.test(r.txt) && /护肤品不用打卡，排上的默认都算用了/.test(r.txt), '极简:护肤品不打卡(步骤不能勾、没有「完成今晚 / 做完了」),说明排上的默认都算用了', r);
+        const sk = await p.eval(`const li=[...document.querySelectorAll('#tn-plan .step')].find(x=>x.querySelector('.skip-btn'));if(!li)return 'no-active';li.querySelector('.skip-btn').click();${wait(80)}
+            return {name:li.dataset.prod,skipped:(lg(K.jrnl).find(e=>e.date===today())||{}).skipped}`);
+        S.ok(sk === 'no-active' || (sk.skipped || []).indexOf(sk.name) >= 0, '极简:活性步骤的「今晚没做」照旧能点、记进 skipped', sk);
+        const r2 = await p.eval(`document.getElementById('tn-logskin').click();${wait(120)}const ov=document.getElementById('skin-sheet');
+            const has={title:ov.querySelector('.sheet-t').textContent,seg:!!ov.querySelector('#tn-skin .seg'),note:!!ov.querySelector('#done-note'),photo:!!ov.querySelector('input[type=file]'),fbBtn:(ov.querySelector('#ai-feedback button')||{}).textContent,txt:ov.innerText};
+            ov.querySelectorAll('#tn-skin .seg button')[2].click();${wait(80)}document.querySelector('#tn-skin .skin-h .btn-link').click();${wait(40)}
+            [...document.querySelectorAll('#tn-skin .syms .chip')].find(c=>c.textContent.trim()==='泛红').click();${wait(80)}
+            const fm=!!document.querySelector('#tn-skin .fm-entry');const e=(lg(K.jrnl)||[]).find(x=>x.date===today())||{};
+            document.querySelector('#skin-sheet .sheet-actions .btn-primary').click();${wait(300)}
+            const call=(__AIF.log||[]).filter(x=>x.p==='/api/feedback');
+            return Object.assign(has,{fm,st:e.status,done:!!e.done,n:call.length,sent:call[0]&&call[0].body.session.status,bar:document.getElementById('tn-logskin').textContent,
+                L1:{lv:acidLadder().level,cap:maxAcidPerWeek(),gate:safetyGate().irritated},nag:/未记录|还没记|记了 \d/.test(document.body.innerText)})`);
+        S.ok(r2.title === '记一下皮肤' && r2.seg && r2.note && r2.photo && r2.fm && /不记也没关系/.test(r2.txt), '「记一下皮肤」打开同一个记皮肤 sheet:状态、具体情况、标在脸上、备注、照片;不催', r2);
+        S.ok((r2.st || []).indexOf('变差') >= 0 && (r2.st || []).indexOf('泛红') >= 0 && !r2.done, '记的写进当天条目,不算对产品打卡(没有 done)', r2);
+        S.ok(r2.fbBtn === '记好了，看顾问怎么说' && r2.n === 1 && (r2.sent || []).indexOf('泛红') >= 0, '记完要顾问反馈(带上刚记的);关掉时后台要一次', r2);
+        // 阶梯档位不因记不记而动;记了「泛红」压低的是安全闸(当晚刺激先停酸),不是阶梯
+        S.ok(r.L0.lv === r2.L1.lv && r.L0.lv === 1 && r2.L1.gate && !r2.nag && /再看看/.test(r2.bar), '刷酸阶梯不因记不记升降档(记了泛红只走安全闸)、不催;记过以后按钮写「今天的皮肤 · 再看看」', { L0: r.L0, L1: r2.L1, bar: r2.bar });
+        S.ok(!p.errors.length, '极简记皮肤 0 报错', p.errors);
+    }
+    {
+        // 极简模式什么都没记就关掉:不花钱要反馈
+        const p = await boot(`minimal()`, { ai: 'on' });
+        const r = await p.eval(`openSkinSheet();${wait(80)}document.querySelector('#skin-sheet .sheet-x').click();${wait(200)}return (__AIF.log||[]).filter(x=>x.p==='/api/feedback').length`);
+        S.ok(r === 0, '极简:打开「记一下皮肤」什么都没记就关掉,不要反馈', r);
     }
 
-    // ── 5. 四个 tab;极简默认也有「记录」(设置里能关);记录页只回看 ──
+    // ── 5. 四个 tab;极简模式默认也显示「记录」(Cait 10/29「皮肤状况记录要保留」),设置里能关(按账号存 PROFILE.hideRecords);记录页只回看 ──
     {
         const p = await boot(`minimal()`);
         const r = await p.eval(`const vis=el=>getComputedStyle(el).display!=='none';const tabs=()=>[...document.querySelectorAll('.tabbar .tab')].filter(vis).map(t=>t.textContent.trim());
             const a=tabs();openSettings();const sw=document.getElementById('set-showrec');const on=sw.checked;sw.click();${wait(80)}const b=tabs();const hid=PROFILE.hideRecords;
-            sw.click();${wait(80)}closeSettings();return {a,on,b,hid,c:tabs(),still:PROFILE.hideRecords}`);
-        S.ok(JSON.stringify(r.a) === '["今晚","顾问","记录","产品"]' && r.on, '极简模式默认也有「记录」tab(只回看,不催)', r);
-        S.ok(JSON.stringify(r.b) === '["今晚","顾问","产品"]' && r.hid === true && r.c.length === 4 && r.still === undefined, '设置「显示「记录」页」能关能开', r);
+            const saved=(lg(K.profile)||{}).hideRecords;sw.click();${wait(80)}closeSettings();return {a,on,b,hid,saved,c:tabs(),still:PROFILE.hideRecords}`);
+        S.ok(JSON.stringify(r.a) === '["今晚","顾问","记录","产品"]' && r.on, '极简模式默认也有「记录」tab', r);
+        S.ok(JSON.stringify(r.b) === '["今晚","顾问","产品"]' && r.hid === true && r.saved === true && r.c.length === 4 && r.still === undefined, '设置「显示「记录」页」能关能开,按账号存进档案(走 saveProfile)', r);
+    }
+    {
+        const p = await boot(`full()`);
+        const r = await p.eval(`const vis=el=>getComputedStyle(el).display!=='none';return [...document.querySelectorAll('.tabbar .tab')].filter(vis).map(t=>t.textContent.trim())`);
+        S.ok(JSON.stringify(r) === '["今晚","顾问","记录","产品"]', '完整模式四个 tab:今晚 / 顾问 / 记录 / 产品', r);
     }
     {
         const p = await boot(`full()`);

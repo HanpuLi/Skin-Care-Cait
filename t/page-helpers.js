@@ -11,7 +11,7 @@
         full(o) {
             o = o || {};
             localStorage.clear();
-            S('sk_profile1', Object.assign({ shaving: true, hrt: false, minimalMode: false, showJournal: true, skinType: '混油皮 · 屏障修护', onboarded: true, autoMatched: 'cait', tour3: true }, o.profile || {}));
+            S('sk_profile1', Object.assign({ shaving: true, hrt: false, minimalMode: false, showJournal: true, skinType: '混油皮 · 屏障修护', onboarded: true, autoMatched: 'cait', tour3: true, tourIA: true }, o.profile || {}));
             const j = [];
             for (let i = o.today ? 0 : -1; i >= -13; i--) j.push({ date: d(i), status: (o.status && o.status(i)) || ['出油', '闭口'], products: (o.products && o.products(i)) || [], note: '', phase: '' });
             S('sk_jrnl1', o.jrnl || j);
@@ -25,7 +25,7 @@
         minimal(o) {
             o = o || {};
             localStorage.clear();
-            S('sk_profile1', Object.assign({ shaving: false, hrt: false, minimalMode: true, showJournal: false, useMakeupRemoval: false, skinType: '油偏混 · 抗闭口', onboarded: true, autoMatched: 'cici', tour3: true,
+            S('sk_profile1', Object.assign({ shaving: false, hrt: false, minimalMode: true, showJournal: false, useMakeupRemoval: false, skinType: '油偏混 · 抗闭口', onboarded: true, autoMatched: 'cici', tour3: true, tourIA: true,
                 zones: [{ name: '人中/鼻下', avoid: ['acid', 'mask', 'retinol'], care: '只温和清洁 + 修护霜点涂' }] }, o.profile || {}));
             const j = [];
             for (let i = -1; i >= -13; i--) j.push({ date: d(i), status: (o.status && o.status(i)) || [], products: (o.products && o.products(i)) || [], note: '', phase: '', auto: true });

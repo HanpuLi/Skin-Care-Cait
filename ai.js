@@ -989,8 +989,9 @@ function aiRenderTonight() {
     const fb = document.getElementById('ai-feedback');
     if (fb) {
         const f = (_aiState().feedback || {})[today()];
-        // 完成今晚之后的 sheet:还没要过反馈 → 一个按钮(记完皮肤再点);不点、直接关掉 sheet 也会在后台要一次(index.html openDoneSheet)
-        fb.innerHTML = f ? _aiFeedbackHtml(f) : (aiReady() && (todayEntry() || {}).done ? `<button class="btn btn-block" onclick="aiAfterCheckin(today())">记好了，看顾问怎么说</button>` : '');
+        // 记皮肤的 sheet(完整模式「完成今晚」之后 / 极简模式「记一下皮肤」):还没要过反馈 → 一个按钮(记完再点);
+        // 不点、直接关掉 sheet 也会在后台要一次(index.html openDoneSheet;极简模式要记了东西才要)。#ai-feedback 只在要反馈的 sheet 里有
+        fb.innerHTML = f ? _aiFeedbackHtml(f) : (aiReady() ? `<button class="btn btn-block" onclick="aiAfterCheckin(today())">记好了，看顾问怎么说</button>` : '');
     }
     _aiMaybeNote();
     _aiMaybeAutoReview();
