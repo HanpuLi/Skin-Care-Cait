@@ -77,8 +77,10 @@
 .msg .body p+p{margin-top:var(--sp-2)}
 .msg.me{align-self:flex-end;max-width:82%;background:var(--tint);border-radius:var(--r-ctl);padding:var(--sp-2) var(--sp-3)}
 .msg .meta,.msg>.note{margin-top:var(--sp-1)}
-.rev{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:var(--sp-3);align-items:center;border-left:2px solid var(--rev);
-  padding:10px 0 10px 14px;margin-top:var(--sp-3)}
+/* 修订块只认带 data-rec 的(对话 / 复盘里那条);单独的 .rev 是「字色 = --rev」的工具类(7 晚提示、刚读完的成分表),别被画成修订条 */
+.rev{color:var(--rev)}
+.rev[data-rec]{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:var(--sp-3);align-items:center;border-left:2px solid var(--rev);
+  padding:10px 0 10px 14px;margin-top:var(--sp-3);color:inherit}
 .rev-main{display:flex;flex-direction:column;min-width:0}
 .rev-h{font:12px/var(--lh-meta) var(--mono);color:var(--rev)}
 .rev-t{font:16px/var(--lh-item) var(--serif);color:var(--ink)}

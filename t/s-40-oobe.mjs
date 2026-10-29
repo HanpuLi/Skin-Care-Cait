@@ -26,6 +26,11 @@ export default async function ({ origin, S, open }) {
     const r = await p.eval(`document.querySelector('#oobe [data-ob="state-irritated"]').click();${W8(250)}
         const e=(${ENV}.sk_jrnl1||[]).find(x=>x.date===__d(0))||{};return {st:e.status||[],note:(document.querySelector('#oobe .ob')||{}).innerText||'',pressed:document.querySelector('#oobe [data-ob="state-irritated"]').getAttribute('aria-checked')}`);
     S.ok(r.st.indexOf('泛红') >= 0 && r.st.indexOf('敏感') >= 0 && r.pressed === 'true' && /酸先不上/.test(r.note), '引导里选「有发红刺痛」:记进今天(泛红 + 敏感),当场说「这几晚酸先不上」', r);
+    // 「在看医生 / 用药」:写 careAt(安全闸只认带它的);再点回「有发红刺痛」就删掉
+    const c = await p.eval(`document.querySelector('#oobe [data-ob="state-care"]').click();${W8(250)}const a=${ENV}.sk_profile1||{};
+        document.querySelector('#oobe [data-ob="state-irritated"]').click();${W8(250)}const b=${ENV}.sk_profile1||{};
+        const e=(${ENV}.sk_jrnl1||[]).find(x=>x.date===__d(0))||{};return {a:[a.startState,a.careAt||''],b:[b.startState,'careAt' in b],st:e.status||[],today:__d(0)}`);
+    S.ok(c.a[0] === 'care' && c.a[1] === c.today && c.b[0] === 'irritated' && c.b[1] === false && c.st.indexOf('泛红') >= 0, '选「在看医生 / 用药」写 careAt = 今天;改回「有发红刺痛」删掉 careAt、今天的泛红还在', c);
     await ob('next'); await ob('finish');
     const t = await p.eval(`${W8(300)}document.querySelectorAll('#sheet-root .sheet-ov').forEach(x=>x.remove());const m=document.getElementById('tn-more');if(m)m.open=true;
         return {kinds:[...document.querySelectorAll('#tn-plan [data-kind]')].map(x=>x.dataset.kind),names:[...document.querySelectorAll('#tn-plan .step-name')].map(x=>x.textContent),

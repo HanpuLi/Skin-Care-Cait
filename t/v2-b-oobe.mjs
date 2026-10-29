@@ -76,6 +76,27 @@ await run('v2-b-oobe', [
         S.ok(r.plan === 1 && r.last.source === 'ai' && r.shop === 0, '做完:顾问出第一版方案(能撤销);第一版方案也不自动判断要不要买', { plan: r.plan, src: r.last.source, shop: r.shop });
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
+    ['新用户 · 登录了、没看过「顾问会看到什么」:点「知道了」出第一版方案,也不自动判断要不要买', async ({ S, open }) => {
+        const p = await open({ keepSheets: true, mode: 'on', login: true, snapshot: 'none', notice: false });
+        await p.eval(`(await import('/js/ui/products.js')).SHOP.delay=200;return 1`);
+        await p.waitFor(`!!document.getElementById('oobe')`, 5000);
+        for (let i = 0; i < 4 && ['welcome', 'invite'].indexOf(await step(p)) >= 0; i++) await ob(p, 'skip');
+        if (await step(p) === 'mode') await ob(p, 'mode-full');
+        S.ok(await step(p) === 'shelf', '(前提)走到「家里有什么」', await step(p));
+        await addProduct(p, 'cleanse', '测试洁面');
+        await addProduct(p, 'moist', '测试保湿');
+        await p.eval(`__AIF.plan={rationale:'新用户第一版',rules:{acidCap:1,acidName:'',acidZones:[],cleanse:'',repair:'',repairWhy:''},resting:[],gaps:[]};return 1`);
+        await ob(p, 'next'); if (await step(p) === 'skin') await ob(p, 'next');
+        await ob(p, 'finish');
+        await p.waitFor(`!!document.getElementById('ai-privacy')`, 3000);
+        S.ok((await log(p, '/api/plan')) === 0, '没看过说明:先弹「顾问会看到什么」,第一版方案还没请');
+        await p.eval(`document.querySelector('#ai-privacy .btn-primary').click();return 1`);
+        await p.waitFor(`(__AIF.log||[]).some(x=>x.p==='/api/plan')`, 4000);
+        await sleep(1200);   // 过了 SHOP.delay(200 毫秒)好几倍
+        const r = await p.eval(`const h=${DATA}.sk_regimen1;return {src:h[h.length-1].source,plan:(__AIF.log||[]).filter(x=>x.p==='/api/plan').length,shop:(__AIF.log||[]).filter(x=>x.p==='/api/shop').length}`);
+        S.ok(r.plan === 1 && r.src === 'ai' && r.shop === 0, '点「知道了」:顾问出第一版;第一版方案落成也不自动判断要不要买(/api/shop 0 次)', r);
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
     ['引导中途登录 · 云端是老账号 → 引导收起', async ({ S, open }) => {
         const p = await open({ keepSheets: true });
         await p.waitFor(`!!document.getElementById('oobe')`, 4000);
@@ -111,9 +132,14 @@ await run('v2-b-oobe', [
         await ob(p, 'mode-full');
         if (await step(p) === 'shelf') await ob(p, 'next');
         S.ok(await step(p) === 'skin', '(前提)走到「你的皮肤」');
+        await ob(p, 'state-irritated');
+        const irr = await text(p, '#oobe');
+        S.ok(/档案里记下了/.test(irr) && !/记进今天了/.test(irr), '重做时点「有发红刺痛」:说的是记进档案,不说「记进今天了」(重做不碰当天日志)', irr.slice(0, 200));
         await ob(p, 'state-ok');
         await ob(p, 'next');
         if (await step(p) !== 'first') await ob(p, 'skip');
+        const fin = await text(p, '#oobe');
+        S.ok(/设置改好了/.test(fin) && !/第一版方案/.test(fin) && !/第一晚不上/.test(fin), '重做的最后一屏:不提第一版方案、第一晚', fin.slice(0, 200));
         await ob(p, 'finish');
         await sleep(400);
         const after = await p.eval(`const d=${DATA};return {st:((d.sk_jrnl1||[]).find(e=>e.date===__d(0))||{}).status||[],n:(d.sk_regimen1||[]).length,last:((d.sk_regimen1||[]).slice(-1)[0]||{}).reason||'',start:d.sk_profile1.startState}`);

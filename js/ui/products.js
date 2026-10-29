@@ -10,10 +10,10 @@
 import { K, LOCAL_KEYS } from '../store.js';
 import { esc, ico, openSheet, closeSheet, toast, sysAlert } from './sheets.js';
 import { shelfSeeded, DEFAULT_PD, ROLE_LABEL, ROLE_ORDER, TRAIT_DEFS, TRAIT_MAP, cleanTraits, traitsOf, hasTrait, statusOf, isSchedActive,
-         normalStatusOf, normalizeStatuses, weeksOpen, prodUsageCount, emptyLogRows, visNotes, capsOf, ESSENTIAL_CAPS } from '../model/products.js';
+         normalStatusOf, normalizeStatuses, weeksOpen, prodUsageCount, emptyLogRows, visNotes, capsOf, ESSENTIAL_CAPS, ROLE_MAP, inferRole } from '../model/products.js';
 import { updateProfile } from '../model/profile.js';
 import { syncRegimen } from '../model/regimen.js';
-import { localMarkRunOut, localUnGone, localToggleLow, onShopLocalChange, shopLocalChange, shopSig } from '../ai/apply.js';
+import { localMarkRunOut, localUnGone, localUndoRunOut, localToggleLow, onShopLocalChange, shopLocalChange, shopSig } from '../ai/apply.js';
 import { buildSkincareContext } from '../ai/context.js';
 import { shopItems, gapsIfGone, pickReplacement } from '../engine/needs.js';
 import { restedNow, includedNow, introNightsLeft, regimenRules } from '../engine/rules.js';
@@ -79,9 +79,14 @@ export function localAddProduct(store, o, today) {
 export function localEditProduct(store, id, patch, today) {
     const list = rawDefs(store), p = list.find(x => x.id === id);
     if (!p) return null;
-    const before = JSON.stringify(PLAN_KEYS.map(k => p[k] === undefined ? null : p[k]));
+    // 存档里没写 role 的内置产品(DEFAULT_PD 那 6 支、没存过 sk_proddefs1 的种子账号):编辑 sheet 拿到的是推出来的角色,
+    //   和推出来的一样就不算「改了类别」—— 只把角色落盘,排法(洗澡夜偏好这些)、分类名都不动,也不出新的一版方案
+    const eff = p.role || ROLE_MAP[p.id] || inferRole(p);
+    const planOf = () => JSON.stringify(PLAN_KEYS.map(k => k === 'role' ? (p.role || eff || null) : (p[k] === undefined ? null : p[k])));
+    const before = planOf();
     if (patch.name !== undefined && String(patch.name).trim()) p.name = String(patch.name).trim().slice(0, 80);
-    if (patch.role && patch.role !== p.role) {
+    if (patch.role && !p.role && patch.role === eff) p.role = eff;
+    else if (patch.role && patch.role !== eff) {
         p.role = patch.role; p.cat = ROLE_LABEL[patch.role] || p.cat;
         p.schedule = Object.assign(defaultScheduleFor(patch.role), { time: (p.schedule && p.schedule.time) || defaultScheduleFor(patch.role).time });
     }
@@ -103,7 +108,7 @@ export function localEditProduct(store, id, patch, today) {
         if (patch.opened) po[id] = patch.opened; else delete po[id];
         store.ls(K.popen, po);
     }
-    if (JSON.stringify(PLAN_KEYS.map(k => p[k] === undefined ? null : p[k])) !== before) after(store, '改了：' + p.name, '改了「' + p.name + '」', today);
+    if (planOf() !== before) after(store, '改了：' + p.name, '改了「' + p.name + '」', today);
     return p;
 }
 export function localSetTraits(store, id, traits, today) { return localEditProduct(store, id, { traits }, today); }
@@ -171,7 +176,7 @@ const hm = t => { const d = new Date(t); return isNaN(d) ? '' : String(d.getHour
 const md = t => { const d = new Date(t); return isNaN(d) ? '' : (d.getMonth() + 1) + '/' + d.getDate(); };
 const traitLabel = k => (TRAIT_DEFS.find(t => t.k === k) || {}).l || k;
 function curUser(app) { return (app && app.sync && app.sync.state && app.sync.state.user) || null; }
-function whoOf(app) { const u = curUser(app); return { name: u && u.displayName ? String(u.displayName).split(' ')[0] : '' }; }
+function whoOf(app) { const u = curUser(app); let shown = null; try { shown = app.shownTonight ? app.shownTonight() : null; } catch (e) { } return { name: u && u.displayName ? String(u.displayName).split(' ')[0] : '', shown }; }
 function nowMsOf(W) { return new Date(W.today + 'T12:00:00').getTime(); }
 export function paoState(W, p) {
     if (!p || p.hidden || !(p.paoMonths > 0)) return null;
@@ -385,6 +390,11 @@ function paintShop() {
 // ══ 读成分表(/api/vision read_label)→ 让她确认 → 入库 → 能撤销 ═════════════════════════════
 // label = {state:'busy'|'confirm'|'done'|'undone'|'error', at, data, role, traits[], matchId, newId, snap(改之前的定义), msg}
 let label = null;
+// 换账号:上一个人刚读的成分表(含撤销用的产品快照)、「要不要买」排着的那次都清掉(app.js clearLocalExtras 调;R.running 自带 uid 守卫)
+export function resetForUser() { label = null; clearTimeout(R.timer); R.timer = null; R.whyQ = []; R.again = false; R.err = null; }
+const ownerOf = app => (app.store && app.store.state && app.store.state.owner) || '';
+// 成分表结果只认读的那个账号:换了账号就当没有(不渲染、不入库、不撤销)
+const labelMine = app => !!label && label.owner === ownerOf(app);
 const norm = s => String(s || '').toLowerCase().replace(/[\s'’·\-_.,()（）%]/g, '');
 export function matchProduct(W, name) {
     const n = norm(name); if (n.length < 3) return null;
@@ -401,15 +411,20 @@ export async function readLabelFromFile(app, file, opts) {
     }
     let img;
     try { img = await imageToDataURL(file, 1280); } catch (e) { toast(e.message); return; }
-    label = { state: 'busy', at: Date.now() };
+    const owner = ownerOf(app);
+    label = { state: 'busy', at: Date.now(), owner };
     paintLabel(app);
     if (opts.sheet) toast('在读成分表…');
     try {
         const W = app.world();
         const r = await app.ai.api.vision(buildSkincareContext(W, whoOf(app)), img, 'read_label');
+        if (ownerOf(app) !== owner) return;   // 等结果的时候换了账号:这是上一个人的成分表,丢掉
         acceptLabel(app, (r && r.data) || {});
         if (opts.sheet) { label.onSaved = opts.onSaved; labelAct(app, 'edit'); }
-    } catch (e) { label = { state: 'error', at: Date.now(), msg: e.message || '顾问出错了' }; paintLabel(app); if (opts.sheet) toast('没读成：' + label.msg); }
+    } catch (e) {
+        if (ownerOf(app) !== owner) return;
+        label = { state: 'error', at: Date.now(), msg: (e.code === 0 && !e.aborted ? '顾问暂时连不上，先手动加。' : e.message) || '顾问出错了', owner }; paintLabel(app); if (opts.sheet) toast('没读成：' + label.msg);
+    }
 }
 // 结果先摆出来让她看:家里有这支 → 补特性;没有 → 新加一支。都要她点「对,入库」才写
 export function acceptLabel(app, d) {
@@ -418,12 +433,12 @@ export function acceptLabel(app, d) {
     let role = ROLE_FROM_CN[String(d.role || '').trim()] || (ROLE_LABEL[d.role] ? d.role : '');
     if (role === 'acid' && (traits.indexOf('clay') >= 0 || traits.indexOf('scrub') >= 0)) role = 'mask';
     const hit = matchProduct(W, d.name);
-    label = { state: 'confirm', at: Date.now(), data: { name: String(d.name || '').trim(), note: String(d.note || '').trim() }, role: hit ? (hit.role || role) : role, traits, matchId: hit ? hit.id : '' };
+    label = { state: 'confirm', at: Date.now(), owner: ownerOf(app), data: { name: String(d.name || '').trim(), note: String(d.note || '').trim() }, role: hit ? (hit.role || role) : role, traits, matchId: hit ? hit.id : '' };
     paintLabel(app);
     return label;
 }
 function labelHtml(app, W) {
-    if (!label) return '';
+    if (!labelMine(app)) return '';
     const L = label;
     if (L.state === 'busy') return `<div class="pr-label" id="pr-label"><p class="note" role="status">在读成分表…</p></div>`;
     if (L.state === 'error') return `<div class="pr-label" id="pr-label"><p class="note">没读成：${esc(L.msg)}</p><div class="btn-row"><button type="button" class="btn-link sm" data-lbl="manual">手动加</button><button type="button" class="btn-link sm quiet" data-lbl="close">关掉</button></div></div>`;
@@ -450,6 +465,7 @@ function rawDef(store, id) { const p = rawDefs(store).find(x => x.id === id); re
 function labelAct(app, act) {
     const store = app.store, t = app.today(), L = label;
     if (!L) return;
+    if (!labelMine(app)) { label = null; paintLabel(app); return; }
     if (act === 'close') { label = null; paintLabel(app); return; }
     if (act === 'manual') { label = null; paintLabel(app); openAddSheet(app); return; }
     if (act === 'ok' && L.state === 'confirm') {
@@ -582,7 +598,7 @@ function runOut(app, pid) {
     const txt = '记了一笔空瓶' + (r.rec.weeks !== null && r.rec.weeks !== undefined ? '（开封 ' + r.rec.weeks + ' 周' + (r.rec.uses ? '，用过 ' + r.rec.uses + ' 次' : '') + '）' : '') + '。'
         + (gaps.length ? '方案缺了一环：' + gaps.map(g => g.label).join('、') + '，看「要不要买新的」。' : '方案照家里剩下的东西重排了' + (r.reg ? '，现在是 v' + r.reg.v : '') + '。');
     openSheet({ id: 'runout-sheet', title: '「' + name + '」用完了', text: txt, actions: [
-        { label: '其实没用完', fn: () => { localUnGone(app.store, pid, app.today()); app.renderAll(); toast('「' + name + '」放回货架了'); } },
+        { label: '其实没用完', fn: () => { localUndoRunOut(app.store, r, app.today()); app.renderAll(); toast('「' + name + '」放回货架了，和用完之前一样'); } },
         { label: '知道了', primary: true }] });
 }
 function dropSheet(app, pid) {

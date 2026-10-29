@@ -51,22 +51,52 @@ export function createPhotoStore(env) {
     function save(date, dataUrl, view) {
         return withTx('readwrite', (st, set) => { st.put({ date: keyOf(date, view), dataUrl }); set(true); }, false);
     }
+    // 这个账号的 key 找不到时依次兜:local__(以前登出 / 离线首开时按「没登录」存下的,记录其实属于这个信封)→ 裸日期(未加前缀的旧数据)
     function get(date, view) {
+        const keys = [keyOf(date, view)];
+        if (uid() !== 'local') keys.push('local__' + date + (view ? '__' + view : ''));
+        if (!view) keys.push(date);
         return withTx('readonly', (st, set) => {
-            const r = st.get(keyOf(date, view));
+            const next = i => {
+                if (i >= keys.length) return set(null);
+                const r = st.get(keys[i]);
+                r.onsuccess = () => { if (r.result) set(r.result.dataUrl); else next(i + 1); };
+            };
+            next(0);
+        }, null);
+    }
+    // 删掉这个账号这一天的照片(单张 + 正 / 左 / 右,连同兜底读到的 local__ 那份);裸日期 key(未加前缀的旧数据)只在没登录过的设备上(uid = local)才删
+    function remove(date) {
+        return withTx('readwrite', (st, set) => {
+            [''].concat(PHOTO_VIEWS).forEach(v => { st.delete(keyOf(date, v)); st.delete('local__' + date + (v ? '__' + v : '')); });
+            if (uid() === 'local') st.delete(date);
+            set(true);
+        }, false);
+    }
+    // 这个账号在这台设备上的全部照片 {日期[__视角]: dataUrl}(local__ 的也算,本账号的优先);存储打不开 → null(和「确实没有照片」的 {} 区分开)
+    function all() {
+        const mine = uid() + '__';
+        return withTx('readonly', (st, set) => {
+            const r = st.getAll();
             r.onsuccess = () => {
-                if (r.result) return set(r.result.dataUrl);
-                if (view) return set(null);
-                const old = st.get(date);   // 兼容旧数据(未加前缀时存的裸日期 key)
-                old.onsuccess = () => set(old.result ? old.result.dataUrl : null);
+                const out = {};
+                (r.result || []).forEach(x => { const k = String(x.date); if (mine !== 'local__' && k.indexOf('local__') === 0 && !(k.slice(7) in out)) out[k.slice(7)] = x.dataUrl; });
+                (r.result || []).forEach(x => { const k = String(x.date); if (k.indexOf(mine) === 0) out[k.slice(mine.length)] = x.dataUrl; });
+                set(out);
             };
         }, null);
     }
-    // 删掉这个账号这一天的照片(单张 + 正 / 左 / 右);裸日期 key(未加前缀的旧数据)只在没登录过的设备上(uid = local)才删
-    function remove(date) {
+    // 认领了本机没登录时攒的记录:local__ 的照片改 key 搬进这个账号(已有同名的不覆盖)
+    function adoptLocal(to) {
+        if (!to || to === 'local') return Promise.resolve(false);
         return withTx('readwrite', (st, set) => {
-            [''].concat(PHOTO_VIEWS).forEach(v => st.delete(keyOf(date, v)));
-            if (uid() === 'local') st.delete(date);
+            const r = st.getAll();
+            r.onsuccess = () => (r.result || []).forEach(x => {
+                const k = String(x.date); if (k.indexOf('local__') !== 0) return;
+                const nk = to + '__' + k.slice(7);
+                const g = st.get(nk);
+                g.onsuccess = () => { if (!g.result) st.put({ date: nk, dataUrl: x.dataUrl }); st.delete(k); };
+            });
             set(true);
         }, false);
     }
@@ -76,5 +106,5 @@ export function createPhotoStore(env) {
             r.onsuccess = () => (r.result || []).forEach(k => { if (String(k).indexOf('__') === -1) st.delete(k); });
         }, undefined);
     }
-    return { open, available, save, get, remove, clearLegacyUnprefixed, keyOf };
+    return { open, available, save, get, remove, all, adoptLocal, clearLegacyUnprefixed, keyOf };
 }

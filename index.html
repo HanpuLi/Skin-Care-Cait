@@ -38,11 +38,12 @@ try{sessionStorage.setItem('sk_bootfail',String(tries+1));}catch(e){}
 var up=navigator.serviceWorker&&navigator.serviceWorker.getRegistration?navigator.serviceWorker.getRegistration().then(function(r){return r&&r.update();}).catch(function(){}):Promise.resolve();
 up.then(function(){return clean?clearCaches():null;}).then(function(){location.reload();},function(){location.reload();});}
 function show(){if(ok())return;var root=document.getElementById('sheet-root')||document.body;if(!root)return;
+var old=!('locks' in navigator)||!('noModule' in document.createElement('script'));
 var ov=document.createElement('div');ov.id='boot-fail';ov.className='sheet-ov';ov.setAttribute('data-noesc','1');
-ov.innerHTML='<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="boot-fail-t"><div class="sheet-h"><h2 class="sheet-t" id="boot-fail-t">这一版没加载完整</h2></div><div class="sheet-b text"><p class="lede">网络断了一半，或者刚更新。记录都在这台设备上，一个字没动。</p><p class="note" id="boot-fail-msg"></p></div><div class="sheet-actions"></div></div>';
+ov.innerHTML='<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="boot-fail-t"><div class="sheet-h"><h2 class="sheet-t" id="boot-fail-t">'+(old?'这台设备的系统版本太旧':'这一版没加载完整')+'</h2></div><div class="sheet-b text"><p class="lede">'+(old?'这一版要 iOS 15.4 或更新的系统（电脑上用新版浏览器）。记录都在这台设备上，一个字没动。':'网络断了一半，或者刚更新。记录都在这台设备上，一个字没动。')+'</p><p class="note" id="boot-fail-msg"></p></div><div class="sheet-actions"></div></div>';
 var acts=ov.querySelector('.sheet-actions');
 function btn(label,primary,fn){var b=document.createElement('button');b.type='button';b.className='btn'+(primary?' btn-primary':'');b.textContent=label;b.addEventListener('click',fn);acts.appendChild(b);}
-if(tries>0&&navigator.onLine!==false)btn('清掉缓存重新加载',false,function(){reload(true);});
+if(!old&&tries>0&&navigator.onLine!==false)btn('清掉缓存重新加载',false,function(){reload(true);});
 btn('重新加载',true,function(){reload(false);});
 root.appendChild(ov);}
 function later(){if(de.getAttribute('data-boot')==='ok'){try{sessionStorage.removeItem('sk_bootfail');}catch(e){}return;}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',show);else show();}

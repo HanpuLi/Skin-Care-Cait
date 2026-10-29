@@ -25,7 +25,17 @@ export function photoAnalysisOn(app, profile) {
     const u = app.sync && app.sync.state && app.sync.state.user;
     return !!(u && isOwnerEmail(u.email));
 }
-export function canAnalyze(app, profile) { return photoAnalysisOn(app, profile) && !!app.ai && app.ai.access() === 'on'; }
+// 能走「拍照分析」:开了照片分析、顾问开通了、而且现在连得上、今天还有次数(连不上 / 额度用完时别让她拍完三张才报错)
+export function canAnalyze(app, profile) { return photoAnalysisOn(app, profile) && !!app.ai && app.ai.access() === 'on' && !analyzeBlocked(app); }
+// 开通了但这会儿用不了:返回一句为什么(按钮换成「加一张照片」时配这句);能用 → ''
+export function analyzeBlocked(app) {
+    const ai = app && app.ai;
+    if (!ai || ai.access() !== 'on') return '';
+    const q = ai.quotaText ? ai.quotaText() : '';
+    if (q) return q.replace(/[。]$/, '') + '，照片先存着，明天再分析。';
+    if (ai.state && ai.state.down) return '顾问现在连不上，照片先存着，连上再分析。';
+    return '';
+}
 
 const VIEW_NAME = { front: '正脸', left: '左脸', right: '右脸' };
 const VIEW_GUIDE = {
@@ -112,11 +122,14 @@ const PHOTO_FAIL = '照片没存上：这台设备的本机照片存储用不了
 export function openCapture(app, opts) {
     opts = opts || {};
     const date = opts.date || app.today();
-    const s = { step: 'intro', views: {}, cur: 'front', live: false, camErr: '', stream: null, result: null, err: '', saved: false, prevImg: false, noPrevImg: false };
+    const s = { step: 'intro', views: {}, cur: 'front', live: false, camErr: '', stream: null, result: null, err: '', saved: false, prevImg: false, noPrevImg: false, prevChecked: false };
     const W0 = app.world(), owner = (app.store.state && app.store.state.owner) || '';
     const last = (W0.journal || []).filter(e => e && e.date < date && e.photoAssess && e.photoAssess.usable !== false).sort((a, b) => b.date.localeCompare(a.date))[0];
-    // 本机有上次的正脸照片的话,会一起发过去对比:先查出来,intro 里说清楚(并给「这次不带」)
-    if (last) Promise.resolve(app.photos.get(last.date, 'front')).then(img => { s.prevImg = !!img; if (s.step === 'intro' && ov.isConnected) paint(); }, () => { });
+    // 本机有上次的正脸照片的话,会一起发过去对比:先查出来,intro 里说清楚(并给「这次不带」)。
+    //   查完之前不下「不带照片」的结论、「开始拍」先不给点;发不发以这里查到、告诉过她的为准(analyze 不再自己另查一次)
+    if (last) Promise.resolve(app.photos.get(last.date, 'front')).then(img => { s.prevImg = !!img; s.prevChecked = true; if (s.step === 'intro' && ov.isConnected) paint(); },
+        () => { s.prevChecked = true; if (s.step === 'intro' && ov.isConnected) paint(); });
+    else s.prevChecked = true;
     function stopCam() { if (s.stream) { try { s.stream.getTracks().forEach(tr => tr.stop()); } catch (e) { } } s.stream = null; s.live = false; }
     async function startCam() {
         stopCam(); s.camErr = '';
@@ -139,10 +152,10 @@ export function openCapture(app, opts) {
         if (s.step === 'intro') {
             return `<p class="lede">正脸、左脸、右脸各一张，顾问逐区看、和上次比。</p>
                 <div class="sk-sec"><div class="sec-t">拍之前</div><ul class="list cap-tips">${TIPS.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>
-                <p class="note">${last ? '上次拍是 ' + esc(mdOf(last.date)) + '（' + daysBetween(last.date, date) + ' 天前），这次会一起比' + (s.prevImg && !s.noPrevImg ? '：会把 ' + esc(mdOf(last.date)) + ' 那张正脸一起发过去。' : '：只带上次的分析结果，不带照片。') : '这是第一次，之后每次都会和上一次比。'}</p>
+                <p class="note">${last ? '上次拍是 ' + esc(mdOf(last.date)) + '（' + daysBetween(last.date, date) + ' 天前），这次会一起比' + (!s.prevChecked ? '：在查这台设备上有没有上次的照片…' : s.prevImg && !s.noPrevImg ? '：会把 ' + esc(mdOf(last.date)) + ' 那张正脸一起发过去。' : '：只带上次的分析结果，不带照片。') : '这是第一次，之后每次都会和上一次比。'}</p>
                 ${last && s.prevImg ? `<button type="button" class="chip" data-cap="noprev" aria-pressed="${s.noPrevImg}" id="cap-noprev">${s.noPrevImg ? ico('check', 'sm') : ''}这次不带上次的照片</button>` : ''}
                 <p class="note">照片存在这台设备上，分析时发给顾问看；只有分析结果记进今天。隔两三天拍一次就够，变差那天可以加拍。</p>
-                <div class="cap-acts"><button type="button" class="btn btn-primary btn-block" data-cap="start">开始拍</button></div>`;
+                <div class="cap-acts"><button type="button" class="btn btn-primary btn-block" data-cap="start"${s.prevChecked ? '' : ' disabled'}>开始拍</button></div>`;
         }
         if (s.step === 'shoot') {
             const cur = s.cur, taken = s.views[cur];
@@ -220,17 +233,18 @@ export function openCapture(app, opts) {
         stopCam(); s.step = 'busy'; s.err = ''; lock(true); paint();
         const W = app.world();
         const u = app.sync && app.sync.state && app.sync.state.user;
-        const ctx = buildSkincareContext(W, { name: u && u.displayName ? String(u.displayName).split(' ')[0] : '' });
+        const ctx = buildSkincareContext(W, { name: u && u.displayName ? String(u.displayName).split(' ')[0] : '', shown: app.shownTonight ? app.shownTonight(W) : null });
         const views = PHOTO_VIEWS.filter(v => s.views[v]);
         const images = views.map(v => s.views[v]);
-        const extra = await previousFor(app, W, date, s.noPrevImg);
+        // 只发她被告知会发的:开头说了「不带照片」(或没查到 / 还没查完),这里就不带
+        const extra = await previousFor(app, W, date, s.noPrevImg || !s.prevImg);
         if (views.length < 3) extra.note = '这次的照片依次是：' + views.map(v => VIEW_NAME[v]).join('、');
         let d;
         try { const r = await app.ai.api.assess(ctx, images, extra); d = (r && r.data) || {}; }
         catch (e) {
             lock(false);
             if (!sameOwner()) { close(); return; }
-            s.err = e.message || '顾问出错了'; s.step = 'error';
+            s.err = (e.code === 0 && !e.aborted ? (e.message || '顾问暂时连不上。') + '照片可以先存着，连上再分析。' : e.message) || '顾问出错了'; s.step = 'error';
             if (ov.isConnected) paint(); else toast('这次没分析成：' + s.err);
             return;
         }

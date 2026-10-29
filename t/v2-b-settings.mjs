@@ -36,6 +36,13 @@ await run('v2-b-settings', [
         S.ok((await prof(p)).shaving === false && await p.eval(`return document.body.classList.contains('hide-shave')`) && !(await has(p, '#set-shavedays')), '关刮胡:档案、body.hide-shave、洗澡习惯里不再有刮胡那行');
         await sw(p, 'set-hrt');
         S.ok((await prof(p)).hrt === true && !(await p.eval(`return document.body.classList.contains('hide-hrt')`)), '开 HRT(只影响自己这个账号)');
+        // 「在看医生 / 用药」:打开写 careAt(安全闸只认带它的;v1 引导留下的老 startState 不算),关掉删掉
+        await sw(p, 'set-care');
+        let pc = await prof(p);
+        S.ok(pc.startState === 'care' && !!pc.careAt && /只做清洁、保湿、修护/.test(await text(p, '#tonight')), '开「在看医生 / 用药」:档案写 startState=care + careAt,今晚页说只做基础几样', pc);
+        await sw(p, 'set-care');
+        pc = await prof(p);
+        S.ok(pc.startState === 'ok' && !('careAt' in pc), '关掉:回 ok、删 careAt', pc);
         // 印章字
         await p.eval(`const i=document.getElementById('set-seal');i.value='茶';i.dispatchEvent(new Event('change'));return 1`); await sleep(200);
         S.ok((await text(p, '#seal-ch')) === '茶' && (await prof(p)).seal === '茶' && !('stamp' in (await prof(p))), '印章上的字:改了立刻换(只写 v1 的 seal 字段)');

@@ -148,7 +148,7 @@ export function createSync(env) {
                 LS.setItem(UIDK, user.uid);
                 const prevKey = syncKey(S.owner);
                 store.switchTo(user.uid, next);
-                if (adopt) { try { LS.removeItem(prevKey); } catch (e) { } }   // 认领走了:数据已在新信封里(另有升级前副本)
+                if (adopt) { try { LS.removeItem(prevKey); } catch (e) { } try { hook('adoptLocalPhotos', user.uid); } catch (e) { } }   // 认领走了:数据已在新信封里(另有升级前副本);没登录时存的照片(local__)跟着记录搬过去
                 clearLocalUserData();
                 applyCloudThenRender();
                 if (switched) ui.toast('换了账号，正在载入…');

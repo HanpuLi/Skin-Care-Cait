@@ -3,10 +3,11 @@
   "source_version": "Version 2.003;hotconv 1.1.1;makeotfexe 2.6.0",
   "source_sha256": "2a2eae2628df83556c54018c41e20fa532c1b862c5256ae8b3f23feb918d12ca",
   "license": "SIL Open Font License 1.1 (fonts/LICENSES.txt)",
-  "charset": "GB 2312 level 1 + UI text of index.html/ai.js + CJK punctuation",
-  "character_count": 3848,
-  "ui_characters": 1051,
+  "charset": "GB 2312 level 1 + UI text of index.html/js/**/*.js + fonts/extra-chars.txt + CJK punctuation",
+  "extra_characters": 323,
+  "character_count": 3876,
+  "ui_characters": 1089,
   "ui_missing_in_source": "",
-  "bytes": 1330292,
-  "font_sha256": "98243a855403934ed97be381273988065535386f3c7600596d87b1f3b9376882"
+  "bytes": 1339792,
+  "font_sha256": "a365fedc6d0a6b5d33f265c7239a023ce402e1686b4264aa20b2471e9ab1441c"
 }

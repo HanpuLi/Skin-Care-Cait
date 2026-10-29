@@ -27,7 +27,7 @@ export default async function ({ origin, S, open }) {
             const ctl=[document.getElementById('tonight-h'),...document.querySelectorAll('#tonight button,#tonight input,#tonight label,#tonight summary')].filter(vis);
             const bad=ctl.filter(el=>hit(R(el))).map(el=>(el.id||el.className||el.tagName)+' '+el.textContent.trim().slice(0,10));
             return {bad,n:ctl.length,seal:document.getElementById('seal-ch').textContent,inHdr:seal.top>=hdr.top-0.5&&seal.bottom<=hdr.bottom+0.5,hdrBottom:Math.round(hdr.bottom),
-                titleTop:Math.round(R(document.getElementById('tonight-h')).top),overflow:document.documentElement.scrollWidth-innerWidth,
+                titleTop:Math.round(R(document.getElementById('tonight-h')).top),overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,
                 q:[...document.querySelectorAll('#tn-sit .sit-q')].filter(vis).map(x=>Math.round(R(x).top))}`);
         S.ok(r.n > 5 && !r.bad.length && r.seal === '膚', `${width} 宽 + 安全区 59px:印章和标题、问句、步骤等 ${r.n} 个控件都不相交`, r);
         S.ok(r.inHdr && r.titleTop >= r.hdrBottom, `${width} 宽:印章整个落在页头高度内,标题在页头下面`, r);

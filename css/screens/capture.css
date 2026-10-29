@@ -12,7 +12,8 @@
 .cap-view .lede{font-size:16px;line-height:22px}
 .cap-view[aria-pressed="true"]{background:var(--tint);box-shadow:inset 0 0 0 1.5px var(--ink)}
 .cap-guide{color:var(--ink)}
-.cap-frame{position:relative;width:100%;max-width:360px;margin-left:auto;margin-right:auto;aspect-ratio:3/4;border-radius:var(--r-card);overflow:hidden;background:var(--tint)}
+/* 取景框按视口高度收:320×568、375×667 上「拍这张」也得在第一屏(页头 + 三视图芯片 + 提示 + 按钮约 340px)*/
+.cap-frame{position:relative;width:min(100%, calc((100dvh - 340px) * .75));min-width:180px;max-width:360px;margin-left:auto;margin-right:auto;aspect-ratio:3/4;border-radius:var(--r-card);overflow:hidden;background:var(--tint)}
 .cap-video,.cap-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 .cap-video{transform:scaleX(-1)}   /* 只是预览像照镜子;存下来的照片不镜像 */
 .cap-ph{position:absolute;left:var(--sp-4);right:var(--sp-4);bottom:var(--sp-4);text-align:center}

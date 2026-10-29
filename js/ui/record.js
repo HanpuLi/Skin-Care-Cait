@@ -16,9 +16,9 @@ import { acidTags } from '../engine/util.js';
 import { safetyGate } from '../engine/gate.js';
 import { buildSkincareContext } from '../ai/context.js';
 import { openSheet, closeSheet, toast, esc, ico, sysConfirm } from './sheets.js';
-import { dataNoticeSeen } from './advisor.js';
+import { dataNoticeSeen, openDataNotice, invalidateChatCtx } from './advisor.js';
 import { faceHtml, bindFace, spotsByZone, heatData, heatTone } from './facemap.js';
-import { openCapture, canAnalyze, photoAnalysisOn, addSimplePhoto, loadDayPhoto, applySuggest, suggestText } from './capture.js';
+import { openCapture, canAnalyze, analyzeBlocked, photoAnalysisOn, addSimplePhoto, loadDayPhoto, applySuggest, suggestText } from './capture.js';
 
 export const id = 'record';
 export const title = '记录';
@@ -37,6 +37,8 @@ export function resetForUser() {
 }
 const ownerOf = app => (app.store && app.store.state && app.store.state.owner) || '';
 const aiOn = app => !!(app.ai && app.ai.access() === 'on' && !(app.ai.state && app.ai.state.down));
+// 记完 / 做完之后顾问会不会自动回一句:开通了、连得上,而且这台设备上看过「顾问会看到什么」(没看过不自动外发)
+export function feedbackOn(app) { try { return aiOn(app) && dataNoticeSeen(app); } catch (e) { return false; } }
 
 // ── 小工具 ──
 function entryOf(W, date) { return (W.journal || []).find(e => e && e.date === date) || null; }
@@ -72,7 +74,14 @@ export async function requestFeedback(app, date, opts) {
     const ai = app.ai;
     if (!ai || date !== app.today() || ai.access() !== 'on') return false;
     if (!opts.force && !dataNoticeSeen(app)) return false;   // 还没看过「顾问会看到什么」:不自动外发
-    if (!ai.ready()) { try { await ai.probe(); } catch (e) { } if (!ai.ready()) return false; }
+    if (!ai.ready()) {
+        try { await ai.probe(); } catch (e) { }
+        if (!ai.ready()) {
+            const me = ai.state && ai.state.meErr;   // 她点了「再试一次」:说清楚为什么没成,别静默
+            if (opts.force && me) { fb.err[date] = me.code === 401 ? '顾问没认出你的登录，到「设置」里退出再登录' : (ai.state.down ? '顾问暂时连不上，记录照常存着。' : me.message || '顾问出错了'); paintFeedback(app, date); }
+            return false;
+        }
+    }
     let W = app.world();
     const en = entryOf(W, date);
     if (!hasLog(en) && !(en && en.done)) return false;
@@ -86,11 +95,11 @@ export async function requestFeedback(app, date, opts) {
     paintFeedback(app, date);
     let f = null;
     try {
-        const r = await ai.api.feedback(buildSkincareContext(W, Object.assign(whoOf(app), { ticked: session.ticked })), session);
+        const r = await ai.api.feedback(buildSkincareContext(W, Object.assign(whoOf(app), { ticked: session.ticked, shown: app.shownTonight ? app.shownTonight(W) : null })), session);
         const d = (r && r.data) || {};
         f = { text: String(d.text || ''), note_add: String(d.note_add || ''), next_adjust: Array.isArray(d.next_adjust) ? d.next_adjust.slice(0, 4) : [],
               sig, at: new Date(app.store.now()).toISOString(), meta: { model: r && r.model, cost: r && r.cost } };
-    } catch (e) { fb.err[date] = e.message || '顾问出错了'; }
+    } catch (e) { fb.err[date] = (e.code === 0 && !e.aborted ? (e.message || '顾问暂时连不上。') + '记录照常存着。' : e.message) || '顾问出错了'; }
     if (ownerOf(app) !== owner) return false;   // 等回答的时候换了账号:丢掉(resetForUser 已经清了 fb)
     fb.busy[date] = false;
     if (f && date === app.today()) {
@@ -154,7 +163,7 @@ function bindFeedback(app) {
 const NEG = /(不|没有|没|无|别|未)$/;
 const SENT_TAGS = [
     ['泛红', /泛红|发红|红了|红血丝|有点红|很红/g],
-    ['爆痘', /(?<!闭口|痘)痘(?!印)|爆了|冒了|红肿/g],
+    ['爆痘', /痘(?!印)|爆了|冒了|红肿/g],
     ['闭口', /闭口|粉刺|小疙瘩|白头/g],
     ['干燥', /干(?!净)|起皮|脱皮|紧绷/g],
     ['敏感', /刺痛|刺刺|发痒|痒|灼热|疼/g],
@@ -164,9 +173,12 @@ const SENT_TREND = [['better', /好些|好多了|好一点|好了点|改善|干�
 const SENT_ZONES = [
     [['额头'], /额头|脑门/], [['发际线'], /发际/], [['眉间'], /眉间|眉心/], [['鼻子'], /鼻子|鼻翼|鼻头|鼻梁/], [['人中/鼻下'], /人中|鼻下/],
     [['口周'], /口周|嘴角|嘴边|嘴周|嘴巴周/], [['下巴'], /下巴/], [['左脸颊'], /左脸|左边脸|左颊/], [['右脸颊'], /右脸|右边脸|右颊/],
-    [['左脸颊', '右脸颊'], /两颊|脸颊|两边脸/], [['左下颌线'], /左下颌|左边下颌/], [['右下颌线'], /右下颌|右边下颌/], [['左下颌线', '右下颌线'], /(?<![左右]|边)下颌/]
+    [['左脸颊', '右脸颊'], /两颊|脸颊|两边脸/], [['左下颌线'], /左下颌|左边下颌/], [['右下颌线'], /右下颌|右边下颌/], [['左下颌线', '右下颌线'], /下颌/, /[左右]边?下颌/g]
 ];
-const SENT_SPOT = [['红痘', /(?<!闭口)痘(?!印)|红肿/], ['闭口', /闭口|粉刺|白头/], ['脓头', /脓/], ['泛红', /泛红|发红|红了|红血丝|有点红|很红/], ['干皮', /起皮|脱皮|干皮/], ['痘印', /痘印/]];
+const SENT_SPOT = [['红痘', /痘(?!印)|红肿/], ['闭口', /闭口|粉刺|白头/], ['脓头', /脓/], ['泛红', /泛红|发红|红了|红血丝|有点红|很红/], ['干皮', /起皮|脱皮|干皮/], ['痘印', /痘印/]];
+// 【不用后行断言】Safari 16.4 之前不认 (?<…),模块顶层的正则一写错整个 App 都打不开(README 支持到 iOS 15.4)。
+//   「闭口痘」不算新痘、「痘痘」不重复:判断前先把这两种说法换掉,再用前向断言排除「痘印」
+const pre = x => String(x || '').replace(/闭口痘/g, '闭口').replace(/痘痘/g, '痘');
 const GONE = /^.{0,2}?(消了|退了|没了|好了|好多了|好些了|好点了|下去了|不见了)/;   // 「下巴的痘消了」:说的是好了,不是又冒了
 function hit(text, re) {
     re.lastIndex = 0;
@@ -181,14 +193,15 @@ function hit(text, re) {
 // 位置按「分句」配:同一个分句里提到的区和情况才配成一对(「下巴两颗红痘，额头有点干」→ 只有下巴:红痘,不会配出额头:红痘)
 const CLAUSE = /[，。；！？,.;!?\n]|还有|而且|但是|不过/;
 export function parseSentence(text) {
-    const s = String(text || '');
+    const s = pre(text);
     const tags = SENT_TAGS.filter(([, re]) => hit(s, re)).map(([t]) => t);
     const tr = SENT_TREND.find(([, re]) => hit(s, re));
     const spots = [];
     s.split(CLAUSE).forEach(cl => {
         if (!cl || !cl.trim()) return;
         const zones = [];
-        SENT_ZONES.forEach(([names, re]) => { if (re.test(cl)) names.forEach(n => { if (zones.indexOf(n) < 0) zones.push(n); }); });
+        // 第三项 = 先抹掉的说法(「左下颌 / 右边下颌」已经由前面单边那两条配上了,不再配成两边)
+        SENT_ZONES.forEach(([names, re, minus]) => { if (re.test(minus ? cl.replace(minus, '') : cl)) names.forEach(n => { if (zones.indexOf(n) < 0) zones.push(n); }); });
         if (!zones.length) return;
         const types = SENT_SPOT.filter(([, re]) => hit(cl, re)).map(([t]) => t);
         zones.forEach(z => types.forEach(t => spots.push({ zone: z, type: t })));
@@ -207,13 +220,15 @@ export function openSkinSheet(app, opts) {
     const hint = opts.hint || {};
     const key = 'sk|' + date;
     const title = mode === 'done' ? '今晚做完了' : date !== t ? dayLabel(date, t) + '的皮肤' : minimal ? '记一下皮肤' : '今天皮肤';
-    const lead = mode === 'done' ? (opts.summary || '') : (minimal && date === t ? '想记就记，不记也没关系。' + (aiOn(app) ? '记完顾问会看一眼。' : '') : '');
+    const lead = mode === 'done' ? (opts.summary || '') : (minimal && date === t ? '想记就记，不记也没关系。' + (feedbackOn(app) ? '记完顾问会看一眼。' : '') : '');
     const en0 = entryOf(app.world(), date) || {};
-    const showFb = date === t && app.ai && app.ai.access() === 'on';
+    const showFb = date === t && aiOn(app);
+    // 还没看过「顾问会看到什么」:反馈不会自动发 —— 在顾问那一格里给「先看一下」,看完再要这一次反馈(和今晚页同一套)
+    const fbNotice = showFb && !dataNoticeSeen(app);
     const html = `${lead ? `<p class="note sk-lead">${esc(lead)}</p>` : ''}<div id="sk-top"></div>
         ${P.hrt ? `<label class="field feat-hrt"><span>HRT 阶段</span><input type="text" id="sk-phase" value="${esc(en0.phase || '')}" placeholder="比如：第 3 个月、剂量调整" autocomplete="off"></label>` : ''}
         <label class="field"><span>备注（选填）</span><textarea id="sk-note" rows="2" placeholder="今天有什么特别的？" data-date="${esc(date)}" data-n0="${esc(noteOf(en0))}">${esc(noteOf(en0))}</textarea></label>
-        ${showFb ? `<div class="sk-sec"><div class="sec-t">顾问</div><div class="fb-box" data-fb-date="${esc(date)}"></div></div>` : ''}
+        ${showFb ? `<div class="sk-sec"><div class="sec-t">顾问</div>${fbNotice ? `<p class="note" id="sk-fb-notice">顾问看了会回一句；先看一下它会看到什么。 <button type="button" class="btn-link sm" id="sk-fb-notice-b">先看一下</button></p>` : ''}<div class="fb-box" data-fb-date="${esc(date)}"></div></div>` : ''}
         ${hasLog(en0) || en0.done || (en0.products || []).length ? `<div class="sk-sec sk-del"><button type="button" class="btn-link sm quiet" id="sk-del">删掉这一天的记录（连同这台设备上的照片）</button></div>` : ''}`;
     const p0 = en0.phase || '';
     let closed = false;
@@ -326,10 +341,14 @@ export function openSkinSheet(app, opts) {
             if (f) addSimplePhoto(app, date, f).then(ok => { if (ok) { toast('照片存好了，只在这台设备上'); paint(); } });
         }
     });
+    const nb = ov.querySelector('#sk-fb-notice-b');
+    if (nb) nb.addEventListener('click', () => openDataNotice(app, () => { const x = ov.querySelector('#sk-fb-notice'); if (x) x.remove(); if (hasLog(entryOf(app.world(), date)) || (entryOf(app.world(), date) || {}).done) requestFeedback(app, date); }));
     const del = ov.querySelector('#sk-del');
-    if (del) del.addEventListener('click', () => sysConfirm('删掉 ' + mdOf(date) + ' 这一天的记录？这台设备上那天的照片也一起删，删了就找不回来。', async () => {
+    if (del) del.addEventListener('click', () => sysConfirm('删掉 ' + mdOf(date) + ' 这一天的记录？这台设备上那天的照片、顾问对这一天的回应也一起删，删了就找不回来。', async () => {
         closed = true;   // 不再走「关 sheet 时保存备注 / 要反馈」
         deleteEntry(app.store, date);
+        // 派生的也一起删:顾问对这一天的回应(sk_ai1.feedback)、今晚小改撤销用的备注原文(sk_tnai1.undo)、对话里拍着的快照
+        forgetDay(app, date);
         let ok = true; try { ok = await app.photos.remove(date); } catch (e) { ok = false; }
         closeSheet('skin-sheet');
         toast(ok ? '这一天的记录删掉了' : '记录删掉了；照片没删掉（这台设备的本机照片存储用不了）');
@@ -339,6 +358,18 @@ export function openSkinSheet(app, opts) {
     return ov;
 }
 
+// 删掉某一天时一起清的派生数据(都同步上云,不清就还留在云端)
+export function forgetDay(app, date) {
+    const store = app.store;
+    const st = store.lg(K.ai);
+    if (st && st.feedback && st.feedback[date]) { const n = JSON.parse(JSON.stringify(st)); delete n.feedback[date]; store.ls(K.ai, n); }
+    const tn = store.lg(K.tnai);
+    if (tn && tn.date === date && tn.undo && (tn.undo.note !== undefined || tn.undo.noteAdded)) {
+        const n = JSON.parse(JSON.stringify(tn)); delete n.undo.note; delete n.undo.noteAdded; store.ls(K.tnai, n);
+    }
+    delete fb.err[date]; delete fb.busy[date];
+    try { invalidateChatCtx(app); } catch (e) { }
+}
 // ══ 记录页 ═══════════════════════════════════════════════════════════════════════════
 export function render(app) {
     const W = app.world(), t = W.today, P = W.profile || {};
@@ -374,7 +405,9 @@ export function render(app) {
     });
     // 标记只画这 14 天里真出现过的那几行(没刷过酸就不留一行空格)
     const MK = [['acid', '酸', '「酸」是刷酸夜'], ['shower', '澡', '「澡」是洗澡'], ['shave', '刮', '「刮」是刮胡']].filter(([k]) => days.some(x => x[k]));
-    h += `<section class="sec" id="rec-14"><div class="sec-h"><span class="sec-t">近 14 天</span><span class="legend"><span><i class="dot ok"></i>好些</span><span><i class="dot hollow"></i>差不多</span><span><i class="dot caution"></i>差些</span></span></div>
+    // 记了但没选好坏的天(v1 形状的旧记录都是这种)画成灰实心点:出现过就在图例里写明「记了」,别被当成「差不多」
+    const anyFaint = days.some(x => !x.tr && hasLog(x.e));
+    h += `<section class="sec" id="rec-14"><div class="sec-h"><span class="sec-t">近 14 天</span><span class="legend"><span><i class="dot ok"></i>好些</span><span><i class="dot hollow"></i>差不多</span><span><i class="dot caution"></i>差些</span>${anyFaint ? '<span><i class="dot faint"></i>记了</span>' : ''}</span></div>
         <div class="d14" role="list">${days.map(x => {
             const st = x.tr ? tagLabel(TREND_TAGS[x.tr]) : hasLog(x.e) ? '记了' : (P.minimalMode ? '' : '没记');   // 极简不说「没记」
             const aria = dayLabel(x.d, t) + (st ? '：' + st : '') + [x.acid ? '刷了酸' : '', x.shower ? '洗澡' : '', x.shave ? '刮胡' : ''].filter(Boolean).map((v, i) => (i || st ? '，' : '：') + v).join('');
@@ -422,7 +455,9 @@ export function render(app) {
     h += `<section class="sec" id="rec-photos"><div class="sec-h"><span class="sec-t">拍照分析</span>${analyze ? '<button type="button" class="btn-link sm" data-act="capture">拍三张</button>' : ''}</div>`;
     if (pa.length) h += `<ul class="rows pa-rows">${pa.map(e => `<li class="row"><span class="row-main"><span class="meta">${esc(dayLabel(e.date, t))}</span><span class="lede">${esc(e.photoAssess.overall || '')}</span>${e.photoAssess.vs_last ? `<span class="note">和上次比：${esc(e.photoAssess.vs_last)}</span>` : ''}</span>`
         + `<img class="pa-thumb" data-pa-date="${esc(e.date)}" alt="${esc(dayLabel(e.date, t))}的正脸照片" hidden></li>`).join('')}</ul>`;
+    const blocked = !analyze && photoAnalysisOn(app, P) ? analyzeBlocked(app) : '';
     h += `<p class="note">${analyze ? '正脸、左脸、右脸各一张，顾问逐区看、和上次比。隔两三天拍一次就够；变差那天可以加拍。照片只存在这台设备上。'
+        : blocked ? blocked + '照片只存在这台设备上。'
         : photoAnalysisOn(app, P) ? '照片分析要登录并开通顾问才能用。现在拍的照片只存在这台设备上。' : '照片分析没打开，要本人在设置里打开才会用。现在拍的照片只存在这台设备上。'}</p></section>`;
     // ⑧ 历史(点一行补记或改那一天)
     const hist = (W.journal || []).filter(e => e && e.date && e.date <= t && (hasLog(e) || e.done || (e.products || []).length)).sort((a, b) => b.date.localeCompare(a.date));

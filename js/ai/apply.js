@@ -9,11 +9,11 @@ import { K } from '../store.js';
 import { buildWorld } from '../model/world.js';
 import { commitAiRegimen, undoRegimen, restoreRegimen, regimenHistory, syncRegimen, currentRegimen as curReg } from '../model/regimen.js';
 import { jrnlEntry, saveJrnl } from '../model/journal.js';
-import { markRunOut, unGone, toggleLow } from '../model/products.js';
+import { markRunOut, unGone, toggleLow, ROLE_ORDER, visNotes } from '../model/products.js';
 import { PHASES } from '../model/profile.js';
 import { safetyGate, gateBlocks } from '../engine/gate.js';
-import { regimenRules, maxAcidPerWeek, zonesAvoiding } from '../engine/rules.js';
-import { tonight as offlineTonight } from '../engine/schedule.js';
+import { regimenRules, maxAcidPerWeek, zonesAvoiding, tonightOverride, usableTonight } from '../engine/rules.js';
+import { tonight as offlineTonight, next7, stepWarnings } from '../engine/schedule.js';
 import { exfoliantCountInLastNDays, prodByName } from '../engine/util.js';
 import { shelfSignature } from '../engine/regimen.js';
 
@@ -52,10 +52,12 @@ export function validateTonight(c, g, stepNames, W) {
         const o = prodByName(W, c.product), ot = (o && o.schedule && o.schedule.type) || '';
         if ((ACT.indexOf(t) >= 0 || ACT.indexOf(ot) >= 0) && t !== ot) return ACT.indexOf(t) >= 0 ? '今晚不能把「' + c.product + '」换成活性；要加活性得过本周额度' : '活性只能换成同一类的活性；想停就说跳过';
     }
-    if (t === 'acid' && c.op === 'add') {
-        if (exfoliantCountInLastNDays(W, 7) >= Math.min(g.acidCapMax, 7)) return '这周的刷酸已经到安全闸的上限了';
+    if (c.op === 'add' && ACT.indexOf(t) >= 0) {
+        // 和离线排法(engine/schedule.js applyTonightOverride)同一套:刮胡夜不加任何活性;泥膜和酸共用去角质额度
         const tn = W.tn || {};
-        if (tn.date === W.today && tn.shave && (W.profile || {}).shaving) return '刮胡夜不上酸';
+        if (tn.date === W.today && tn.shave && (W.profile || {}).shaving) return '刮胡夜不上酸、维 A、泥膜';
+        if (t === 'acid' && exfoliantCountInLastNDays(W, 7) >= Math.min(g.acidCapMax, 7)) return '这周的刷酸已经到安全闸的上限了';
+        if (t === 'mask' && exfoliantCountInLastNDays(W, 7) >= Math.min(g.acidCapMax, maxAcidPerWeek(W))) return '这周刷酸 / 敷泥膜已经到上限了（两样一起算）';
     }
     return '';
 }
@@ -247,6 +249,153 @@ export function tonightPlan(W, aiData) {
              skips: off.skips.map(x => ({ product: x, why: '' })), warnings: off.warnings, blocked: [], dropped: [] };
 }
 
+// ══ 她眼前的今晚(今晚页显示的那一份)═══════════════════════════════════════════════════════
+// 今晚页、对话 / 反馈的上下文、change_tonight 的校验、顾问页未来 7 晚的今晚那格,都用这一份(以前后三者按离线排法算,
+// 顾问版显示着时她说「今晚那支乳酸别用了」会被拒,顾问还在按另一份今晚回答)。纯函数:aiData 由调用方从本机缓存里取。
+const ACTIVE = ['acid', 'mask', 'retinol'];
+const ACT_N = { acid: '酸', retinol: '维 A', mask: '面膜' };
+const kindOfP = p => { const t = p && p.schedule && p.schedule.type; return ACTIVE.indexOf(t) >= 0 ? t : (p && p.role === 'acid' ? 'acid' : (p && (p.role === 'mask' || p.role === 'retinol')) ? p.role : ''); };
+// 今晚打过勾的 / 标了没做的(完整模式的打卡:sk_tnsteps1 + 当天日志 products)
+export function tonightTicks(W) {
+    const d = W.tnsteps || {};
+    const done = new Set(d.date === W.today ? (d.done || []) : []);
+    const en = (W.journal || []).find(e => e && e.date === W.today) || null;
+    ((en && en.products) || []).forEach(tag => { const p = (W.products || []).find(x => x.journalTag && x.journalTag === tag); if (p) done.add(p.name); });
+    const skipped = new Set((en && en.skipped) || []);
+    skipped.forEach(n => done.delete(n));
+    return { done, skipped };
+}
+// 顾问的今晚小改(sk_tnai1)叠在顾问写的原始步骤上(之后整份再过闸)。返回 {data, changed:Set(产品名), missed:[op]}(missed = 找不到目标步骤、没改成的)
+export function withOverride(W, data, ov) {
+    const changed = new Set(), missed = [];
+    if (!ov) return { data, changed, missed };
+    const d = JSON.parse(JSON.stringify(data));
+    d.steps = Array.isArray(d.steps) ? d.steps : []; d.skips = Array.isArray(d.skips) ? d.skips : [];
+    const kindOf = n => kindOfP(prodByName(W, n));
+    const roleIdx = n => { const p = prodByName(W, n); return p ? ROLE_ORDER.indexOf(p.role) : -1; };
+    ov.ops.forEach(c => {
+        const why = c.why ? '：' + c.why : '';
+        if (c.op === 'skip') {
+            const i = d.steps.findIndex(s => s && s.product === c.product);
+            if (i >= 0) { d.steps.splice(i, 1); d.skips.push({ product: c.product, why: '顾问：今晚先跳过' + why }); } else missed.push(c);
+        } else if (c.op === 'swap') {
+            const s = d.steps.find(x => x && x.product === c.product);
+            if (s && c.to) { s.product = c.to; s.why = '顾问今晚换的' + why; changed.add(c.to); } else missed.push(c);
+        } else if (c.op === 'add') {
+            if (!c.product || d.steps.some(x => x && x.product === c.product)) return;
+            const ri = roleIdx(c.product);
+            let at = d.steps.findIndex(x => x && x.product && roleIdx(x.product) > ri);
+            if (at < 0) at = d.steps.length;
+            d.steps.splice(at, 0, { product: c.product, how: '', why: '顾问今晚加的' + why });
+            changed.add(c.product);
+        } else if (c.op === 'acid') {
+            const i = d.steps.findIndex(x => x && x.product && kindOf(x.product) === 'acid');
+            if (i < 0) { missed.push(c); return; }
+            if (c.level === 'stop') { const p = d.steps[i].product; d.steps.splice(i, 1); d.skips.push({ product: p, why: '顾问：今晚的酸停掉' + why }); }
+            else { const s = d.steps[i]; s.how = (s.how || '') + '（今晚降一档：只薄涂一层、时间减半，刺痛马上洗掉）'; changed.add(s.product); }
+        }
+    });
+    return { data: d, changed, missed };
+}
+// 打过勾 / 已经记下的步骤是事实:不管是被闸拦下、还是顾问后来那份里没排 / 写进了「今晚不用」,都按原来的顺序放回列表,
+//   不挪进「今晚不用」(勾完之后闸收紧、顾问版晚到或重排时都会碰到)。
+export function keepDone(W, plan, data, done, off) {
+    const has = n => plan.steps.some(s => s.product === n);
+    const back = [...done].filter(n => n && !has(n) && prodByName(W, n));
+    if (!back.length) return plan;
+    const names = new Set(back);
+    const order = (data.steps || []).map(s => s && (s.product || s.how));
+    const steps = plan.steps.slice();
+    back.forEach(n => {
+        const src = (data.steps || []).find(s => s && s.product === n) || {};
+        const os = ((off && off.steps) || []).find(s => s.p === n) || {};
+        const p = prodByName(W, n);
+        let at = -1;
+        const oi = order.indexOf(n);
+        if (oi >= 0) at = steps.findIndex(s => order.indexOf(s.product || s.how) > oi);
+        else { const ri = ROLE_ORDER.indexOf(p.role); at = steps.findIndex(s => s.product && ROLE_ORDER.indexOf((prodByName(W, s.product) || {}).role) > ri); }
+        if (at < 0) at = steps.length;
+        steps.splice(at, 0, { product: n, how: String(src.how || os.h || ''), why: String(src.why || ''), kind: kindOfP(p) || 'base', kept: true });
+    });
+    return Object.assign({}, plan, { steps, blocked: (plan.blocked || []).filter(b => !names.has(b.product)), skips: (plan.skips || []).filter(s => !names.has(s.product)) });
+}
+// 极简模式:第二天按排班(sk_planday1)推定「排上的都用了」—— 顾问版的活性要和排班对齐:
+//   · 排班之外的活性今晚不上(不然多上的那次会漏记);
+//   · 排班里有、今晚离线也排得上、顾问却没排的放回来(不然没用的那次会被记成用了);顾问说了为什么不用,就写在这一步上,
+//     她点「今晚没做」才算没做 —— 不在渲染时替她写记录。
+export function minimalGuard(W, plan, off) {
+    const slot = new Set(((off.slot && off.slot.items) || []).filter(it => ACTIVE.indexOf(it.type) >= 0).map(it => { const p = (W.products || []).find(q => q.id === it.id); return p ? p.name : it.label; }));
+    const keep = [], blocked = plan.blocked.slice();
+    let skips = plan.skips.slice();
+    plan.steps.forEach(s => {
+        if (s.product && ACTIVE.indexOf(s.kind) >= 0 && !slot.has(s.product)) {
+            const why = '只看今晚的用法按排班走，排班外的' + (ACT_N[s.kind] || '活性') + '今晚不加';
+            blocked.push({ product: s.product, why }); skips.push({ product: s.product, why });
+        } else keep.push(s);
+    });
+    (off.steps || []).filter(s => ACTIVE.indexOf(s.kind) >= 0 && slot.has(s.p) && !keep.some(x => x.product === s.p)).forEach(s => {
+        const sk = skips.find(x => x.product === s.p);
+        const why = sk && sk.why ? '顾问说今晚可以不用（' + sk.why.replace(/[。.]$/, '') + '）。排班里有它：没用就点「今晚没做」，第二天就不会记成用了。' : '';
+        const ri = ROLE_ORDER.indexOf((prodByName(W, s.p) || {}).role);
+        let at = keep.findIndex(x => x.product && ROLE_ORDER.indexOf((prodByName(W, x.product) || {}).role) > ri);
+        if (at < 0) at = keep.length;
+        keep.splice(at, 0, { product: s.p, how: s.h || '', why, kind: s.kind, slotBack: true });
+        skips = skips.filter(x => x.product !== s.p);
+    });
+    if (!keep.some(s => s.product)) return null;
+    return Object.assign({}, plan, { steps: keep, blocked: blocked.filter(b => !keep.some(s => s.product === b.product)), skips });
+}
+// 顾问版过完闸以后,整份今晚还要「洗完全脸有东西护着」(和离线 schedule.js 的 8/28 守卫同一个口径):
+//   没有能全脸涂的、货架上又有一支今晚能用的保湿 → 按规则补成一步;补不上 → 安全提示。提示按显示的步骤重算(stepWarnings),不套离线那份。
+function coverAi(W, plan, ov) {
+    const g = safetyGate(W), P = W.profile || {};
+    const names = plan.steps.map(s => s.product).filter(Boolean);
+    let steps = plan.steps;
+    const skippedByAdvisor = new Set(((ov && ov.ops) || []).filter(c => c.op === 'skip').map(c => c.product));
+    const warn0 = stepWarnings(W, steps.map(s => ({ p: s.product, kind: s.kind })));
+    if (warn0.some(w => w.key === 'cover')) {
+        const m = (W.products || []).find(p => p.role === 'moist' && !p.hidden && usableTonight(W, p) && !gateBlocks(p, g, W) && names.indexOf(p.name) < 0 && !skippedByAdvisor.has(p.name)
+            && ((p.schedule && p.schedule.time) || ['pm']).indexOf('pm') >= 0);
+        if (m) {
+            const ri = ROLE_ORDER.indexOf(m.role);
+            let at = steps.findIndex(s => s.product && ROLE_ORDER.indexOf((prodByName(W, s.product) || {}).role) > ri);
+            if (at < 0) at = steps.length;
+            steps = steps.slice();
+            const hint = m.pmHint || visNotes(m, P)[0] || '全脸封层';
+            steps.splice(at, 0, { product: m.name, how: steps.some(s => s.kind === 'acid') ? '刷完酸直接封层' : hint, why: '顾问没排保湿，按规则补上：洗完全脸要有东西护着。', kind: 'base', added: true });
+        }
+    }
+    const warnings = stepWarnings(W, steps.map(s => ({ p: s.product, kind: s.kind })));
+    return Object.assign({}, plan, { steps, warnings });
+}
+// 今晚页显示的那一份:顾问版(叠今晚小改 → 过闸 → 放回打过勾的 → 极简对齐排班 → 补保湿)能用就用,不然离线排法。
+// 返回 tonightPlan 的形状 + {changed:Set, missed:[], fellBack, warnings}
+export function shownTonight(W, aiData) {
+    let off;
+    try { off = offlineTonight(W); } catch (e) { off = { slot: { items: [] }, shower: false, shave: false, steps: [], skips: [], warnings: [] }; }
+    const hasShelf = (W.products || []).some(p => !p.hidden);
+    const ov = tonightOverride(W);
+    let plan = null, changed = new Set(), missed = [], fellBack = false;
+    if (aiData && hasShelf) {
+        const o = withOverride(W, aiData, ov); changed = o.changed; missed = o.missed;
+        const ga = gateTonightPlan(W, o.data);
+        plan = ga ? keepDone(W, Object.assign({ source: 'ai' }, ga), o.data, tonightTicks(W).done, off) : null;
+        if (plan && (W.profile || {}).minimalMode) plan = minimalGuard(W, plan, off);
+        if (plan) plan = coverAi(W, plan, ov);
+        else fellBack = true;
+    }
+    if (!plan) { plan = tonightPlan(W, null); missed = []; }
+    return Object.assign(plan, { changed, missed, fellBack, off });
+}
+// 顾问页「未来 7 晚」/ 上下文里的 week:今晚那格按她眼前那份(顾问版的活性),其余按离线排班
+export function next7Shown(W, shown) {
+    const days = next7(W);
+    if (!shown || shown.source !== 'ai' || !days.length || days[0].date !== W.today) return days;
+    const items = shown.steps.filter(s => s.product && ACTIVE.indexOf(s.kind) >= 0).map(s => ({ type: s.kind, name: s.product }));
+    days[0] = Object.assign({}, days[0], { items, conflicts: [] });
+    return days;
+}
+
 // ── 直接应用 + 撤销 ──
 export const TONIGHT_TXT = {
     skip: c => '今晚跳过「' + c.product + '」', swap: c => '今晚「' + c.product + '」换成「' + c.to + '」',
@@ -259,18 +408,20 @@ export const REG_TXT = {
     cleanse: c => '洗脸：' + c.value, repair: c => '修护霜' + (c.value === 'spot' ? '只点涂' : '全脸薄涂')
 };
 // 今晚的小改(change_tonight)→ 写 sk_tnai1(撤销用的「改之前」存在它自己身上)+ 今天日志的备注。返回一条记录挂在那条助手消息上。
-export function applyTonight(store, j, today) {
+// opts.aiData = 今晚页现在用的顾问版(本机缓存,没有就 null):跳过 / 换掉 / 停酸对的是她眼前那份今晚,不是离线排法
+export function applyTonight(store, j, today, opts) {
     if (!j || !Array.isArray(j.changes) || !j.changes.length) return null;
     const W = buildWorld(store, { today });
     const changes = j.changes.slice(0, 6).filter(c => c && typeof c === 'object');
     const g = safetyGate(W);
-    let stepNames = [];
-    try { stepNames = offlineTonight(W).steps.map(s => s.p); } catch (e) { }
+    let stepNames = [], shown = null;
+    try { shown = shownTonight(W, (opts && opts.aiData) || null); stepNames = shown.steps.map(s => s.product).filter(Boolean); } catch (e) { }
+    const hasAcid = !!(shown && shown.steps.some(s => s.kind === 'acid'));
     const prev = store.lg(K.tnai);
     const cur = (prev && prev.date === today) ? JSON.parse(JSON.stringify(prev)) : { date: today, ops: [] };
     const jr0 = (store.lg(K.jrnl) || []).find(x => x.date === today);
     const snapNote = jr0 ? (jr0.note || '') : null;
-    const result = changes.map(c => validateTonight(c, g, stepNames, W));
+    const result = changes.map(c => validateTonight(c, g, stepNames, W) || (c.op === 'acid' && shown && !hasAcid ? '今晚的步骤里没有酸' : ''));
     let n = 0, noteAdded = '';
     changes.forEach((c, k) => {
         if (result[k]) return;
@@ -355,11 +506,38 @@ export function restoreRegimenLocal(store, id, reason, today) {
     return reg;
 }
 // ── 货架上的本机操作(产品页 P2 调这些,不要直接调 model 层):改货架 → 方案 force 重出一版 → 触发「要不要买」──
+// 用完了:先拍一份这支产品自己的状态(开封日、状态、快用完、空瓶记录在不在),「其实没用完」按它原样退回
+function runOutSnap(store, id) {
+    const has = k => store.lg(k) !== null && store.lg(k) !== undefined;
+    const popen = store.lg(K.popen) || {}, PS = store.lg(K.prods) || {};
+    return { id, popen: popen[id], prods: PS[id], low: (store.lg(K.low) || []).indexOf(id) >= 0, gone: (store.lg(K.gone) || []).indexOf(id) >= 0,
+             had: { popen: has(K.popen), prods: has(K.prods), low: has(K.low), empty: has(K.empty), gone: has(K.gone) } };
+}
 export function localMarkRunOut(store, id, today) {
+    const snap = runOutSnap(store, id);
     const rec = markRunOut(store, id, today); if (!rec) return null;
     const reg = syncRegimen(store, '用完了：' + rec.name, true, today);
     shopLocalChange('「' + rec.name + '」用完了');
-    return { rec, reg };
+    return { rec, reg, snap };
+}
+// 「其实没用完」:撤销刚才那次「用完了」—— 不是「买回来了」(那个会把开封日改成今天、状态改成正常使用、留着空瓶记录)。
+//   删掉刚推的那条空瓶记录,开封日 / 状态 / 快用完照用完之前的原样退回;方案回到用完之前那一版(不再出一版「补货」)。
+export function localUndoRunOut(store, out, today) {
+    if (!out || !out.rec || !out.snap) return false;
+    const { rec, snap } = out, id = snap.id;
+    const put = (k, v, had) => store.ls(k, (!had && (v === null || (Array.isArray(v) ? !v.length : !Object.keys(v).length))) ? undefined : v);
+    const em = store.lg(K.empty) || {}, list = (em[id] || []).slice();
+    let at = -1; for (let i = list.length - 1; i >= 0; i--) if (list[i] && list[i].date === rec.date && list[i].name === rec.name) { at = i; break; }
+    if (at >= 0) { list.splice(at, 1); if (list.length) em[id] = list; else delete em[id]; put(K.empty, em, snap.had.empty); }
+    if (!snap.gone) put(K.gone, (store.lg(K.gone) || []).filter(x => x !== id), snap.had.gone);
+    const PS = store.lg(K.prods) || {}; if (snap.prods === undefined) delete PS[id]; else PS[id] = snap.prods; put(K.prods, PS, snap.had.prods);
+    const popen = store.lg(K.popen) || {}; if (snap.popen === undefined) delete popen[id]; else popen[id] = snap.popen; put(K.popen, popen, snap.had.popen);
+    const low = store.lg(K.low) || []; if (snap.low && low.indexOf(id) < 0) put(K.low, low.concat([id]), snap.had.low);
+    const last = curReg(store);
+    if (out.reg && last && last.id === out.reg.id) undoRegimen(store, out.reg.id, today);
+    else syncRegimen(store, '', false, today);
+    shopLocalChange('撤销了「' + rec.name + '」用完');
+    return true;
 }
 export function localUnGone(store, id, today) {
     const def = unGone(store, id, today);

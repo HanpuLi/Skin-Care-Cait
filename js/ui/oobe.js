@@ -95,12 +95,26 @@ function stepHtml(app) {
             <button type="button" class="chip" role="radio" data-ob="state-ok" aria-checked="${P.startState === 'ok'}">没有</button>
             <button type="button" class="chip" role="radio" data-ob="state-irritated" aria-checked="${P.startState === 'irritated'}">有发红刺痛</button>
             <button type="button" class="chip" role="radio" data-ob="state-care" aria-checked="${P.startState === 'care'}">在看医生 / 用药</button></div>
-            ${P.startState === 'irritated' ? '<p class="note">记进今天了：这几晚只做清洁、保湿、修护，酸先不上。</p>' : P.startState === 'care' ? '<p class="note">记下了。医生开的药优先，护肤这边只做基础的几样；顾问也会看到这一条。</p>' : ''}</div>
+            ${skinStateNote(P, O && O.redo)}</div>
         <div class="acts ob-next"><button type="button" class="btn btn-primary" data-ob="next">下一步</button></div><div class="ob-foot">${skip}</div>` };
-    const ai = app.ai.ready();
-    return { title: '生成第一版', html: `<p class="ob-lede">${ai ? '顾问会按你家里的东西和皮肤情况出第一版方案。' : '按你家里的东西和皮肤情况排第一版。'}</p>
-        <p class="note">第一晚不上任何活性（酸、面膜、维 A），先看皮肤对基础的几样有没有反应。之后从每周 1 次温和酸起步，看反应一档档加。</p>
+    // 重新做引导:不出第一版方案、也没有「第一晚」的闸(finishOobe 里 redo 都跳过了),别这么说
+    if (O && O.redo) return { title: '改好了', html: `<p class="ob-lede">设置改好了，今晚按新的排。</p>
+        ${P.startState === 'care' ? '<p class="note">在看医生 / 用药：护肤只做清洁、保湿、修护，直到你在设置里关掉。</p>' : ''}
         <div class="acts stack-acts ob-next"><button type="button" class="btn btn-primary" data-ob="finish">好，看今晚</button></div>` };
+    const ai = app.ai.ready();
+    const later = P.startState === 'care' ? '在看医生 / 用药：之后也只做清洁、保湿、修护，医生开的药优先，直到你在设置里关掉。'
+        : P.startState === 'irritated' ? '你说了现在有发红刺痛：头三晚酸先不上，面膜、维 A 也不上。之后从每周 1 次温和酸起步，看反应一档档加。'
+            : '之后从每周 1 次温和酸起步，看反应一档档加。';
+    return { title: '生成第一版', html: `<p class="ob-lede">${ai ? '顾问会按你家里的东西和皮肤情况出第一版方案。' : '按你家里的东西和皮肤情况排第一版。'}</p>
+        <p class="note">第一晚不上任何活性（酸、面膜、维 A），先看皮肤对基础的几样有没有反应。${later}</p>
+        <div class="acts stack-acts ob-next"><button type="button" class="btn btn-primary" data-ob="finish">好，看今晚</button></div>` };
+}
+// 「现在有没有发红刺痛 / 在看医生」选完那一句:只说真会发生的(engine/gate.js ⑧)
+function skinStateNote(P, redo) {
+    if (P.startState === 'irritated') return redo ? '<p class="note">档案里记下了；今天的皮肤到「记录」里改。</p>'
+        : '<p class="note">记进今天了：头三晚酸先不上，面膜、维 A 也不上，只做清洁、保湿、修护。</p>';
+    if (P.startState === 'care') return '<p class="note">记下了：护肤只做清洁、保湿、修护，医生开的药优先，顾问也会看到这一条。设置里「在看医生 / 用药」能关掉。</p>';
+    return '';
 }
 // 同一个全屏 sheet 原地换内容(不关了重开:每点一下都重放一次滑入动画,还会丢滚动位置)
 function paint(app) {
@@ -140,7 +154,7 @@ function bind(ov, app) {
         } else if (a === 'add') openAddSheet(app, { stay: true, onSaved: () => refreshOobe(app) });
         else if (a.indexOf('state-') === 0) {
             const v = a.slice(6);
-            updateProfile(app.store, p => { p.startState = v; });
+            updateProfile(app.store, p => { p.startState = v; if (v === 'care') p.careAt = p.careAt || app.today(); else delete p.careAt; });
             // 「现在发红刺痛」是安全输入:第一次引导直接记进今天(安全闸当晚就生效);看医生的写进档案给顾问看。
             //   只撤引导自己加的那几个标签(今天她自己记的泛红是就医红线数的硬事实,不能被一个「没有」抹掉);
             //   「重新做引导」只改档案里的起点,不碰当天日志(她今天的记录在记录页改)。
@@ -183,8 +197,9 @@ export async function finishOobe(app) {
         holdShop(false);   // 引导里加的货架、第一版方案都不自动判断「要不要买」;她到产品页点「让顾问判断」
     };
     // 第一次请顾问之前先让她看到「顾问会看到什么」(点「知道了」再发)
+    // 弹着说明的时候还按着「要不要买」(放开只交给 ask() 结尾):不然她点「知道了」→ 第一版方案落成 → 自动判断一次要不要买(10/29:第一次打开不自动调)
     if (dataNoticeSeen(app)) await ask();
-    else { holdShop(false); openDataNotice(app, () => { ask(); }); }
+    else if (!openDataNotice(app, () => { ask(); })) holdShop(false);   // 没弹出来(没登录):别把 hold 永远卡住
 }
 
 // ── 改版说明(v2)──

@@ -23,6 +23,10 @@ export default async function ({ origin, S, open }) {
     const used = [...new Set(src.match(/[一-鿿]/g) || [])];
     const miss = used.filter(c => !have.has(c));
     S.ok(!miss.length, `宋体子集覆盖界面源码里的全部 ${used.length} 个汉字`, miss.join(''));
+    // 领域字表(护肤成分、症状、病名、HRT 药名:顾问回答里常见、不在 GB 2312 一级里的字)每个字都在子集里
+    const extra = [...new Set((fs.readFileSync(path.join(ROOT, 'fonts/extra-chars.txt'), 'utf8').split('\n').filter(l => !l.startsWith('#')).join('').match(/[一-鿿]/g) || []))];
+    const missX = extra.filter(c => !have.has(c));
+    S.ok(extra.length > 200 && !missX.length && ['鲨', '疱', '钛', '睾', '荟', '螨'].every(c => have.has(c)), `宋体子集覆盖领域字表的全部 ${extra.length} 个字(鲨 疱 钛 睾 荟 螨 ……)`, missX.join(''));
     // 界面用到的非 ASCII 字符都得落在三款自托管字体的 unicode-range 里(否则 iPhone 上落到系统字体,字形和粗细对不上;比如「→」)
     //   范围从 css/tokens.css 现读;源码里先去掉注释、正则里的字符区间
     const tok = fs.readFileSync(path.join(ROOT, 'css/tokens.css'), 'utf8');

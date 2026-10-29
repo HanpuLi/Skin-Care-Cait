@@ -27,6 +27,20 @@ export default async function ({ origin, S, open }) {
         S.ok(!p.errors.length, `${who}/${scheme}:0 报错`, p.errors);
     }
 
+    // ── 顾问改了今晚 + 一张提醒卡,主屏 App 真机尺寸(顶 59、底 34 的安全区,tab 栏 90 高):第一步还是整个在第一屏 ──
+    for (const scheme of ['light', 'dark']) {
+        const p = await open({ scheme });
+        await p.nav(origin + '/index.html', 200);
+        await p.eval(`__seed.full({status:i=>i===-1?['泛红']:['稳定']});
+            localStorage.setItem('sk_tnai1',JSON.stringify({date:__d(0),id:'t-s10',at:new Date().toISOString(),ops:[{op:'skip',product:'MZ Skin Soothe & Smooth 眼部精华',to:'',level:'',why:'今晚想简单点，少一步'}],undo:{prev:null}}));return 1`);
+        await p.reload(800);
+        const r = await p.eval(`const s=document.documentElement.style;s.setProperty('--safe-top','59px');s.setProperty('--safe-bot','34px');document.getElementById('tab-tonight').click();${W8(200)}scrollTo(0,0);
+            const f=document.querySelector('#tn-plan li'),tb=document.querySelector('.tabbar').getBoundingClientRect(),rv=document.getElementById('tn-rev');
+            const b=f&&f.getBoundingClientRect();return {rev:!!rv,revH:rv?Math.round(rv.getBoundingClientRect().height):0,cards:document.querySelectorAll('#tn-cards .note-caution,#tn-cards .note-info').length,top:b&&Math.round(b.top),bottom:b&&Math.round(b.bottom),tab:Math.round(tb.top)}`);
+        S.ok(r.rev && r.cards >= 1 && r.bottom !== null && r.bottom <= r.tab, `改了今晚 + 提醒卡 /${scheme}:修订线和提醒卡都在,第一步仍整个在第一屏(底部安全区 34px)`, r);
+        S.ok(!p.errors.length, `改了今晚 /${scheme}:0 报错`, p.errors);
+    }
+
     // ── 完整模式:点 4 下皮肤状态,方案版本不变;状态三选一单选,旧标签照样存;完成今晚后没点的记「没做」、名字不划线 ──
     {
         const p = await open();

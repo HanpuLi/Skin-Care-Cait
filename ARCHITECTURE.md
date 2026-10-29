@@ -18,7 +18,8 @@ css/base.css          reset, layout, typography, tab bar, toast
 css/components.css    buttons, chips, segmented controls, fields, switches, sheets, folds
 css/screens/*.css     per-screen styles
 sw.js                 offline cache, cache-first for one version at a time; its file list must match js/ and css/ exactly,
-                      and CACHE_NAME must be bumped whenever index.html, js/ or css/ change (both checked in engine-unit)
+                      and CACHE_NAME must be bumped whenever any precached file changes (the page, js/, css/, fonts,
+                      manifest, icons; engine-unit reads the list from sw.js and checks both)
 ```
 
 ## Layers and rules
@@ -34,7 +35,7 @@ sw.js                 offline cache, cache-first for one version at a time; its 
 
 3. **The engine is pure.** `js/model/world.js` `buildWorld(store, {today})` reads every key once into a plain object `W`; every function in `js/engine/` takes `W` and returns data. Results are memoised per `W` (a `WeakMap`), and hypotheticals use `derive(W, patch)` instead of mutating globals. `buildWorld` is also the single place where minimal-mode history is absorbed (`absorbPrescribedHistory`), before anything reads the journal.
 
-4. **One safety gate.** `engine/gate.js` `safetyGate(W)` decides what tonight may contain (acid cap, strong actives, retinol, oils, masks), and `gateBlocks(product, gate, W)` explains why a product is blocked. The offline schedule (`engine/schedule.js`), the advisor's tonight changes, routine changes and whole plans (`ai/apply.js`) all pass through the same two functions. `engine/redline.js` decides when to suggest seeing a clinician. It counts only the status tags a person logged, not face-map spots or photo analysis results.
+4. **One safety gate.** `engine/gate.js` `safetyGate(W)` decides what tonight may contain (acid cap, strong actives, retinol, oils, masks), and `gateBlocks(product, gate, W)` explains why a product is blocked. It also honours the starting state given during setup: "redness or stinging now" stops acids, masks and retinol for the first three nights after setup; "seeing a doctor / on medication" keeps tonight to cleansing, moisturiser, repair and eye cream until the person turns it off in settings (only when the v2 setup or settings wrote it, recorded as `careAt`; a value left by the v1 setup does not tighten the plan, so both versions keep computing the same night). The offline schedule (`engine/schedule.js`), the advisor's tonight changes, routine changes and whole plans (`ai/apply.js`) all pass through the same two functions. `engine/redline.js` decides when to suggest seeing a clinician. It counts only the status tags a person logged, not face-map spots or photo analysis results.
 
 5. **Advisor changes apply directly and can be undone.** `ai/apply.js` validates each change against the gate, applies what passes, explains what was blocked, and stores enough to undo. Routine changes become a new routine version (`model/regimen.js`); undo is itself a version. The local-change notice (`shopLocalChange`) is fired only from these local entry points (apply / undo / restore and the `local*` shelf changes), never from sync, startup maintenance or automatic routine regeneration. QA checks this statically and by counting calls. It has two listeners, registered in `js/app.js`: the "should I buy something" runner (`ui/products.js` `ensureShopRunner`) and tonight's re-plan (`ui/tonight.js` `localChange`). Both debounce and skip the call when their signature has not changed.
 
@@ -57,6 +58,8 @@ Nothing is sent to the advisor automatically (tonight's plan, feedback after log
 - When it calls: once on a new day, only while the page is visible (`document.hidden` is false); after a local change (this page's shower/shave buttons, "let the advisor re-plan", or `app.tonightChanged(why)` / the local-change notice from other screens), debounced, and only if `sig` changed; never because of a synced change or an automatic routine regeneration; never after tonight is marked done.
 - Steps the person already ticked, and steps already logged today, are facts: the gate does not move them into "not tonight".
 - In minimal mode the advisor's active steps are aligned with today's plan (`sk_planday1`), because tomorrow's presumed history follows that plan: actives outside the plan are not shown, and planned actives the advisor left out stay as steps with the advisor's reason, so only her "not done tonight" marks them as skipped.
+- What tonight's page shows is computed in one place, `ai/apply.js` `shownTonight(W, aiData)` (tonight changes → gate → ticked steps put back → minimal-mode alignment → "something on the whole face" check, which adds a moisturiser if the advisor left none, or raises the safety notice). The chat and feedback context, `change_tonight` validation and the "next seven nights" cell for today all use the same function (`app.shownTonight()`), so the advisor talks about, and changes, the list she is looking at. Safety notices are recomputed for the shown steps (`engine/schedule.js` `stepWarnings`).
+- If she has already ticked steps when a new advisor version arrives (late, or re-planned), the page keeps the list she is following and offers "swap in".
 
 Other device-only keys added in v2: `sk_aiprivacy1` (`{uid, at}`: the data notice shown the first time this account opens the advisor screen on this device; same format as v1) and the photo-analysis switch, which is a profile field (`photoAnalysis`, synced): unset means on only for the owner account, other accounts must turn it on themselves.
 
@@ -83,6 +86,8 @@ Startup: lock, open envelope, migrate older keys, seed profile, then `'system'` 
 - Same keys, same value shapes, same sync envelope (`sk_sync_v1:<uid>`), same recovery copies (up to four per account on a device) and same Firestore document layout as the previous version. A device running the old version and one running v2 can share an account.
 - The routine fingerprint (`REGIMEN_ENGINE = 'e4'`, `skinSignature`, `shelfSignature`) is unchanged, so the two versions do not keep regenerating each other's routine.
 - New optional fields: journal `skipped` (steps a person marked as not done), `spots` (face-map zones), `photoAssess` (cleaned photo analysis result); tonight-change undo records may carry `noteAdded`. Older readers ignore them.
+- Photos (IndexedDB, device only) are keyed by the envelope owner (`store.state.owner`), the same owner as the records, not by the currently signed-in Firebase user; photos saved under `local__` before sign-in move to the account when it claims the local records.
+- Engine change on purpose (not in v1): on a shave night the advisor's "add a clay mask" is refused and a mask is dropped from that night's slot, like acid and retinol. It only affects nights where a mask would otherwise be placed next to shaving.
 
 ## Advisor service
 

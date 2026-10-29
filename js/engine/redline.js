@@ -20,5 +20,7 @@ export function medicalRedLine(W) {
     const why = [byRed ? '泛红 ' + red.length + ' 天' : '', byAcne ? '冒痘 ' + acne.length + ' 天' : ''].filter(Boolean).join('、');
     return { on: byRed || byAcne, by: byRed && byAcne ? 'both' : byRed ? 'red' : byAcne ? 'acne' : '',
              redDays: red.length, acneDays: acne.length, days: new Set(red.concat(acne).map(e => e.date)).size, why: why ? '近两周' + why : '',
+             // 这一轮从哪天开始(近 14 天里第一次泛红 / 冒痘):上一轮点的「先不 / 已约了」早于它,就不算这一轮的回应
+             start: red.concat(acne).map(e => e.date).sort()[0] || '',
              followUp: m.state || '' };
 }

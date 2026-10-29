@@ -14,6 +14,7 @@ import { lastNDays } from '../engine/util.js';
 import { addDays, dowOf } from '../clock.js';
 import { startOobe, showWhatsNew } from './oobe.js';
 import { photoAnalysisOn, PHOTO_FIELD } from './capture.js';
+import { invalidateChatCtx } from './advisor.js';
 
 // 极简模式是什么,全 App 只有这一种说法(引导、设置都照它)
 export const MINIMAL_DESC = '护肤品不用打卡，排上的默认都算用了；哪一步没做点一下「今晚没做」。皮肤想记就记，不会催。';
@@ -94,7 +95,8 @@ function isOwner(app) { try { return !!app.sync.isOwner(curUser(app)); } catch (
 const TIMING_TXT = { neutral: '无所谓', avoid: '避开刚洗完热水澡', prefer: '洗澡夜优先' };
 export const DATA_NOTE = [
     '你的记录（每天的皮肤、货架、方案、设置）存在这台设备上；登录后同步到 Google Firebase 里你自己账号的那一份，只有你自己能读写。顾问对你记录的回应、每周复盘的结果也跟着同步。',
-    '今晚页每天会自动请顾问排一次；你记完皮肤、完成今晚后顾问会自动回一句；问顾问、出方案、每周复盘、读成分表、「要不要买新的」也一样：这些请求带着你记录的快照，先到 Cait 家里的顾问服务器，再用 Cait 的 Anthropic API 组织调用 Claude 生成回答。服务器只记每次花了多少钱，和你让顾问「记住」的那几句（在这里能看、能删），不存对话和照片。',
+    '这些会自动发给顾问：今晚页每天排一次；你记完皮肤、完成今晚后回一句；每周第一次打开顾问页复盘一次（近两周记了 3 天以上才跑）；货架上标了用完 / 快用完之后判断要不要买。你问顾问、出方案、读成分表时也发。这些请求带着你记录的快照（还有你账号名字的第一个词），先到 Cait 家里的顾问服务器，再用 Cait 的 Anthropic API 组织调用 Claude 生成回答。服务器只记每次花了多少钱，不存对话和照片。',
+    '对话里顾问会自己记下以后也要用的事（比如对某成分的反应、过敏、偏好），存在服务器上；记了会在那条回答下面写「记住了」，在这里的「顾问记得的事」能看、能删。',
     '对话、「要不要买新的」的结果只存在这台设备上，换设备不带过去。',
     '照片只存在这台设备上（浏览器的本机数据库），不进云端同步。只有你点了分析、读成分表或随消息发图时，才把照片发给顾问：分析时是这次拍的那几张，这台设备上存着上一次分析时的正脸照片的话，也会一起发过去对比（拍之前能选不带）。分析完服务器不留，存下来的只有分析结果（进当天的记录）。',
     'HRT 只在你自己打开了 HRT 时才进顾问看到的快照；两个账号的数据互相看不到。'
@@ -129,6 +131,8 @@ function body(app) {
         ${sw('set-hrt', 'HRT', !!P.hrt)}
         <p class="note set-hint">${owner ? '只影响你自己这个账号：App 里记的 HRT 阶段只在打开时带给顾问，也只在打开时按周期调酸；家里的服务器另外会附上你在服务器上记的用药和化验，和这个开关无关。' : '只影响你自己这个账号：开了 HRT 才会按周期调酸，顾问也才看得到。'}</p>
         ${sw('set-premakeup', '需要卸妆步骤', !!P.useMakeupRemoval)}
+        ${sw('set-care', '在看医生 / 用药', P.startState === 'care' && !!P.careAt)}
+        <p class="note set-hint">打开时护肤只排清洁、保湿、修护和眼霜，酸、面膜、维 A、精华、面油都先不上，医生开的药优先；顾问也会看到。</p>
         ${skinChipsHtml(P)}</div>
 
     <div class="sheet-sec" id="set-habit"><div class="sec-t">通常哪几天洗澡${P.shaving ? '、刮胡' : ''}</div>
@@ -203,7 +207,10 @@ function bind(ov, app) {
     const on = (id, fn) => { const el = ov.querySelector('#' + id); if (el) el.addEventListener('change', () => fn(el)); };
     on('set-showrec', el => setProfile(app, p => { if (el.checked) delete p.hideRecords; else p.hideRecords = true; }));
     on('set-shave', el => setProfile(app, p => { p.shaving = el.checked; }));
-    on('set-hrt', el => setProfile(app, p => { p.hrt = el.checked; }));
+    // HRT 开关一变:对话里拍着的快照作废(关了之后不能再把 HRT 阶段带给顾问)
+    on('set-hrt', el => { setProfile(app, p => { p.hrt = el.checked; }); try { invalidateChatCtx(app); } catch (e) { } });
+    // 打开时记下 careAt(安全闸只认带它的,v1 引导留下的老值不算);一变对话快照也作废
+    on('set-care', el => { setProfile(app, p => { if (el.checked) { p.startState = 'care'; p.careAt = app.today(); } else { if (p.startState === 'care') p.startState = 'ok'; delete p.careAt; } }); try { invalidateChatCtx(app); } catch (e) { } });
     on('set-premakeup', el => setProfile(app, p => { p.useMakeupRemoval = el.checked; }));
     on('set-repairuse', el => setProfile(app, p => { if (el.value) p.repairUse = el.value; else delete p.repairUse; }));
     on('set-acidlevel', el => setProfile(app, p => { const v = el.value ? +el.value : null; if (v !== (p.acidLevel || null)) { p.acidLevel = v; p.acidLevelAt = v ? t() : ''; } }));
@@ -270,24 +277,20 @@ export async function backupData(app) {
     CLOUD_KEYS.forEach(k => { const v = app.store.lg(k); if (v !== null && v !== undefined) data[k] = v; });
     const photos = await allPhotos(app);
     if (photos && Object.keys(photos).length) data._photos = photos;
+    if (photos === null) data._meta.photosMissing = true;   // 照片存储没打开:备份里没带上照片(调用方要说出来)
     return data;
 }
+// 走照片库自己的事务封装(连接被 iOS 断开会重开一次再试);打不开 → null,不当成「没有照片」
 async function allPhotos(app) {
-    if (!app.photos || !app.photos.open) return null;
-    const db = await app.photos.open(); if (!db) return null;
-    const prefix = app.photos.keyOf('');
-    return new Promise(res => {
-        const out = {};
-        try {
-            const r = db.transaction('photos', 'readonly').objectStore('photos').getAll();
-            r.onsuccess = () => { (r.result || []).forEach(x => { const k = String(x.date); if (k.indexOf(prefix) === 0) out[k.slice(prefix.length)] = x.dataUrl; }); res(out); };
-            r.onerror = () => res(out);
-        } catch (e) { res(out); }
-    });
+    if (!app.photos || !app.photos.all) return null;
+    let out = await app.photos.all();
+    if (out === null) out = await app.photos.all();   // 再试一次
+    return out;
 }
 async function exportBackup(app) {
     const data = await backupData(app);
     download('skincare_backup_' + app.today() + '.json', JSON.stringify(data, null, 2));
+    if (data._meta.photosMissing) toast('这次备份里没带上照片：这台设备的本机照片存储没打开。记录都在里面。', 5000);
 }
 function importBackup(app, file) {
     const rd = new FileReader();

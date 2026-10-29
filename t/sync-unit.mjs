@@ -114,7 +114,8 @@ export async function runSyncUnit(S) {
     });
 
     await T('新账号 + 回声', async () => {
-        const h = harness(); await h.login('a', 'caitlye@gmail.com'); h.emit({}, {}, false);
+        // 主账号邮箱不在公开仓库里写明文(js/sync.js 和 t/v2-b-lib.mjs 同样用 base64)
+        const h = harness(); await h.login('a', Buffer.from('Y2FpdGx5ZUBnbWFpbC5jb20=', 'base64').toString()); h.emit({}, {}, false);
         S.ok(h.data('sk_profile1').autoMatched === 'a' && h.state().rev === 0, '新的主账号:autoMatch 只落盘(system),不算改动', h.state());
         h.onRender = () => { h.store.ls('sk_mig1', ['m1']); h.store.ls('sk_regimen1', [{ v: 2 }], 'system'); };
         h.emit(Object.assign({}, h.state().data, { sk_cd1: 'x' })); h.emit(h.remote.get('a')); h.onRender = null;

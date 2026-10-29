@@ -209,7 +209,7 @@ await run('v2-a-record', [
             S.ok(r.red === 0 && !r.styleAttrs.length, `${tag}:没有红、模板里没有 style=(热度条除外)`, { red: r.red, st: r.styleAttrs });
             S.ok(r.sizes.every(x => [12, 14, 16, 18, 22, 28].includes(x)), `${tag}:字号只用 6 档`, r.sizes);
             if (scheme === 'dark') S.ok(!r.brightN, `${tag}:没有比 --ink-strong 更亮的像素`, r.bright);
-            const w = await p.eval(`return document.documentElement.scrollWidth<=window.innerWidth+1`);
+            const w = await p.eval(`return document.documentElement.scrollWidth<=document.documentElement.clientWidth`);
             S.ok(w, `${tag}:390 宽不横向滚动`);
             S.ok(!p.errors.length, `${tag}:0 console error`, p.errors);
             p.done(); await sleep(150);

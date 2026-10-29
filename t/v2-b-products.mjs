@@ -129,6 +129,16 @@ await run('v2-b-products', [
         S.ok(JSON.stringify(c1) === '["calm"]' && c2 === undefined, '补特性 → 撤销:定义整份换回改之前', { c1, c2 });
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
+    ['320 宽 · 读成分表:顾问说里的长网址不撑出横向滚动', async ({ S, open }) => {
+        const p = await open({ seed: 'full', mode: 'on', login: true, width: 320 });
+        await tab(p, 'products', 400);
+        await p.eval(`__AIF.vision={mode:'read_label',name:'CeraVe 保湿乳',role:'保湿',traits:['light'],note:'成分说明见 https://www.cerave.co.uk/skincare/moisturisers/moisturising-lotion-ingredients'};return 1`);
+        await setFile(p, '#pr-scan-in', tinyPng());
+        await p.waitFor(`!!document.getElementById('pr-label-ok')`, 6000);
+        const r = await p.eval(`return {sw:document.documentElement.scrollWidth,cw:document.documentElement.clientWidth,t:(document.getElementById('pr-label')||{}).innerText||''}`);
+        S.ok(/cerave\.co\.uk/.test(r.t) && r.sw <= r.cw, '「顾问说」那一格的网址折行,没有横向滚动', { sw: r.sw, cw: r.cw });
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
     ['要不要买新的 · 顾问在后台判断', async ({ S, open }) => {
         const p = await open({ seed: 'full', mode: 'on', login: true });
         await p.eval(`(await import('/js/ui/products.js')).SHOP.delay=400;return 1`);

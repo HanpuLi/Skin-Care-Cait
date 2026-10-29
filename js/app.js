@@ -18,7 +18,7 @@ import { openSheet, closeSheet, hasSheet, toast, sysAlert, sysConfirm, download,
 import { openSettings, watchTheme } from './ui/settings.js';
 import { onBoot as oobeOnBoot, onFirstSnapshot as oobeOnFirstSnapshot } from './ui/oobe.js';
 import { ensureShopRunner } from './ui/products.js';
-import { onShopLocalChange } from './ai/apply.js';
+import { onShopLocalChange, shownTonight } from './ai/apply.js';
 import * as tonightScreen from './ui/tonight.js';
 import * as advisorScreen from './ui/advisor.js';
 import * as recordScreen from './ui/record.js';
@@ -32,7 +32,9 @@ function boot() {
     const app = {};
     const store = createStore({ localStorage: window.localStorage,
         onStorageError: msg => { const el = document.getElementById('sync-toast-el'); if (el) { el.textContent = msg; el.classList.add('show'); } } }).open();
-    const photos = createPhotoStore({ indexedDB: window.indexedDB, uid: () => (app.sync && app.sync.state.user && app.sync.state.user.uid) || 'local' });
+    // 照片跟着记录走同一个主人(信封的 owner):登出后、离线首开(登录服务没加载出来)时,记录还属于刚才那个账号,照片也一样;
+    //   以前按「Firebase 当前用户」分,登出时存的照片落在 local__ 下,再登录就找不到了
+    const photos = createPhotoStore({ indexedDB: window.indexedDB, uid: () => (store.state && store.state.owner) || 'local' });
     let fbUser = null;
     const ai = createAiClient({ base: aiBase(location.hostname), getUser: () => fbUser, fetch: (u, i) => window.fetch(u, i), localStorage: window.localStorage, today });
 
@@ -123,11 +125,15 @@ function boot() {
             },
             // 登录后核一次顾问开通;核成了就补「新的一天」那次今晚(核不成不再追着核;页面在后台时 tonight.js 自己会跳过,等切回来)
             onAuthUser: user => { fbUser = user || null; if (user) Promise.resolve(ai.probe()).then(() => { if (ai.ready()) tonightScreen.onAiReady(app); }, () => { }); },
-            onFirstSnapshot: () => oobeOnFirstSnapshot(app)   // 新用户引导 / 改版说明(oobe.js 另有兜底:第一份快照走待推分支时这里不来)
+            onFirstSnapshot: () => oobeOnFirstSnapshot(app),   // 新用户引导 / 改版说明(oobe.js 另有兜底:第一份快照走待推分支时这里不来)
+            adoptLocalPhotos: uid => { try { photos.adoptLocal(uid); } catch (e) { } }   // 认领了本机没登录时的记录:那时的照片一起搬
         }
     });
     Object.assign(app, { store, sync, ai, photos, today, show, renderAll, renderScreen,
         tonightChanged: why => tonightScreen.localChange(app, why),   // 别的屏改了今晚的前提(今天洗澡 / 刮胡、模式)后调:签名变了才让顾问重排
+        // 她眼前的今晚(今晚页显示的那份,顾问版或离线):对话 / 反馈 / 拍照分析的上下文、change_tonight 的校验、未来 7 晚的今晚那格都用它
+        aiTonightData: W => tonightScreen.aiTonightData(app, W),
+        shownTonight: W => { W = W || app.world(); return shownTonight(W, tonightScreen.aiTonightData(app, W)); },
         world: opts => buildWorld(store, Object.assign({ today: today() }, opts || {})),
         signIn() {
             if (typeof firebase === 'undefined') { sysAlert('登录服务没加载出来，检查一下网络再试。'); return; }

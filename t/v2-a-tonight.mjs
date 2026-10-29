@@ -319,6 +319,25 @@ await run('v2-a-tonight', [
         S.ok(r.v.boxes === 0, '极简 + 顾问版:照样不打卡', r.v.boxes);
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
+    ['320 宽:顾问写的长网址、修订线、反馈不撑出横向滚动', async ({ S, open }) => {
+        const URL = 'https://www.nhs.uk/conditions/rosacea/treatment-and-medicines-overview';
+        const T2 = JSON.parse(JSON.stringify(TONIGHT_FULL));
+        T2.why = '参考 ' + URL + ' 的说法'; T2.steps[2].why = '看这里：' + URL;
+        const p = await open({ seed: 'full', seedArg: `{products:i=>[]}`, mode: 'on', login: true, width: 320, aif: `{tonight:${JSON.stringify(T2)},feedback:{text:'可以看看 ${URL}',note_add:'',next_adjust:[],dropped:[]}}` });
+        await tab(p, 'tonight', 200);
+        await p.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 8000);
+        await p.eval(`const d=${ENV};d.sk_tnai1={date:__d(0),id:'t-url',at:new Date().toISOString(),ops:[{op:'skip',product:'MZ Skin Soothe & Smooth 眼部精华',to:'',level:'',why:'见 ${URL}'}],undo:{prev:null}};d._updatedAt=Date.now()+9000;fakeCloud.emit(d);${W8(400)}return 1`);
+        const hs = () => p.eval(`return {sw:document.documentElement.scrollWidth,cw:document.documentElement.clientWidth}`);
+        const a = await hs();
+        S.ok(await p.eval(`return !!document.getElementById('tn-rev') && /nhs\.uk/.test(document.getElementById('tonight').innerText)`) && a.sw <= a.cw, '今晚页(顾问的为什么 + 修订线里各一个长网址):没有横向滚动', a);
+        // 记一句皮肤 → 顾问的反馈里带网址
+        await tab(p, 'record', 250);
+        await p.eval(`const q=document.getElementById('rec-q');q.value='今天还好';q.dispatchEvent(new Event('input'));document.getElementById('rec-q-go').click();return 1`);
+        await p.waitFor(`/nhs\.uk/.test((document.querySelector('#rec-today .fb-box')||{}).innerText||'')`, 5000);
+        const b = await hs();
+        S.ok(b.sw <= b.cw, '记录页(顾问反馈里一个长网址):没有横向滚动', b);
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
     ['美学探针:浅 / 深,完整 / 极简', async ({ S, open }) => {
         for (const scheme of ['light', 'dark']) for (const who of ['full', 'minimal']) {
             const p = await open({ seed: who, scheme });

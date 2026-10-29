@@ -180,7 +180,10 @@ export function computePlan(W) {
                     const np = prodByName(W, c.product);
                     const ty = np && np.schedule && np.schedule.type;
                     if (!np || !ACT.includes(ty) || gateBlocks(np, gate, W) || ts.items.some(x => x.type === ty)) return;
-                    if (ty === 'acid' && (maxAcid === 0 || ts.shave || journalAcidCnt >= gate.acidCapMax)) return;   // 闸压到 0 / 已到上限 / 刮胡夜:不加酸
+                    if (ts.shave) return;   // 刮胡夜不加酸、维 A、泥膜(和 ai/apply.js validateTonight、gateTonightPlan 同一条)
+                    if (ty === 'acid' && (maxAcid === 0 || journalAcidCnt >= gate.acidCapMax)) return;   // 闸压到 0 / 已到上限:不加酸
+                    // 泥膜和酸共用去角质额度(产品备注「使用当晚视为酸类占用」):HRT 波动期 1 次 / 周也管泥膜
+                    if (ty === 'mask' && (maxAcid === 0 || journalAcidCnt >= Math.min(maxAcid, gate.acidCapMax))) return;
                     ts.items.push({ id: np.id, type: ty, label: np.name, byAI: true });
                 }
             });
@@ -201,7 +204,12 @@ export function computePlan(W) {
                 p.conflicts.push(`${dayLabel}：${msg}`);
                 p.items = p.items.filter(i => !hits.includes(i));
             };
-            if (p.shave) { dropIf('acid', 'avoidShaveDay', '刷酸与刮胡冲突'); dropIf('retinol', 'avoidShaveDay', '维 A 与刮胡冲突'); }
+            if (p.shave) {
+                dropIf('acid', 'avoidShaveDay', '刷酸与刮胡冲突'); dropIf('retinol', 'avoidShaveDay', '维 A 与刮胡冲突');
+                // 泥膜也不和刮胡同晚(刮胡夜的步骤本来就不显示它;不从槽位里拿掉,极简模式第二天会被推定成用过)。已记下的是事实,不动
+                const mk = p.items.filter(i => i.type === 'mask' && !i.logged && flagOn(i, 'avoidShaveDay'));
+                if (mk.length) { p.conflicts.push(`${dayLabel}：面膜与刮胡冲突`); p.items = p.items.filter(i => mk.indexOf(i) < 0); }
+            }
             if (has('acid')) dropIf('retinol', 'avoidAcid', '维 A 与刷酸冲突');
             if (has('acid')) dropIf('mask', 'avoidAcid', '面膜与刷酸同晚');
             if (has('mask') && has('retinol')) { p.conflicts.push(`${dayLabel}：面膜与维 A 同晚`); p.items = p.items.filter(i => i.type !== 'retinol'); }
@@ -335,6 +343,29 @@ export function buildNightSteps(W, shower, shave, slot) {
         steps.forEach(s => { if (lowNames.indexOf(s.p) >= 0) s.h = (s.h || '') + '（这支快用完了）'; });
     }
     return { steps, skips, warnings };
+}
+// 一份「要显示的今晚步骤」的安全提示(顾问版也要有,不能拿离线那份的提示套):口径和 buildNightSteps 同一套
+//   steps = [{p 产品名(纯动作为 ''), kind}];返回 [{text, after, key}]。
+//   · 这支酸还在试用的头几晚 · 刷酸夜 + 新保湿的头几晚 · 洗完全脸没有能涂的(8/28 事故)
+export const COVER_WARN = '洗完全脸没有能涂的东西了：保湿这一档是空的。去「产品」看「要不要买新的」。';
+export function faceCoveredBy(W, names) {
+    const spotUse = repairUse(W) === 'spot';
+    return names.some(n => { const q = prodByName(W, n); return !!q && (['moist', 'serum', 'oil'].indexOf(q.role) >= 0 || (q.role === 'repair' && !spotUse)); });
+}
+export function stepWarnings(W, steps) {
+    const out = [], list = (steps || []).filter(Boolean);
+    const names = list.map(s => s.p || '').filter(Boolean);
+    const ai = list.findIndex(s => s.kind === 'acid');
+    if (ai >= 0) {
+        const ap = prodByName(W, list[ai].p);
+        if (ap && introNightsLeft(W, ap)) out.push({ key: 'acid-intro', text: '这支酸还在试用的头几晚，别和别的新东西同一晚上脸：出了问题分不清是谁。', after: ai });
+        list.forEach((s, i) => {
+            const q = s.p && prodByName(W, s.p);
+            if (q && q.role === 'moist' && introHint(W, q)) out.push({ key: 'moist-intro', text: '今晚既刷酸、又是这支保湿的头几晚：建议酸往后挪一晚，两样一起上，出了问题分不清是谁。', after: i });
+        });
+    }
+    if (!faceCoveredBy(W, names) && (W.products || []).some(p => !p.hidden)) out.push({ key: 'cover', text: COVER_WARN, after: 0 });
+    return out;
 }
 // 今晚(按 W.tn 的洗澡 / 刮胡;没有就按排班)
 export function tonight(W) {

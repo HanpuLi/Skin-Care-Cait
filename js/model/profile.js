@@ -2,7 +2,8 @@
 // 双人差异全靠它(不写死任何人的情况):
 //   shaving / hrt / minimalMode / hideRecords / skinType / baseTraits / concerns / goal / zones / excluded /
 //   acidTiming / repairUse / acidLevel / acidLevelAt / useMakeupRemoval / showerDays(镜像,见 model/week.js) /
-//   medical {state:'booked'|'seen'|'later', at, date?, seenAt?, note?, until?} / oobe / oobeAt / tourIA / stamp / firstSeen / autoMatched
+//   medical {state:'booked'|'seen'|'later', at, date?, seenAt?, note?, until?} / oobe / oobeAt / tourIA / stamp / firstSeen / autoMatched /
+//   startState('ok'|'irritated'|'care',引导里的起点)/ careAt(v2 引导或设置里打开「在看医生 / 用药」那天;有它安全闸才只排基础几样)
 // 纯函数直接用;要读写存储的函数第一个参数传 store(这个模块不 import store,也没有全局状态)。
 import { K } from '../store.js';
 import { isOwnerEmail } from '../sync.js';

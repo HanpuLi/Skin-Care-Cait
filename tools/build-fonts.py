@@ -6,7 +6,10 @@
 
 字表 = 《GB 2312》一级 3755 个常用字(本地用 Python 自带的 gb2312 编解码生成,不用下载字表)
      ∪ index.html 和 js/ 下全部模块里实际出现的汉字(v2;v1 时是 index.html / ai.js)
+     ∪ fonts/extra-chars.txt 的领域字表(护肤成分、症状、皮肤科病名、HRT 药名:鲨 脓疱 钛 睾 荟 ……
+        这些不在一级字表里,顾问一写就落到系统字体,一段话里一半宋体一半苹方)
      ∪ 全角标点、中文引号、省略号。
+重做之后原地覆盖同一个文件名:一定要给 sw.js 的 CACHE_NAME 升版(t/engine-unit.mjs 会核)。
 顾问写出来的话基本落在常用字里,离线也是宋体;子集外的生僻字落到下一个字体(见 index.html 的 --serif)。
 
 输出:
@@ -29,6 +32,7 @@ CHARS = ROOT / "fonts" / "noto-serif-sc-400-skin.chars.txt"
 META = ROOT / "fonts" / "noto-serif-sc-400-skin.meta.json"
 FAMILY = "Skin Serif SC"
 UI_FILES = ["index.html"] + sorted(str(p.relative_to(ROOT)) for p in (ROOT / "js").rglob("*.js"))
+EXTRA = ROOT / "fonts" / "extra-chars.txt"
 CJK = re.compile(r"[　-〿㐀-䶿一-鿿豈-﫿＀-￯]")
 PUNCT = "·—‘’“”…、。，：；！？（）《》〈〉「」『』【】〔〕～－"
 
@@ -49,7 +53,8 @@ def main() -> int:
         return 2
     src = Path(sys.argv[1])
     ui = "".join(CJK.findall("".join((ROOT / f).read_text(encoding="utf-8") for f in UI_FILES)))
-    wanted = set(gb2312_level1()) | set(ui) | set(PUNCT) | {chr(c) for c in range(0x3000, 0x3040)}
+    extra = "".join(CJK.findall("".join(l for l in EXTRA.read_text(encoding="utf-8").splitlines() if not l.startswith("#")))) if EXTRA.exists() else ""
+    wanted = set(gb2312_level1()) | set(ui) | set(extra) | set(PUNCT) | {chr(c) for c in range(0x3000, 0x3040)}
     font = TTFont(src)
     cmap = font.getBestCmap()
     have = sorted(ch for ch in wanted if ord(ch) in cmap)
@@ -88,7 +93,8 @@ def main() -> int:
         "source_version": str(src_name.getName(5, 3, 1, 0x409)),
         "source_sha256": hashlib.sha256(src.read_bytes()).hexdigest(),
         "license": "SIL Open Font License 1.1 (fonts/LICENSES.txt)",
-        "charset": "GB 2312 level 1 + UI text of index.html/js/**/*.js + CJK punctuation",
+        "charset": "GB 2312 level 1 + UI text of index.html/js/**/*.js + fonts/extra-chars.txt + CJK punctuation",
+        "extra_characters": len(set(extra)),
         "character_count": len(have),
         "ui_characters": len(set(ui)),
         "ui_missing_in_source": "".join(missing),

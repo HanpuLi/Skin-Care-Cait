@@ -17,7 +17,7 @@ import { ROLE_LABEL, traitsOf, isSchedActive, statusOf, emptyLogRows } from '../
 import { PHASES, userZones } from '../model/profile.js';
 import { cleanSpots } from '../model/journal.js';
 
-// who = { name?(显示名第一个词), ticked?[](今晚已点了做的步骤) }
+// who = { name?(显示名第一个词), ticked?[](今晚已点了做的步骤), shown?(ai/apply.js shownTonight:她眼前那份今晚;没有就按离线排法) }
 export function buildSkincareContext(W, who) {
     who = who || {};
     const P = W.profile || {}, minimal = !!P.minimalMode;
@@ -35,7 +35,9 @@ export function buildSkincareContext(W, who) {
     try {
         const tn = tonightSteps(W);
         const te = (W.journal || []).find(x => x.date === W.today);
-        tonight = { steps: tn.steps.map(s => ({ role: roleOf(s.p), product: s.p })), skipped: tn.skips.slice(0, 8), shower: !!tn.shower, shave: !!tn.shave,
+        const sv = shownSteps(W, who.shown);
+        tonight = { source: sv.source, steps: sv.steps.map(s => Object.assign({ role: roleOf(s.product), product: s.product }, s.kind && s.kind !== 'base' ? { kind: s.kind } : {})),
+                    skipped: sv.skipped, shower: !!tn.shower, shave: !!tn.shave,
                     done: !!(te && te.done), ticked: (who.ticked || []).slice(0, 20), notDone: ((te && te.skipped) || []).slice(0, 8) };
     } catch (e) { }
     const tags = acidTags(W);
@@ -78,10 +80,16 @@ export function buildSkincareContext(W, who) {
                   gate: { irritated: g.irritated, tags: g.tags, worsening: g.worsening, acidReaction: g.react, hrtFlare: g.hrtFlare, medical: g.medical, firstNight: g.firstNight, acidCapMax: g.acidCapMax, notes: g.notes } },
         zones: userZones(P).map(z => ({ name: z.name, avoid: z.avoid || [], care: z.care || '' })),
         acid: acidHistory(W, 6),
-        week: next7(W).map(d => ({ date: d.date, dayName: d.dayName, shower: d.shower, shave: d.shave, plan: d.items.map(i => ({ type: i.type, product: i.name })) }))
+        week: next7(W).map((d, i) => ({ date: d.date, dayName: d.dayName, shower: d.shower, shave: d.shave,
+            plan: (i === 0 && d.date === W.today && who.shown && who.shown.source === 'ai'
+                ? who.shown.steps.filter(s => s.product && ['acid', 'mask', 'retinol'].indexOf(s.kind) >= 0).map(s => ({ type: s.kind, name: s.product }))
+                : d.items).map(it => ({ type: it.type, product: it.name })) }))
     };
     if (rr.source !== 'ai') ctx.regimen.ladder = { level: rr.ladder.level, why: rr.ladder.why, uses: rr.ladder.uses };
     if (P.medical && P.medical.state) ctx.medical = { state: P.medical.state, date: P.medical.date || '', seenAt: P.medical.seenAt || '', note: P.medical.note || '' };
+    // 引导里说的起点:在看医生 / 用药 → 顾问要知道(安全闸那边只排基础几样);刚开始时有发红刺痛也带上
+    if (g.care) ctx.user.care = '在看医生 / 用药：医生开的药优先，护肤只做清洁、保湿、修护（她在设置里关掉之前一直这样）';
+    else if (g.startIrritated) ctx.user.start = '刚开始用时说了有发红刺痛：头三晚不上酸、面膜、维 A';
     if (P.hrt) ctx.hrt = { on: true, flare: g.hrtFlare, recent: lastNDays(W, 14).filter(e => e.phase).map(e => ({ date: e.date, phase: e.phase })) };
     // 「要不要买新的」要看的:标了快用完的、近 60 天的空瓶、在哪个国家买
     ctx.low = (W.products || []).filter(p => !p.hidden && low.indexOf(p.id) >= 0).map(p => p.name);
@@ -90,10 +98,20 @@ export function buildSkincareContext(W, who) {
     ctx.region = 'GB';
     return ctx;
 }
-// 每条对话另带的「此刻」:对话开头拍的快照整段不变(缓存命中省钱),会变的放这里
-export function liveContext(W) {
+// 她眼前的今晚(顾问版 / 离线)→ {source, steps[{product, kind}], skipped[]};纯动作(product 为空)不算步骤
+function shownSteps(W, shown) {
+    if (shown && Array.isArray(shown.steps)) {
+        return { source: shown.source === 'ai' ? '顾问版（今晚页上显示的这份）' : '离线排法',
+                 steps: shown.steps.filter(s => s.product).map(s => ({ product: s.product, kind: s.kind || 'base' })),
+                 skipped: (shown.skips || []).slice(0, 8).map(x => typeof x === 'string' ? x : (x.product + (x.why ? '（' + x.why + '）' : ''))) };
+    }
+    const tn = tonightSteps(W);
+    return { source: '离线排法', steps: tn.steps.filter(s => s.p).map(s => ({ product: s.p, kind: s.kind || 'base' })), skipped: tn.skips.slice(0, 8) };
+}
+// 每条对话另带的「此刻」:对话开头拍的快照整段不变(缓存命中省钱),会变的放这里。shown = 她眼前那份今晚
+export function liveContext(W, shown) {
     const g = safetyGate(W), rr = regimenRules(W), reg = currentRegimen(W);
-    let steps = [];
-    try { steps = tonightSteps(W).steps.map(s => s.p); } catch (e) { }
-    return { tonight: { steps }, regimen: { v: reg ? reg.v : 0, source: rr.source === 'ai' ? '顾问' : '离线规则', acidCapNow: maxAcidPerWeek(W), acidName: rr.acidName || '' }, gate: g.notes, acid: acidHistory(W, 3) };
+    let steps = [], source = '离线排法';
+    try { const sv = shownSteps(W, shown); steps = sv.steps.map(s => s.product); source = sv.source; } catch (e) { }
+    return { tonight: { source, steps }, regimen: { v: reg ? reg.v : 0, source: rr.source === 'ai' ? '顾问' : '离线规则', acidCapNow: maxAcidPerWeek(W), acidName: rr.acidName || '' }, gate: g.notes, acid: acidHistory(W, 3) };
 }

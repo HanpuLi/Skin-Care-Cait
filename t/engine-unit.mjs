@@ -21,7 +21,10 @@ import { toggleTn, setDayState, syncHabitSources, dayState } from '../js/model/w
 import { cleanPhotoAssess, setPhotoAssess } from '../js/model/journal.js';
 import { syncRegimen, currentRegimen, commitAiRegimen } from '../js/model/regimen.js';
 import { buildSkincareContext } from '../js/ai/context.js';
-import { applyTonight, undoTonightChange, applyRegimen, validatePlan, gateTonightPlan, onShopLocalChange, undoRegimenChange, localToggleLow } from '../js/ai/apply.js';
+import { applyTonight, undoTonightChange, applyRegimen, validatePlan, gateTonightPlan, onShopLocalChange, undoRegimenChange, localToggleLow,
+         shownTonight, next7Shown, localMarkRunOut, localUndoRunOut } from '../js/ai/apply.js';
+import { liveContext } from '../js/ai/context.js';
+import { medicalFollowUp } from '../js/ui/tonight.js';
 import { parseSseBlock, aiClean, createAiClient } from '../js/ai/client.js';
 import { localEditProduct, localDropProduct } from '../js/ui/products.js';
 import { localUnGone as localUnGone2 } from '../js/ai/apply.js';
@@ -401,6 +404,125 @@ export async function runEngineUnit(S) {
         } catch (e) { S.ok(false, 'client 异步测试抛异常 ' + e.message, e.stack); }
     })();
 
+    // ═══ 修复第 2 轮的回归 ═══
+    const CLAY = 'IPSA 深层净化泥面膜', VOT = 'Votary 10%乳酸', LACURA = 'Lacura 温和洗面奶', TSENS = 'La Roche-Posay Toleriane Sensitive Fluide';
+    t('泥膜:顾问「加一支」也查去角质额度和刮胡夜', () => {
+        // HRT 波动期(酸 / 泥膜一起 ≤1 次/周),3 天前刷过 PC 酸
+        const s = full({ profile: { hrt: true }, phase: i => i === -1 ? '剂量调整' : '', products: i => i === -3 ? ['PC酸'] : [], status: () => ['稳定'] });
+        const w = W(s), g = safetyGate(w);
+        S.ok(g.hrtFlare && g.acidCapMax === 1, '(前提)HRT 波动期,额度 1 次/周', g.notes);
+        const r = applyTonight(s, { id: 't-clay', changes: [{ op: 'add', product: CLAY, why: '测试' }] }, T);
+        S.ok(r.state === 'failed' && /上限/.test(r.result[0] || '') && !s.lg(K.tnai), '这周已经去角质 1 次:加泥膜被拦,sk_tnai1 没写', r.result);
+        // 以前写进去的(或另一台设备同步来的)加泥膜小改:离线排法也不放进今晚的槽位
+        s.ls(K.tnai, { date: T, id: 't-old', ops: [{ op: 'add', product: CLAY, to: '', level: '', why: '' }] });
+        const w2 = W(s);
+        S.ok(!tonight(w2).steps.some(x => x.p === CLAY) && !(plandayOf(w2).items || []).some(x => x.name === CLAY), '离线今晚和 planday 都没有泥膜', plandayOf(w2).items);
+        // 极简 + 刮胡夜
+        const m = minimal({ profile: { shaving: true } });
+        toggleTn(m, 'shave', true, T);
+        const r2 = applyTonight(m, { id: 't-clay2', changes: [{ op: 'add', product: CLAY }] }, T);
+        S.ok(r2.state === 'failed' && /刮胡夜/.test(r2.result[0] || ''), '刮胡夜加泥膜:被拦,写明「刮胡夜不上酸、维 A、泥膜」', r2.result);
+        m.ls(K.tnai, { date: T, id: 't-old2', ops: [{ op: 'add', product: CLAY, to: '', level: '', why: '' }] });
+        const wm = W(m);
+        S.ok(!(plandayOf(wm).items || []).some(x => x.type === 'mask'), '刮胡夜:planday 里没有泥膜(第二天不会被推定成敷过)', plandayOf(wm).items);
+        S.ok(!computePlan(wm).filter(d => !d.isPast && d.shave).some(d => d.items.some(i => i.type === 'mask' && !i.logged)), '刮胡的晚上槽位里都没有泥膜');
+    });
+    const AI_ACID = { title: '刷酸夜', why: '测试', steps: [{ product: LACURA, how: '洗', why: '' }, { product: VOT, how: '薄涂', why: '顾问排的酸' }, { product: TSENS, how: '封层', why: '' }], skips: [] };
+    t('她眼前的今晚:对话的上下文和 change_tonight 对的是今晚页上那份', () => {
+        const s = full({ status: () => ['稳定'] }), w = W(s);
+        const sh = shownTonight(w, AI_ACID);
+        S.ok(sh.source === 'ai' && sh.steps.some(x => x.product === VOT && x.kind === 'acid'), '(前提)顾问版今晚有 Votary 酸', sh.steps.map(x => x.product));
+        const ctx = buildSkincareContext(w, { shown: sh }), live = liveContext(w, sh);
+        S.ok(/顾问版/.test(ctx.tonight.source) && ctx.tonight.steps.some(x => x.product === VOT) && live.tonight.steps.indexOf(VOT) >= 0, '上下文 tonight / live 都是顾问版(带来源)', { src: ctx.tonight.source, live: live.tonight });
+        const n7 = next7Shown(w, sh);
+        S.ok(n7[0].items.some(i => i.type === 'acid' && i.name === VOT), '未来 7 晚的今晚那格按顾问版标「酸」', n7[0].items);
+        const r = applyTonight(s, { id: 't-skipv', changes: [{ op: 'skip', product: VOT, why: '有点刺' }] }, T, { aiData: AI_ACID });
+        S.ok(r.state === 'applied' && !r.result[0], '对话里跳过眼前这支酸:生效', r.result);
+        const sh2 = shownTonight(W(s), AI_ACID);
+        S.ok(!sh2.steps.some(x => x.product === VOT) && sh2.skips.some(x => x.product === VOT), '今晚页上这支消失,进「今晚不用」', sh2.steps.map(x => x.product));
+        const r2 = applyTonight(s, { id: 't-skipx', changes: [{ op: 'skip', product: 'Dr Sebagh Rose de Vie 精华' }] }, T, { aiData: AI_ACID });
+        S.ok(r2.state === 'failed' && /没有这支/.test(r2.result[0] || ''), '跳过顾问版里根本没有的一步:记为没改成,不算 applied', r2.result);
+    });
+    t('顾问版今晚也要「洗完全脸有东西护着」', () => {
+        const bare = { title: '刷酸夜', why: '', steps: [{ product: LACURA, how: '', why: '' }, { product: PC, how: '', why: '' }] };
+        const s = full({ status: () => ['稳定'] }), sh = shownTonight(W(s), bare);
+        const moist = sh.steps.find(x => x.added);
+        S.ok(sh.source === 'ai' && moist && roleOf(W(s), moist.product) === 'moist' && /按规则补上/.test(moist.why) && !(sh.warnings || []).some(x => x.key === 'cover'),
+            '顾问只排洁面 + 酸:按规则补上一支保湿(写明是补的),不再出「没东西涂」', sh.steps.map(x => x.product + (x.added ? '+' : '')));
+        const s2 = full({ status: () => ['稳定'], gone: ['tolerianeSens'], extra: { sk_profile1: { shaving: true, hrt: false, minimalMode: false, showJournal: true, onboarded: true, autoMatched: 'cait', repairUse: 'spot' } } });
+        const sh2 = shownTonight(W(s2), bare);
+        S.ok((sh2.warnings || []).some(x => x.key === 'cover'), '货架上没有能补的保湿:出「洗完全脸没有能涂的」安全提示', sh2.warnings);
+    });
+    t('引导里说的起点真的生效', () => {
+        const s = full({ status: () => ['稳定'], profile: { startState: 'irritated', oobeAt: d(-1) } }), w = W(s), g = safetyGate(w);
+        S.ok(g.startIrritated && g.acidCapMax === 0 && !tonight(w).steps.some(x => x.kind === 'acid'), '「有发红刺痛」:引导后第二晚也不上酸', g.notes);
+        const s2 = full({ status: () => ['稳定'], profile: { startState: 'irritated', oobeAt: d(-3) } });
+        S.ok(!safetyGate(W(s2)).startIrritated, '三晚之后恢复照常');
+        const s3 = full({ status: () => ['稳定'], profile: { startState: 'care', careAt: d(-20), oobeAt: d(-20) } }), w3 = W(s3), g3 = safetyGate(w3);
+        const bad = tonight(w3).steps.map(x => w3.products.find(p => p.name === x.p)).filter(p => p && ['precleanse', 'cleanse', 'moist', 'repair', 'spf', 'eye'].indexOf(p.role) < 0);
+        S.ok(g3.care && g3.acidCapMax === 0 && !bad.length && /设置里能改/.test(g3.notes.join()), '「在看医生 / 用药」:只排清洁、保湿、修护、眼霜,写明设置里能改', bad.map(p => p.name));
+        S.ok(/在看医生/.test(buildSkincareContext(w3, {}).user.care || ''), '顾问的上下文里带着这一条');
+        S.ok(!safetyGate(W(full({ status: () => ['稳定'], profile: { startState: 'care', oobeAt: d(-200) } }))).care, 'v1 引导里选过、没有 careAt 的老账号:不凭空收紧(和 v1 算的一样)');
+    });
+    t('「其实没用完」原样退回', () => {
+        const s = full({ extra: { sk_popen1: { pc: '2026-03-01' }, sk_prods1: { goodGenes: 'active', drorganic: 'owned', pc: 'paused' }, sk_low1: ['pc'] } });
+        const KS = [K.popen, K.prods, K.low, K.empty, K.gone], snap = () => KS.map(k => JSON.stringify(s.lg(k)));
+        const before = snap(), nReg = (s.lg(K.regimen) || []).length;
+        const out = localMarkRunOut(s, 'pc', T);
+        S.ok(out && JSON.stringify(s.lg(K.empty)) !== 'null' && s.lg(K.gone).indexOf('pc') >= 0, '(前提)用完了:记了空瓶、进了「已删掉」');
+        localUndoRunOut(s, out, T);
+        const after = snap();
+        S.ok(JSON.stringify(after) === JSON.stringify(before), '撤销之后开封日、状态、快用完、空瓶记录、已删掉五个键逐字和用完之前一样', { before, after });
+        S.ok(!(s.lg(K.regimen) || []).some(r => /补货/.test(r.reason || '')) && (s.lg(K.regimen) || []).length > nReg, '方案回到用完之前那一版(撤销是新的一版),没出「补货」');
+    });
+    t('编辑没写 role 的内置产品:只改保质期不动排法', () => {
+        const s = full(), nReg = (s.lg(K.regimen) || []).length;
+        localEditProduct(s, 'pc', { role: 'acid', paoMonths: 6 }, T);
+        const pc = (s.lg(K.prodDefs) || []).find(x => x.id === 'pc');
+        S.ok(pc && pc.paoMonths === 6 && pc.schedule.preferShowerNight === true && pc.cat === '去角质 · T区' && pc.role === 'acid', '排法(洗澡夜偏好)和分类名都没被重置,角色落了盘', pc && { cat: pc.cat, pref: pc.schedule.preferShowerNight });
+        S.ok((s.lg(K.regimen) || []).length === nReg, '不出新的方案版本');
+    });
+    t('就医卡:「先不」过期、上一轮的回应不算这一轮', () => {
+        const red = { followUp: 'later', start: '2026-10-20' };
+        S.ok(medicalFollowUp(red, { state: 'later', at: '2026-10-25', until: '2026-11-01' }, T) === 'later', '「先不」7 天内:按她的回应显示');
+        S.ok(medicalFollowUp(red, { state: 'later', at: '2026-10-21', until: '2026-10-28' }, T) === '', '过了 until:回到完整的就医理由');
+        S.ok(medicalFollowUp({ followUp: 'booked', start: '2026-10-20' }, { state: 'booked', at: '2026-09-30', date: '2026-10-03' }, T) === '', '「已约了」是上一轮点的:不算这一轮的回应');
+    });
+    await (async () => {
+        const LS0 = () => { const m = new Map(); return { getItem: k => m.has(k) ? m.get(k) : null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) }; };
+        try {
+            let who = { uid: 'uA', getIdToken: async () => 'tokA' };
+            const hits = [];
+            const fetch = (u, init) => { hits.push(u.replace('http://x', '') + '|' + init.headers.Authorization); if (/review|assess/.test(u)) return new Promise((res, rej) => { init.signal.addEventListener('abort', () => rej(new DOMException('aborted', 'AbortError'))); }); return Promise.resolve(new Response('event: done\ndata: {"text":"hi"}\n\n', { status: 200 })); };
+            const c = createAiClient({ base: 'http://x', getUser: () => who, fetch, localStorage: LS0(), today: () => T, wait: () => Promise.resolve(), limits: { point: 150, streamHead: 150, streamIdle: 150, assess: 150, shop: 150 } });
+            const rv = c.api.review({}).catch(e => e);
+            const ch = c.api.chat({ message: 'x' });
+            await new Promise(r => setTimeout(r, 20));
+            const ab = c.abort();
+            const o = await ch;
+            await rv;
+            S.ok(ab && o.aborted && !hits.some(h => /\/api\/chat/.test(h)), '排在后面的对话点「停一下」:马上停,轮到它时也没发出去', { o, hits });
+            // 排着队的时候换了账号:出队时不拿新账号的 token 发上一个人的请求
+            hits.length = 0;
+            const rv2 = c.api.review({}).catch(e => e);
+            const fb = c.api.feedback({ who: 'A' }, {}).catch(e => e);
+            await new Promise(r => setTimeout(r, 20));
+            who = { uid: 'uB', getIdToken: async () => 'tokB' }; c.clearLocal();
+            const e2 = await fb; await rv2;
+            S.ok(e2 && e2.switched && !hits.some(h => /feedback/.test(h)), '换了账号:排着的 A 的反馈不发', { e: e2 && e2.message, hits });
+            // 429「还没跑完」按退避多等几次(总时长对齐 busyWait),不是 6 秒就放弃
+            let n429 = 0;
+            const c3 = createAiClient({ base: 'http://x', getUser: () => who, localStorage: LS0(), today: () => T, wait: () => Promise.resolve(), limits: { busyWait: 90000 },
+                fetch: () => Promise.resolve(++n429 < 5 ? new Response(JSON.stringify({ error: '上一个请求还没跑完，稍等。' }), { status: 429 }) : new Response(JSON.stringify({ data: { ok: 1 } }), { status: 200 })) });
+            const r3 = await c3.api.tonight({}).catch(e => e);
+            S.ok(r3 && r3.data && r3.data.ok === 1 && n429 === 5, '429「还没跑完」:退避重试到后端空出来', { n429, r3: r3 && (r3.message || r3.data) });
+            // /api/me 401:原因留着(界面说「退出再登录」)
+            const c4 = createAiClient({ base: 'http://x', getUser: () => who, localStorage: LS0(), today: () => T, fetch: () => Promise.resolve(new Response(JSON.stringify({ error: '请先登录。', status: 'signed_out' }), { status: 401 })) });
+            await c4.probe(true);
+            S.ok(c4.state.meErr && c4.state.meErr.code === 401 && !c4.ready(), 'probe 失败的原因留在 state.meErr(401)', c4.state.meErr);
+        } catch (e) { S.ok(false, '修复第 2 轮 client 测试抛异常 ' + e.message, e.stack); }
+    })();
+
     // ═══ 存储 / 兼容 / 文件表(s-70 的静态部分)═══
     t('CLOUD_KEYS', () => {
         const legacy = fs.readFileSync(path.join(ROOT, 'legacy/index.v1.html.txt'), 'utf8');
@@ -422,15 +544,25 @@ export async function runEngineUnit(S) {
         S.ok(!/legacy\//.test(sw) && !/legacy\//.test(html) && !/ai\.js/.test(sw), '旧单文件(legacy/)不被新 index.html 加载,也不进 sw 缓存');
         const css = (html.match(/href="(css\/[^"]+)"/g) || []).map(x => x.slice(6, -1)).sort();
         S.ok(JSON.stringify(css) === JSON.stringify(files.filter(f => f.startsWith('./css/')).map(f => f.slice(2)).sort()), 'index.html 引了全部样式表', css);
-        // SW 缓存优先(一次启动只用一个版本):改了 index.html / js/ / css/ 而 CACHE_NAME 没升,已装 App 的人永远拿不到新版
+        // SW 缓存优先(一次启动只用一个版本):改了任何预缓存的文件而 CACHE_NAME 没升,已装 App 的人永远拿不到新版。
+        //   清单直接从 sw.js 的 CORE + FONTS 解析(页面、js/、css/、manifest、图标、字体、旧 URL 重定向页),不手抄
+        const precached = [...(sw.match(/const CORE = \[([\s\S]*?)\];/) || [, ''])[1].matchAll(/'\.\/([^']*)'/g), ...(sw.match(/const FONTS = \[([\s\S]*?)\];/) || [, ''])[1].matchAll(/'\.\/([^']*)'/g)]
+            .map(m => m[1]).filter(Boolean);
+        S.ok(['index.html', 'manifest.json', 'icon-192.png', 'fonts/noto-serif-sc-400-skin.woff2', '护肤计划.html'].every(f => precached.indexOf(f) >= 0) && precached.some(f => f.startsWith('js/')),
+            '从 sw.js 解析出了预缓存清单(含字体、manifest、图标)', precached.length);
         try {
             const sh = c => execSync(c, { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
             const base = sh('git merge-base HEAD main').trim();
             const name = x => (x.match(/const CACHE_NAME = '([^']+)'/) || [])[1];
-            const changed = sh('git diff --name-only ' + base + ' -- index.html js css').trim();
+            const changed = sh('git -c core.quotepath=off diff --name-only ' + base + ' -- ' + precached.map(f => JSON.stringify(f)).join(' ')).trim();
             const was = name(sh('git show ' + base + ':sw.js'));
-            S.ok(!changed || name(sw) !== was, 'index.html / js/ / css/ 相对 main 有改动时,sw.js 的 CACHE_NAME 也升了版', { was, now: name(sw), changed: changed.split('\n').slice(0, 5) });
+            S.ok(!changed || name(sw) !== was, '预缓存的文件(页面 / js / css / 字体 / manifest / 图标)相对 main 有改动时,sw.js 的 CACHE_NAME 也升了版', { was, now: name(sw), changed: changed.split('\n').slice(0, 5) });
         } catch (e) { S.ok(true, '(没有 git / main,跳过 CACHE_NAME 升版检查)'); }
+        // 老 iOS Safari(15.4–16.3,README 写的支持范围)不认的语法:模块顶层一出现,整个模块图解析失败、App 打不开
+        //   后行断言 (?<= / (?<!、正则 v 标志、类的 static 块
+        const OLD_SAFARI = [[/\(\?<[=!]/, '正则后行断言'], [/\/[a-z]*v[a-z]*\.test\(|new RegExp\([^)]*,\s*'[a-z]*v/, '正则 v 标志'], [/\bstatic\s*\{/, '类的 static 块']];
+        const oldHits = files.filter(f => f.endsWith('.js')).flatMap(f => { const src = fs.readFileSync(path.join(ROOT, f), 'utf8'); return OLD_SAFARI.filter(([re]) => re.test(src)).map(([, n]) => f + ':' + n); });
+        S.ok(!oldHits.length, 'js/ 里没有 iOS 15.4 不认的语法(后行断言、正则 v 标志、static 块)', oldHits);
         const emo = files.concat(['./index.html', './sw.js', './manifest.json']).filter(f => /\p{Extended_Pictographic}/u.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
         S.ok(!emo.length, 'App 源码里 0 emoji', emo);
     });

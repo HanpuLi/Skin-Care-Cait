@@ -18,7 +18,7 @@ import { next7, buildNightSteps, slotFor } from '../engine/schedule.js';
 import { hasTrait } from '../model/products.js';
 import { toggleTn, setDayState, saveHabit, presetOk, habitPreset } from '../model/week.js';
 import { buildSkincareContext, liveContext } from '../ai/context.js';
-import { applyTonight, undoTonightChange, applyRegimen, applyPlan, undoRegimenChange, restoreRegimenLocal, TONIGHT_TXT, REG_TXT } from '../ai/apply.js';
+import { applyTonight, undoTonightChange, applyRegimen, applyPlan, undoRegimenChange, restoreRegimenLocal, TONIGHT_TXT, REG_TXT, next7Shown } from '../ai/apply.js';
 import { addDays, dowOf, isoWeek } from '../clock.js';
 
 export const id = 'advisor';
@@ -42,7 +42,10 @@ const mdAt = t => { const d = new Date(t); return isNaN(d) ? '' : (d.getMonth() 
 function md(s) { return String(s || '').split(/\n{2,}/).map(p => '<p>' + esc(p.replace(/\*\*(.+?)\*\*/g, '$1').replace(/^#+\s*/gm, '')).replace(/\n/g, '<br>') + '</p>').join(''); }
 function user(app) { return (app.sync && app.sync.state && app.sync.state.user) || null; }
 function uidOf(app) { const u = user(app); return u ? u.uid : null; }
-function whoOf(app) { const u = user(app); return { name: u && u.displayName ? String(u.displayName).split(' ')[0] : '' }; }
+function whoOf(app, W) { const u = user(app); return { name: u && u.displayName ? String(u.displayName).split(' ')[0] : '', shown: shownOf(app, W) }; }
+// 她眼前的今晚(今晚页显示的那份:顾问版或离线);app.js 接好的钩子,单测里没有就按离线
+function shownOf(app, W) { try { return app.shownTonight ? app.shownTonight(W) : null; } catch (e) { return null; } }
+function aiTonightOf(app) { try { return app.aiTonightData ? app.aiTonightData() : null; } catch (e) { return null; } }
 function isOwner(app) { try { return !!(app.sync.isOwner && app.sync.isOwner(user(app))); } catch (e) { return false; } }
 export function canTalk(app) { return app.ai.access() === 'on' && app.ai.ready() && !app.ai.state.down && !app.ai.quotaText(); }
 
@@ -90,7 +93,7 @@ export function openDataNotice(app, after) {
             <li>近 14 天的皮肤记录、标在脸上的位置、备注、做了哪几步</li>
             <li>设置里的肤质、想解决的、要避开的区域${P.hrt ? '、HRT 阶段' : ''}；看过医生的记录（如果有）</li>
             ${ownerHrt}<li>你发的对话和照片</li></ul>
-        <p class="note">今晚页每天会自动请顾问排一次，记完皮肤、完成今晚后顾问也会自动回一句；这些请求都带着上面这些。会发到 Cait 家里的服务器，再转给 Anthropic 的 Claude 模型生成回答。服务器只记每次花了多少钱，不存对话和照片；只存你让顾问「记住」的那几句，可以随时删。对话本身只存在这台设备上。详细的在「设置 › 数据说明」。</p>`,
+        <p class="note">这些会自动发：今晚页每天请顾问排一次；记完皮肤、完成今晚后顾问回一句；每周第一次打开顾问页复盘一次（近两周记了 3 天以上才跑）；货架上标了用完 / 快用完，顾问判断要不要买。每次都带着上面这些，还有你账号名字的第一个词。会发到 Cait 家里的服务器，再转给 Anthropic 的 Claude 模型生成回答。服务器只记每次花了多少钱，不存对话和照片。对话里顾问会自己记下以后也要用的事（比如对某成分的反应、过敏、偏好），记了会在那条回答下面写「记住了」，在「设置 › 顾问记得的事」里能看、能删。对话本身只存在这台设备上。详细的在「设置 › 数据说明」。</p>`,
         actions: [{ label: '知道了', primary: true, fn: seen }], onClose: seen });
     return true;
 }
@@ -102,6 +105,24 @@ function chatState(app) {
     return (st && st.uid === uidOf(app) && Array.isArray(st.chat)) ? st : { uid: uidOf(app), chat: [], ctx: null };
 }
 function saveChat(app, st) { if (!app.store.setLocal(LOCAL_KEYS.aiChat, JSON.stringify(st))) toast('这台设备存不进去了，这条对话没存上'); }
+// 对话开头拍的快照(缓存命中省钱)会过期:换了一天、HRT 开关变了、近 14 天的记录 / 备注改了或删了、就医状态变了 → 重拍。隐私优先于缓存命中。
+function ctxKey(W) {
+    const P = W.profile || {};
+    const days = (W.journal || []).filter(e => e && e.date && e.date <= W.today && e.date >= addDays(W.today, -13))
+        .map(e => [e.date, e.note || '', (e.status || []).join(','), e.phase || '', e.photoAssess ? 1 : 0].join('~')).sort().join('|');
+    return [W.today, P.hrt ? 1 : 0, JSON.stringify(P.medical || null), P.startState || '', days].join('#');
+}
+function freshCtx(app, W, st) {
+    const k = ctxKey(W);
+    if (!st.ctx || st.ctxKey !== k) { st.ctx = buildSkincareContext(W, whoOf(app, W)); st.ctxKey = k; }
+    return st.ctx;
+}
+// 删掉某一天、关掉 HRT 之后调:本机存着的对话快照作废,下一条消息重拍
+export function invalidateChatCtx(app) {
+    let st = null;
+    try { st = JSON.parse(app.store.getLocal(LOCAL_KEYS.aiChat)); } catch (e) { }
+    if (st && st.ctx) { st.ctx = null; delete st.ctxKey; saveChat(app, st); }
+}
 // sk_ai1:每周复盘做过没有(跨设备)。【整合时搬家】没有 model 函数,先放这里(写法同 v1:读 → 改 → 写回,'user')
 function aiState(store) { return store.lg(K.ai) || {}; }
 function updateAiState(store, fn) { const s = aiState(store); fn(s); return store.ls(K.ai, s); }
@@ -288,9 +309,11 @@ function n7Note(W, days) {
     else if (tm === 'avoid') bits.push('酸避开刚洗完热水澡的晚上');
     return { text: bits.length ? bits.join('；') + '。' : '哪晚洗澡在这里点，酸和面膜会跟着重排。', moved: false };
 }
-function weekHtml(W) {
+// 未来 7 晚:今晚那格按她眼前那份今晚(顾问版有酸就标「酸」),其余按离线排班
+const days7 = (app, W) => next7Shown(W, shownOf(app, W));
+function weekHtml(W, app) {
     if (!(W.products || []).some(p => !p.hidden)) return '';
-    const P = W.profile || {}, days = next7(W);
+    const P = W.profile || {}, days = days7(app, W);
     const preset = presetOk(W.preset) ? W.preset : null;
     const same = !!preset && days.every(d => { const x = preset.find(p => p.dow === dowOf(d.date)); return x && !!x.shower === !!d.shower && (!P.shaving || !!x.shave === !!d.shave); });
     const note = n7Note(W, days);
@@ -308,21 +331,23 @@ function weekHtml(W) {
     </section>`;
 }
 function nightSheet(app, date) {
-    const W = app.world(), d = next7(W).find(x => x.date === date); if (!d) return;
-    const r = buildNightSteps(W, d.shower, d.shave, slotFor(W, date));
+    const W = app.world(), d = days7(app, W).find(x => x.date === date); if (!d) return;
+    let r = buildNightSteps(W, d.shower, d.shave, slotFor(W, date));
+    const sh = date === W.today ? shownOf(app, W) : null;
+    if (sh && sh.source === 'ai') r = { steps: sh.steps.map(x => ({ p: x.product || x.how, h: x.product ? x.how : '' })), skips: sh.skips.map(x => x.product), warnings: sh.warnings || [], ai: true };
     const when = date === W.today ? '今晚' : d.dayName + ' ' + mdShort(date);
     openSheet({ id: 'night-sheet', title: when + ' · ' + (nightLabel(d) === '修' ? '修护夜' : nightLabel(d) + '夜'),
-        html: `<p class="note">${d.shower ? '洗澡' : '不洗澡'}${(W.profile || {}).shaving ? (d.shave ? ' · 刮胡' : ' · 不刮胡') : ''}。离线规则排的，那天顾问可能会再调。</p>
+        html: `<p class="note">${d.shower ? '洗澡' : '不洗澡'}${(W.profile || {}).shaving ? (d.shave ? ' · 刮胡' : ' · 不刮胡') : ''}。${r.ai ? '今晚页上顾问排的那份。' : '离线规则排的，那天顾问可能会再调。'}</p>
             <ol class="night-steps">${r.steps.map(s => `<li><span class="lede">${esc(s.p)}</span>${s.h ? `<span class="note">${esc(s.h)}</span>` : ''}</li>`).join('')}</ol>
             ${r.skips.length ? `<p class="note">那晚不用：${esc(r.skips.join('、'))}</p>` : ''}
             ${(r.warnings || []).length ? `<div class="adv-warn">${r.warnings.map(w => `<p class="note ink">${esc(w.text)}</p>`).join('')}</div>` : ''}`,
         actions: [{ label: '知道了', primary: true }] });
 }
-function snapNights(W, tapped) { const o = {}; next7(W).forEach(d => { o[d.date] = nightKey(d); }); o.__t = tapped || ''; return o; }
+function snapNights(app, W, tapped) { const o = {}; days7(app, W).forEach(d => { o[d.date] = nightKey(d); }); o.__t = tapped || ''; return o; }
 function toggleNight(app, date, k) {
     const W = app.world(), t = W.today;
     if (date < t) return;
-    ST.n7Prev = snapNights(W, date);
+    ST.n7Prev = snapNights(app, W, date);
     const d = next7(W).find(x => x.date === date); if (!d) return;
     if (date === t) toggleTn(app.store, k, !d[k], t);
     else setDayState(app.store, date, k === 'shower' ? !d.shower : d.shower, k === 'shave' ? !d.shave : d.shave, t);
@@ -347,7 +372,7 @@ function fillWeekHabit(app) {
     }
     sysConfirm('接下来 7 晚（含今晚）的' + (P.shaving ? '洗澡和刮胡' : '洗澡') + '按存过的习惯重填，现在点过的会被盖掉。酸和面膜跟着重排。', () => {
         const W2 = app.world(), t = W2.today, pre = habitPreset(W2.preset, W2.profile);
-        ST.n7Prev = snapNights(W2, '');
+        ST.n7Prev = snapNights(app, W2, '');
         for (let i = 0; i < 7; i++) {
             const ds = addDays(t, i), x = pre.find(p => p.dow === dowOf(ds)) || { shower: false, shave: false };
             if (i === 0) { toggleTn(app.store, 'shower', !!x.shower, t); toggleTn(app.store, 'shave', !!x.shave, t); }
@@ -372,6 +397,9 @@ function accessHtml(app) {
         <div class="btn-row"><button type="button" class="btn" data-act="retry">重试</button></div></div>`;
     const q = app.ai.quotaText();
     if (q) return `<div class="adv-access" id="adv-access" data-acc="quota"><p class="lede">${esc(q)}</p><p class="note">今晚的步骤照离线规则排，记录不受影响。</p></div>`;
+    const me = app.ai.state.meErr;
+    if (!app.ai.ready() && PROBE.tried[uidOf(app)] && !PROBE.busy && me && me.code === 401) return `<div class="adv-access" id="adv-access" data-acc="signedout"><p class="lede">顾问没认出你的登录。</p><p class="note">到「设置」里退出再登录一次；今晚照上面这版方案排，记录不受影响。</p>
+            <div class="btn-row"><button type="button" class="btn" data-act="retry">重试</button></div></div>`;
     if (!app.ai.ready()) return PROBE.tried[uidOf(app)] && !PROBE.busy
         ? `<div class="adv-access" id="adv-access" data-acc="noreply"><p class="lede">顾问这会儿没回应。</p><p class="note">今晚照上面这版方案排，记录不受影响。</p>
             <div class="btn-row"><button type="button" class="btn" data-act="retry">重试</button></div></div>`
@@ -445,7 +473,7 @@ export async function send(app, preset) {
     if (!(await ensureReady(app))) return;
     const owner = ownerOf(app);
     const W = app.world(), st = chatState(app);
-    if (!st.chat.length || !st.ctx) st.ctx = buildSkincareContext(W, whoOf(app));
+    freshCtx(app, W, st);
     st.chat.push({ role: 'user', text: text || '（看图）', img: !!img, at: Date.now() });
     st.chat = st.chat.slice(-CHAT_MAX);
     saveChat(app, st);
@@ -453,7 +481,8 @@ export async function send(app, preset) {
     ST.img = null; ST.busy = true; ST.stream = '';
     app.renderScreen('advisor');
     scrollLog();
-    const res = await app.ai.api.chat({ messages: histFor(W, st.chat, CHAT_SEND), context: st.ctx, live: liveContext(app.world()), image: img || undefined },
+    const W1 = app.world();
+    const res = await app.ai.api.chat({ messages: histFor(W, st.chat, CHAT_SEND), context: st.ctx, live: liveContext(W1, shownOf(app, W1)), image: img || undefined },
         t => { if (ownerOf(app) !== owner) return; ST.stream = t; const s = document.getElementById('adv-stream'); if (s) s.innerHTML = md(t); });
     if (ownerOf(app) !== owner) return;   // 等回答的时候换了账号:丢掉,不往另一个人的存档和对话里写(ST 已被 resetForUser 清过)
     ST.busy = false; ST.stream = '';
@@ -464,7 +493,7 @@ export async function send(app, preset) {
     if (usable) {   // 先执行改动(它会改存档),再读存档追加
         reply = { role: 'assistant', text: res.text, meta: res.meta, at: Date.now(), recs: [] };
         if (res.partial) reply.partial = true;
-        if (res.act) { const r = applyTonight(app.store, res.act, t2); if (r) reply.recs.push(Object.assign(r, { date: t2, at: Date.now() })); }
+        if (res.act) { const r = applyTonight(app.store, res.act, t2, { aiData: aiTonightOf(app) }); if (r) reply.recs.push(Object.assign(r, { date: t2, at: Date.now() })); }
         if (res.prop && Array.isArray(res.prop.changes) && res.prop.changes.length) {
             const fromV = regV(app);
             const r = applyRegimen(app.store, res.prop.changes.slice(0, 8), { kind: 'chat', id: res.prop.id, reason: '对话里改的：' + String(res.prop.message || text).slice(0, 60), model: res.meta && res.meta.model, cost: res.meta && res.meta.cost }, t2);
@@ -494,12 +523,12 @@ async function askPlan(app, request) {
     app.renderScreen('advisor');
     try {
         const W = app.world(), fromV = regV(app), owner = ownerOf(app);
-        const r = await app.ai.api.plan(buildSkincareContext(W, whoOf(app)), request);
+        const r = await app.ai.api.plan(buildSkincareContext(W, whoOf(app, W)), request);
         if (ownerOf(app) !== owner) return;   // 换了账号:丢掉
         const d = (r && r.data) || {};
         const reg = applyPlan(app.store, d, { model: r.model, cost: r.cost }, app.today());
         const st = chatState(app);
-        if (!st.ctx) st.ctx = buildSkincareContext(W, whoOf(app));
+        freshCtx(app, app.world(), st);
         st.chat.push({ role: 'user', text: request || '让顾问出方案', at: Date.now() });
         st.chat.push({ role: 'assistant', text: d.rationale || '顾问按家里的东西和现在的皮肤出了一版方案。', meta: { model: r.model, cost: r.cost }, at: Date.now(),
             recs: [{ kind: 'plan', id: 'p' + Date.now(), versionId: reg.id, v: reg.v, fromV, changes: [], result: [], blocked: reg.blocked || [], state: 'applied', at: Date.now(),
@@ -521,7 +550,7 @@ export async function runReview(app, auto) {
     if (!auto) app.renderScreen('advisor');
     try {
         const W = app.world(), fromV = regV(app);
-        const r = await app.ai.api.review(buildSkincareContext(W, whoOf(app)));
+        const r = await app.ai.api.review(buildSkincareContext(W, whoOf(app, W)));
         if (ownerOf(app) !== owner) return;   // 复盘跑了一分钟,中途换了账号:结果属于上一个人,不写进这个人的方案和 sk_ai1
         const d = (r && r.data) || {};
         const changes = (d.adjustments || []).filter(x => x && TYPE2OP[x.type]).slice(0, 6).map(x => ({ op: TYPE2OP[x.type], product: x.type === 'phase' ? '' : (x.item || ''), value: x.value || '', why: x.reason || '' }));
@@ -571,7 +600,7 @@ function recAct(app, key) {
     } else if (s === 'undone') {
         if (rec.kind === 'tonight') {
             const ok = (rec.changes || []).filter((c, k) => !(rec.result || [])[k]);
-            const r = applyTonight(app.store, { id: rec.id, changes: ok }, t);
+            const r = applyTonight(app.store, { id: rec.id, changes: ok }, t, { aiData: aiTonightOf(app) });
             if (!r || r.state !== 'applied') { toast('重做没成：' + ((r && r.result.filter(Boolean)[0]) || '今晚已经变了')); return; }
             toast('重做了，今晚又按顾问改的来');
         } else {
@@ -598,6 +627,19 @@ export function lastTonightRec(app) {
     return null;
 }
 export function revAct(app, key) { recAct(app, key); }
+// 今天顾问在对话 / 出方案 / 复盘里落成的最近一版方案(和对话里那条修订线同源);今晚页拿它挂「改了方案 · 撤销」
+export function lastRegimenRec(app) {
+    const W = app.world(), hist = W.regimen || [], cands = [];
+    const today = id => hist.some(h => h.id === id && h.date === W.today);
+    chatState(app).chat.forEach((m, mi) => (m.recs || []).forEach((r, ri) => { if (r && (r.kind === 'regimen' || r.kind === 'plan') && r.versionId && today(r.versionId)) cands.push({ key: mi + '.' + ri, rec: r }); }));
+    const rv = aiState(app.store).review;
+    if (rv && rv.rec && rv.rec.versionId && today(rv.rec.versionId)) cands.push({ key: 'review', rec: Object.assign({}, rv.rec, { kind: 'review', at: rv.rec.at || rv.at }) });
+    if (!cands.length) return null;
+    const at = r => +new Date(r.at) || +r.at || 0;
+    const best = cands.sort((a, b) => at(a.rec) - at(b.rec)).pop();
+    const rows = recRows(best.rec).filter(r => !r.bad).map(r => r.txt + (r.part ? '（' + r.part + '）' : ''));
+    return Object.assign(best, { state: recLive(W, best.rec), text: best.rec.kind === 'plan' ? (best.rec.summary || '') : rows.join('；') + (rows.length ? '。' : '') });
+}
 
 // ── 从别的页跳过来问(产品「问顾问」、常识「问顾问这一条」):预填,不自动发 ──
 export function askAdvisor(app, text) {
@@ -631,8 +673,8 @@ export function render(app) {
     // 极简模式(样稿 Cici 版):这一屏以对话为主;方案和未来 7 晚收成顶上一行折叠,点开照样全有(离线可看、能撤销、能排洗澡)
     const top = P.minimalMode && shelf
         ? `<details class="fold adv-minfold" id="adv-minfold"${ST.minOpen ? ' open' : ''}><summary><span class="fold-sum"><span class="lede">现在的方案和未来 7 晚</span><span class="note">${esc(planLine(W))}</span></span></summary>
-            <div class="fold-body">${planHtml(app, W)}${weekHtml(W)}</div></details>`
-        : planHtml(app, W) + weekHtml(W);
+            <div class="fold-body">${planHtml(app, W)}${weekHtml(W, app)}</div></details>`
+        : planHtml(app, W) + weekHtml(W, app);
     return `<h1 class="page-title" id="advisor-h">${esc(title)}</h1>
         ${top}
         ${chatHtml(app, W)}
@@ -675,7 +717,10 @@ export function mount(root, app) {
         else if (a === 'plan') askPlan(app);
         else if (a === 'review') runReview(app, false);
         else if (a === 'unimg') { const ta = document.getElementById('adv-text'); if (ta) ST.draft = ta.value; ST.img = null; app.renderScreen('advisor'); }
-        else if (a === 'stop') { if (app.ai.abort) app.ai.abort(); }
+        else if (a === 'stop') {   // 排着队的也马上停(client.js);什么都没停到 = 状态是旧的,直接收起「在想…」
+            const any = app.ai.abort ? app.ai.abort() : false;
+            if (!any && ST.busy) { ST.busy = false; ST.stream = ''; app.renderScreen('advisor'); }
+        }
         else if (a === 'newchat') sysConfirm('开始新对话？之前的对话会清掉（已经改过的今晚和方案不受影响）。', () => { saveChat(app, { uid: uidOf(app), chat: [], ctx: null }); app.renderScreen('advisor'); }, { ok: '开始新对话' });
     }));
     const red = root.querySelector('#adv-redeem'), code = root.querySelector('#adv-code');

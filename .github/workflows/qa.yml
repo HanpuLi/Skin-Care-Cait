@@ -127,6 +127,9 @@ jobs:
           console.log("manifest/firebase/sw/redirect/public-docs/fonts/js ok(" + files.length + " 个文件)");
           '
           test -z "$(git ls-files AGENTS.md CLAUDE.md LIVING_TODO.md README-private.md '家中护肤品清单.md' '审计报告_*.json' 'Cici档案' '个人档案')"
+          # 主账号邮箱不许以明文出现在任何入库文件里(源码和测试都用 base64)
+          OWNER_EMAIL="$(echo 'Y2FpdGx5ZUBnbWFpbC5jb20=' | base64 -d)"
+          test -z "$(git ls-files -z | xargs -0 grep -IlF "$OWNER_EMAIL" -- 2>/dev/null)"
 
   firestore-rules:
     runs-on: ubuntu-latest

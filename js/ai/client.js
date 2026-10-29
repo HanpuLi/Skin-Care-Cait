@@ -31,11 +31,13 @@ export function parseSseBlock(block) {
 export function createAiClient(env) {
     const LS = env.localStorage;
     const wait = env.wait || (ms => new Promise(r => setTimeout(r, ms)));
-    const st = { me: null, meUid: null, down: false, quota: null, chain: Promise.resolve(), cur: null };
+    const st = { me: null, meUid: null, meErr: null, down: false, quota: null, chain: Promise.resolve(), cur: null, pending: new Set(), gen: 0 };
     // 每个请求的总时限(毫秒):卡住的请求会把串行队列整条堵死(今晚 / 出方案 / 复盘 / 反馈全等着),到点就放弃,按连不上处理
-    const LIMIT = Object.assign({ point: 90000, assess: 120000, shop: 150000, streamHead: 90000, streamIdle: 45000 }, env.limits || {});
-    const TIMEOUT_MSG = '顾问这次太久没回应，先按离线规则来。';
-    const DOWN_MSG = '顾问暂时连不上，今晚照离线规则做，不影响记录。';
+    //   busyWait:后端回 429「上一个请求还没跑完」时最多等多久(前端超时 / 停一下之后,后端那次还在跑,一次 LLM 调用常要半分钟到一分多钟)
+    const LIMIT = Object.assign({ point: 90000, assess: 120000, shop: 150000, streamHead: 90000, streamIdle: 45000, busyWait: 90000 }, env.limits || {});
+    // 通用说法:这里不知道调用方在做什么(今晚 / 拍照分析 / 读成分表…),「今晚照离线规则」这类上下文由各屏自己补
+    const TIMEOUT_MSG = '顾问这次太久没回应。';
+    const DOWN_MSG = '顾问暂时连不上。';
     const err0 = (msg, extra) => { const e = new Error(msg); e.code = 0; return Object.assign(e, extra || {}); };
     const uid = () => { const u = env.getUser(); return u ? u.uid : null; };
     const get = k => { try { return JSON.parse(LS.getItem(k)); } catch (e) { return null; } };
@@ -99,13 +101,27 @@ export function createAiClient(env) {
         return st.quota.kind === 'daily' ? '今天的顾问次数用完了，明天再来。' : '这个月的顾问额度用完了，17 号恢复。';
     }
     function serial(fn) { const p = st.chain.then(fn, fn); st.chain = p.then(() => { }, () => { }); return p; }
-    // 非对话接口:排队;429「还没跑完」等 3 秒重试两次
-    function point(path, body, timeout) {
-        return serial(async () => {
-            for (let i = 0; ; i++) {
-                try { return aiClean(await aiFetch(path, body, { timeout: timeout || LIMIT.point })); }
-                catch (e) { if (e.code === 429 && /还没跑完/.test(e.message) && i < 2) { await wait(3000); continue; } throw e; }
+    // 排队的请求出队时才真正发:排进去时是谁、哪一代(换账号 clearLocal 会 +1),出队时对不上就不发 —— 不能拿下一个人的 token 发上一个人的快照
+    const ticket = () => ({ uid: uid(), gen: st.gen });
+    const stale = tk => tk.gen !== st.gen || uid() !== tk.uid;
+    const SWITCHED = () => err0('换了账号，这条没发。', { aborted: true, switched: true });
+    // 429「还没跑完」:按退避多等几次(3、6、12、24 秒……),总共不超过 busyWait
+    async function busyRetry(fn) {
+        let waited = 0;
+        for (let i = 0; ; i++) {
+            try { return await fn(); }
+            catch (e) {
+                if (e.code === 429 && /还没跑完/.test(e.message) && waited < LIMIT.busyWait) { const ms = Math.min(30000, 3000 * Math.pow(2, i), LIMIT.busyWait - waited); await wait(ms); waited += ms; continue; }
+                throw e;
             }
+        }
+    }
+    // 非对话接口:排队
+    function point(path, body, timeout) {
+        const tk = ticket();
+        return serial(async () => {
+            if (stale(tk)) throw SWITCHED();
+            return busyRetry(async () => { if (stale(tk)) throw SWITCHED(); return aiClean(await aiFetch(path, body, { timeout: timeout || LIMIT.point })); });
         });
     }
     // SSE:delta 边到边回调;action / proposal / memory / done / error 收起来交给调用方
@@ -115,10 +131,18 @@ export function createAiClient(env) {
     async function stream(path, body, onDelta) {
         const out = { text: '', meta: null, err: null, prop: null, act: null, mem: null };
         let gotDone = false, reading = false;
+        // 排着队的时候点「停一下」也要马上停:不等前面的今晚 / 反馈 / 拍照分析跑完,轮到它时也不再发出去(不花这笔钱)
+        const tk = ticket();
+        const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const mine = { ac, stop: false, kill: null };
+        const killed = new Promise((res, rej) => { mine.kill = () => rej(err0('停下了。', { aborted: true })); });
+        killed.catch(() => { });
+        st.pending.add(mine);
         try {
-            await serial(async () => {
-                const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
-                const mine = { ac, stop: false };
+            await Promise.race([killed, serial(async () => {
+                st.pending.delete(mine);
+                if (mine.stop) throw err0('停下了。', { aborted: true });
+                if (stale(tk)) throw SWITCHED();
                 st.cur = mine;
                 try {
                     const r = await aiFetch(path, body, { stream: true, timeout: LIMIT.streamHead, ctl: ac });
@@ -153,20 +177,29 @@ export function createAiClient(env) {
                     if (mine.stop) throw err0('停下了。', { aborted: true });
                     if (idleOut && !gotDone) throw err0(TIMEOUT_MSG, { timeout: true });
                 } finally { if (st.cur === mine) st.cur = null; }
-            });
+            })]);
         } catch (e) {
             if (e && e.aborted) { out.err = e.message; out.code = 0; out.aborted = true; }
             else if (reading) { out.err = (e && e.timeout) ? e.message : '连接断了，这条回答没收完。'; out.code = 0; }
             else { out.err = e.message; out.code = typeof e.code === 'number' ? e.code : 0; }
         }
+        st.pending.delete(mine);
         // 读完了却没有 done(又不是后端明说的 error):半截回答
-        if (reading && !gotDone) {
+        if (reading && !gotDone && !out.aborted) {
             out.partial = true;
             if (!out.err) { out.err = '连接断了，这条回答没收完。'; out.code = 0; }
         }
         return out;
     }
-    function abort() { const c = st.cur; if (!c) return false; c.stop = true; try { c.rd && c.rd.cancel(); } catch (e) { } try { c.ac && c.ac.abort(); } catch (e) { } return true; }
+    // 停掉正在读的那条流,和所有排着队还没发的对话(返回 true = 真停了什么)
+    function abort() {
+        let any = false;
+        st.pending.forEach(m => { m.stop = true; any = true; try { m.kill && m.kill(); } catch (e) { } });
+        st.pending.clear();
+        const c = st.cur;
+        if (c) { c.stop = true; any = true; try { c.rd && c.rd.cancel(); } catch (e) { } try { c.ac && c.ac.abort(); } catch (e) { } }
+        return any;
+    }
     // 开通状态:'out' 没登录 · 'none' 邀请制、没开通 · 'mismatch' 邮箱绑了别的账号 · 'on' 可以用(连没连上另看 down)
     function access() {
         const u = uid(); if (!u) return 'out';
@@ -181,8 +214,9 @@ export function createAiClient(env) {
         const u = uid();
         if (!u) { st.me = null; st.meUid = null; return null; }
         if (!force && st.meUid === u && st.me) return st.me;
-        try { st.me = await aiFetch('/api/me'); st.meUid = u; rememberAccess('allowed'); }
-        catch (e) { st.me = null; }
+        // 失败的原因留着(st.meErr):401 = 认不出登录,界面要说「退出再登录」,不能只说「没回应」
+        try { st.me = await aiFetch('/api/me'); st.meUid = u; st.meErr = null; rememberAccess('allowed'); }
+        catch (e) { st.me = null; st.meErr = { code: typeof e.code === 'number' ? e.code : 0, message: e.message || '', status: e.status || '' }; }
         return st.me;
     }
     async function redeem(code) {
@@ -192,7 +226,7 @@ export function createAiClient(env) {
     }
     // 换账号:本机缓存属于别的账号的清掉(按 uid 存;sync 换账号时也会调 clearLocal)。
     //   sk_aiprivacy1(看没看过「顾问会看到什么」)不清:它自带 uid,别的账号读到对不上就当没看过;清了反而让刚登录的人在弹出之前就被自动外发卡住
-    function clearLocal() { [LOCAL_KEYS.aiChat, LOCAL_KEYS.aiNote, LOCAL_KEYS.aiAcc, LOCAL_KEYS.aiOpts, LOCAL_KEYS.aiShop, LOCAL_KEYS.aiTonight].forEach(k => { try { LS.removeItem(k); } catch (e) { } }); st.me = null; st.meUid = null; st.quota = null; }
+    function clearLocal() { [LOCAL_KEYS.aiChat, LOCAL_KEYS.aiNote, LOCAL_KEYS.aiAcc, LOCAL_KEYS.aiOpts, LOCAL_KEYS.aiShop, LOCAL_KEYS.aiTonight].forEach(k => { try { LS.removeItem(k); } catch (e) { } }); st.me = null; st.meUid = null; st.meErr = null; st.quota = null; st.gen++; }
     function opts() { const o = get(LOCAL_KEYS.aiOpts) || {}; return o.model ? { model: o.model, effort: o.effort || 'medium' } : {}; }
 
     // ── 接口 ──
@@ -211,10 +245,8 @@ export function createAiClient(env) {
         assess: (context, images, prev) => point('/api/assess', Object.assign({ context, images }, prev || {}, opts()), LIMIT.assess),
         // 要不要买:单独占忙碌位(不进排队),约 70 秒;429「还没跑完」等 8 秒重试两次
         shop: async (context, trigger) => {
-            for (let i = 0; ; i++) {
-                try { return aiClean(await aiFetch('/api/shop', Object.assign({ context, trigger }, opts()), { timeout: LIMIT.shop })); }
-                catch (e) { if (e.code === 429 && /还没跑完/.test(e.message) && i < 2) { await wait(8000); continue; } throw e; }
-            }
+            const tk = ticket();
+            return busyRetry(async () => { if (stale(tk)) throw SWITCHED(); return aiClean(await aiFetch('/api/shop', Object.assign({ context, trigger }, opts()), { timeout: LIMIT.shop })); });
         },
         memory: body => point('/api/memory', body || null)
     };

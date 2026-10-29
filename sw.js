@@ -4,10 +4,11 @@
 //   核心文件缺一个就不装(老版本继续用);字体、Firebase SDK 单独装,某一份没下完不连累整体,运行时再补。
 // · 同源请求:缓存优先,只用当前版本(CACHE_NAME)那一套 —— 一次启动只用一个版本,不会拼出新旧混合的模块集;
 //   缓存里没有的才走网络并补进缓存,已有的不拿网络结果覆盖。版本更新只靠 CACHE_NAME 升版走 SW 更新(原子切换),
-//   所以改了 index.html / js/ / css/ 必须给 CACHE_NAME +1(t/engine-unit.mjs 对着 main 核)。
+//   所以改了任何预缓存的文件(CORE 和 FONTS 列出的全部:页面、js/、css/、manifest、图标、字体)都必须给 CACHE_NAME +1
+//   (t/engine-unit.mjs 从这里解析清单、对着 main 核;字体子集重做是原地覆盖同一个文件名,不升版已装 App 永远拿旧子集)。
 // · Firebase SDK(URL 带版本、内容不变):缓存优先。iOS 会清 HTTP 缓存,不放进 SW 的话离线首开就成了「没登录」。
 // · Google 字体域(子集外的生僻字兜底):stale-while-revalidate,先给缓存、后台更新。
-const CACHE_NAME = 'skincare-app-v30';
+const CACHE_NAME = 'skincare-app-v31';
 const CORE = [
   './',
   './index.html',

@@ -63,7 +63,7 @@ export default async function ({ origin, S, open }) {
         await p.eval(PROBE + ';return 1');
         for (const [tab, act, name] of [['advisor', ''], ['tonight', `document.getElementById('btn-settings').click()`, '设置'], ['record', '']]) {
             const tag = `full/light/${width}/${tab}${name ? ' + ' + name : ''}`;
-            const r = await p.eval(`${CLEAR}${TAB(tab)}try{${act ? act + ';' + W8(250) : ''}}catch(e){return {miss:String(e.message)}}const o=__probe();o.hscroll=document.documentElement.scrollWidth>innerWidth+1;
+            const r = await p.eval(`${CLEAR}${TAB(tab)}try{${act ? act + ';' + W8(250) : ''}}catch(e){return {miss:String(e.message)}}const o=__probe();o.hscroll=document.documentElement.scrollWidth>document.documentElement.clientWidth;
                 o.trendH=Math.max(0,...[...document.querySelectorAll('#rec-trend .trend-rows li')].map(li=>li.getBoundingClientRect().height));return o`);
             if (r.miss) { S.ok(false, `${tag}:打不开这一屏`, r.miss); continue; }
             S.ok(!r.smallN, `${tag}:可点的都 ≥44×44`, r.small);

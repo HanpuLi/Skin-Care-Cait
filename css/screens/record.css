@@ -7,9 +7,9 @@
 /* ① 随时记一笔 */
 .rec-quick{display:flex;flex-direction:column;margin-top:var(--sp-4)}
 .rec-q-l{font:18px/var(--lh-item) var(--serif);color:var(--ink)}
-.rec-quick textarea,.sheet textarea,.sheet input[type="text"]{display:block;width:100%;margin-top:var(--sp-2);min-height:44px;padding:var(--sp-2) 0;resize:none;
+.rec-quick textarea,.sheet textarea,.sheet input[type="text"],.sheet input[type="date"]{-webkit-appearance:none;appearance:none;display:block;width:100%;margin-top:var(--sp-2);min-height:44px;padding:var(--sp-2) 0;resize:none;
   font:16px/24px var(--serif);color:var(--ink);background:transparent;border:0;border-bottom:1px solid var(--line-ctl);border-radius:0;outline:none}
-.rec-quick textarea:focus,.sheet textarea:focus,.sheet input[type="text"]:focus{border-bottom:1.5px solid var(--ink)}
+.rec-quick textarea:focus,.sheet textarea:focus,.sheet input[type="text"]:focus,.sheet input[type="date"]:focus{border-bottom:1.5px solid var(--ink)}
 .rec-quick textarea::placeholder,.sheet textarea::placeholder,.sheet input::placeholder{color:var(--faint)}
 .rec-q-acts{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-2);margin-top:var(--sp-3)}
 .rec-q-acts .btn{min-height:48px}

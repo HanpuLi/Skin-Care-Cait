@@ -2,7 +2,9 @@
 *,*::before,*::after{box-sizing:border-box}
 [hidden]{display:none!important}
 html{font-family:var(--serif);-webkit-text-size-adjust:100%;text-size-adjust:100%;background:var(--paper);font-synthesis-weight:none;accent-color:var(--ink)}
-body{margin:0;background:var(--paper);color:var(--ink);font:16px/var(--lh-body) var(--serif);letter-spacing:var(--ls-body);
+/* overflow-wrap:顾问写的字里常有网址、无空格的英文长串:不许撑出横向滚动(320 宽整页能左右滑、tab 栏被推出屏幕)。
+   用 break-word 不用 anywhere:不改各处的最小宽度(按钮、auto 列不会被挤成一个字一行),只在真放不下时断开 */
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/var(--lh-body) var(--serif);letter-spacing:var(--ls-body);overflow-wrap:break-word;
   padding-bottom:calc(var(--sp-6) + var(--tabbar-h) + var(--safe-bot));-webkit-tap-highlight-color:transparent;text-autospace:ideograph-alpha ideograph-numeric}
 ::selection{background:rgba(201,122,98,.28)}
 h1,h2,h3,p,ul,ol{margin:0;padding:0;font-weight:400}
@@ -51,12 +53,12 @@ body.minimal .adv{display:none!important}
 .meta{font:12px/var(--lh-meta) var(--mono);color:var(--faint)}
 .list li{padding-left:1em;text-indent:-1em}
 .list li::before{content:"·";display:inline-block;width:1em;text-indent:0;color:var(--faint)}
-.kv{display:grid;grid-template-columns:5em 1fr;column-gap:var(--sp-3);row-gap:var(--sp-2);margin-top:var(--sp-3)}
+.kv{display:grid;grid-template-columns:5em minmax(0,1fr);column-gap:var(--sp-3);row-gap:var(--sp-2);margin-top:var(--sp-3)}
 .kv dt{font:14px/var(--lh-body) var(--serif);color:var(--muted)}
 .kv dd{margin:0;font:16px/var(--lh-body) var(--serif);color:var(--ink)}
 .kv dd .note{display:block}
 .rows{border-bottom:1px solid var(--line)}
-.row{display:grid;grid-template-columns:1fr auto;align-items:center;column-gap:var(--sp-3);min-height:48px;padding:var(--sp-3) 0;border-top:1px solid var(--line);width:100%;text-align:left}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:var(--sp-3);min-height:48px;padding:var(--sp-3) 0;border-top:1px solid var(--line);width:100%;text-align:left}
 .row-main{min-width:0}
 .row-main>.lede,.row-main>.meta,.row-main>.note{display:block}
 .hist .row-main>.note{display:inline}
@@ -71,6 +73,8 @@ body.minimal .adv{display:none!important}
   background:var(--sheet);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line-ctl);border-radius:var(--r-ctl);padding:var(--sp-3) var(--sp-4);font:16px/24px var(--serif);
   opacity:0;pointer-events:none;transition:opacity .15s}
 .toast.show{opacity:1}
+/* 顾问页底部贴着输入框:吐司抬到输入区上面,别把正在打的字挡住 3 秒 */
+body:has(#advisor.active #adv-dock) .toast{bottom:calc(var(--tabbar-h) + var(--safe-bot) + 76px)}
 
 /* ── 底部 tab:只放文字;当前项下面一个 4px 红点 = 这一屏的红 ── */
 .tabbar{position:fixed;inset:auto 0 0 0;z-index:60;background:var(--paper);border-top:1px solid var(--line);

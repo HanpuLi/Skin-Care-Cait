@@ -5,17 +5,23 @@
 #tonight .page-title{margin-top:var(--sp-1)}
 .tn-lead{margin-top:var(--sp-1);font:16px/var(--lh-body) var(--serif);color:var(--muted)}
 
-/* 修订线:顾问改了今晚 · 撤销(单独一行,始终可见;不铺底、不加圆角、不用红)*/
-.revbar{margin-top:var(--sp-4);border-left:2px solid var(--rev);padding:var(--sp-2) 0 var(--sp-2) var(--sp-3);
-  display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:var(--sp-3);align-items:center}
-.revbar .rev-main{display:flex;flex-direction:column;min-width:0}
-.revbar .who{font:12px/var(--lh-meta) var(--mono);color:var(--rev)}
-.revbar .what{font:16px/var(--lh-item) var(--serif);color:var(--ink)}
+/* 修订线:顾问改了今晚 · 撤销(单独一行,始终可见;不铺底、不加圆角、不用红)。
+   压成一行贴在「今晚的步骤」下面:390×844 主屏 App 里,改过今晚也得在第一屏看到第一步;改了什么太长就截断(整句在 title 里),
+   被改的那一步自己带 --rev 竖线 */
+.revbar{margin-top:var(--sp-1);border-left:2px solid var(--rev);padding:0 0 0 var(--sp-3);min-height:44px;
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:var(--sp-2);align-items:center}
+.revbar .who{font:12px/var(--lh-meta) var(--mono);color:var(--rev);white-space:nowrap}
+.revbar .what{font:14px/var(--lh-note) var(--serif);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.revbar+.revbar{margin-top:var(--sp-1)}
+/* 她自己点的(「看过医生了」的撤销):不是顾问的改动,不用 --rev(§3.6)*/
+.revbar.mine{margin-top:var(--sp-4);border-left-color:var(--line-ctl)}
+.revbar.mine .who{font:14px/22px var(--serif);color:var(--muted)}
+.med-unbook{margin-top:var(--sp-2)}
 
 /* ② 今晚的情况:问句 + 两个选项;下面一行说影响 */
-.tn-sit{margin-top:var(--sp-5);border-top:1px solid var(--line);padding-top:var(--sp-3)}
+.tn-sit{margin-top:var(--sp-4);border-top:1px solid var(--line);padding-top:var(--sp-1)}
 .tn-sit .sec-h .note{font-size:14px}
-.sit-q{padding:var(--sp-2) 0 var(--sp-1)}
+.sit-q{padding:var(--sp-1) 0}
 .sit-row{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-3)}
 .sit-l{font:18px/var(--lh-item) var(--serif);color:var(--ink)}
 .sit-btns{display:flex;gap:var(--sp-2);flex:none}
@@ -26,7 +32,7 @@
 .sit-fx.changed{color:var(--ink)}
 
 /* ③ 提醒卡:就医(全 App 唯一的红框)> 注意 > 其余;其余折成「还有 N 条」 */
-.tn-cards{margin-top:var(--sp-5)}
+.tn-cards{margin-top:var(--sp-4)}
 .note-medical{border:1px solid var(--medical);border-radius:var(--r-card);padding:var(--sp-4)}
 .med-h{display:flex;justify-content:space-between;align-items:baseline;gap:var(--sp-2);flex-wrap:wrap}
 .med-eb{font:14px/22px var(--serif);color:var(--medical)}
@@ -39,7 +45,10 @@
 .nc-eb{font:14px/22px var(--serif);color:var(--caution)}
 .ni-eb{font:14px/22px var(--serif);color:var(--muted)}
 .note-caution p,.note-info p{font:16px/var(--lh-body) var(--serif);color:var(--ink)}
-.tn-more-b{margin-top:var(--sp-1)}
+/* 「还有 N 条」在第一张卡的眉题那一行右边:触控区 44 高,用负边距不把这一行撑高 */
+.nc-h{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2);min-height:22px}
+.nc-h .tn-more-b{margin:-11px 0;min-height:44px;flex:none}
+.note-medical+.tn-more-b{margin-top:var(--sp-1)}
 .tn-more-b .ico{transition:transform .15s}
 .tn-more-b[aria-expanded="true"] .ico{transform:rotate(90deg)}
 .tn-more{padding-bottom:var(--sp-2)}
@@ -48,8 +57,8 @@
 .tn-more .nc-eb{display:inline}
 
 /* ④ 步骤:整行就是一个 checkbox;序号下面是角色(页边批注栏);每步一句为什么 */
-.tn-steps{margin-top:var(--sp-5)}
-.tn-src{margin-top:var(--sp-1)}
+.tn-steps{margin-top:var(--sp-4)}
+.tn-src{margin-top:0}
 .tn-src .btn-link{min-height:44px;vertical-align:middle}
 .tn-mini-hint{margin-top:var(--sp-1)}
 .steps{margin-top:var(--sp-2)}
