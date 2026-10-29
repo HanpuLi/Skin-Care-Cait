@@ -2134,6 +2134,7 @@
         <div class="tabs-wrap">
             <div class="tabs">
                 <button class="tab active" id="tab-tonight" onclick="show('tonight',this)" aria-label="今晚护肤">今晚</button>
+                <button class="tab" id="tab-coach" onclick="show('coach',this)" aria-label="护肤顾问">顾问</button>
                 <button class="tab" id="tab-guide" onclick="show('guide',this)" aria-label="使用指南">指南</button>
                 <button class="tab" id="tab-wkly" onclick="show('wkly',this)" aria-label="排班管理">排班</button>
                 <button class="tab" id="tab-jrnl" onclick="show('jrnl',this)" aria-label="护肤日志">日志</button>
@@ -2145,6 +2146,7 @@
         <!-- ══ 今晚 ══ -->
 
         <div id="tonight" class="panel active">
+            <div id="ai-note"></div>
             <div id="regimen-card"></div>
             <div id="assess-card"></div>
             <div id="hrt-bnr"></div>
@@ -2178,6 +2180,13 @@
                 <button class="tn-reset" onclick="resetTnToSchedule()">↺ 重置为排班默认值</button>
             </div>
             <div class="tn-plan" id="tn-plan"></div>
+            <div id="tn-checkin"></div>
+            <div id="ai-feedback"></div>
+        </div>
+
+        <!-- ══ 顾问(AI)—— 内容全部由 ai.js 渲染;ai.js 没加载上时这里只剩一句话,其余功能照常 ══ -->
+        <div id="coach" class="panel">
+            <div id="coach-content"><div class="alert info">顾问没加载出来。今晚的护肤照常按离线规则排，刷新一下再试。</div></div>
         </div>
 
         <!-- 早晨面板已按用户要求移除（两人都不做早间流程）。renderAm 有 #am-plan 早退保护，调用点无需改动。 -->
@@ -2212,6 +2221,7 @@
                     <label class="set-row"><span>显示「日志」页</span><input type="checkbox" id="set-showjrnl" onchange="onProfileEdit()"></label>
                     <label class="set-row"><span>刷酸时机</span><select id="set-acidtiming" class="hf" style="max-width:190px" onchange="onProfileEdit()"><option value="">自动（易泛红则避开洗澡夜）</option><option value="neutral">无所谓</option><option value="avoid">避开刚洗完热水澡</option><option value="prefer">优先安排在洗澡夜</option></select></label>
                     <label class="set-row"><span>修护霜用法</span><select id="set-repairuse" class="hf" style="max-width:190px" onchange="onProfileEdit()"><option value="">自动（按屏障状态）</option><option value="full">全脸薄涂</option><option value="spot">仅点涂</option></select></label>
+                    <label class="set-row"><span>没连上顾问时 · 刷酸档位</span><select id="set-acidlevel" class="hf" style="max-width:190px" onchange="onProfileEdit()"><option value="">自动（没刺激就一档档加）</option><option value="1">每周 1 次</option><option value="2">每周 2 次</option><option value="3">每周 3 次</option></select></label>
                 </div>
                 <p style="font-size:11px;color:var(--tx3);margin-top:8px">关掉某项只是隐藏对应界面，已记录的历史数据不会删除，可随时打开。</p>
                 <div class="sec-title" style="margin-top:1.25rem">需要避开的区域</div>
@@ -2306,14 +2316,14 @@
         <div id="jrnl" class="panel">
             <div class="cdc">
                 <div class="cdh">
-                    <div class="cdt">🛡️ 酸类解禁倒计时</div>
-                    <div class="cdb" id="cd-badge">未设置</div>
+                    <div class="cdt">🧪 刷酸节奏</div>
+                    <div class="cdb" id="cd-badge">—</div>
                 </div>
                 <div class="pw">
                     <div class="pb" id="cd-bar" style="width:0%"></div>
                 </div>
-                <div class="cm"><span id="cd-left">屏障稳定需4周</span><span id="cd-pct">0%</span></div>
-                <div class="cir"><label>开始修护日期：</label><input type="date" id="cd-start" data-maxtoday="1" onchange="saveCd()"></div>
+                <div class="cm"><span id="cd-left"></span><span id="cd-pct"></span></div>
+                <div id="cd-events" style="font-size:11px;color:var(--tx3);font-family:var(--mono);margin-top:6px;line-height:1.6"></div>
             </div>
 
             <!-- Quick log presets -->
@@ -2416,6 +2426,7 @@
 
         <div id="prods" class="panel">
             <p style="font-size:12px;color:var(--tx3);margin-bottom:1rem">点击状态按钮循环切换；点击产品行展开详情。</p>
+            <div id="ai-prod-entry"></div>
             <div id="prod-list"></div>
             <div class="section" style="margin-top:1.5rem">
                 <div class="sec-title">要不要买新的</div>
@@ -2626,7 +2637,9 @@
             empty: 'sk_empty1',     // 空瓶记录:{产品id: [{date, weeks, uses}]}——「用完了」是事件,要留痕
             gone:  'sk_gone1',      // 家里已经没有了、已从货架删掉的产品 id(用完即删,不进待买清单)
             low:   'sk_low1',       // 「快用完了」的产品 id —— 见底预警,**不是**已退役的 pending(见 toggleLow)
-            regimen: 'sk_regimen1'  // 方案版本历史:皮肤状况或货架一变就重出一版(见 syncRegimen)
+            regimen: 'sk_regimen1', // 方案版本历史:皮肤状况或货架一变就重出一版(见 syncRegimen);顾问的方案也是这里的一版(source:'ai')
+            tnai:  'sk_tnai1',      // 今晚的小改(顾问 change_tonight):{date, id, ops[]} —— 只对当天有效,撤销回到改之前
+            ai:    'sk_ai1'         // 顾问的跨设备状态:本周复盘做过没有(一周一次,别两台设备各跑一遍)、最近一次复盘、打卡反馈
         };
         // One-time migration from old keys
         (function migrate() {
@@ -2942,7 +2955,16 @@
             { name: '发际线',   avoid: ['mask'],                    care: '易长闭口，冲洗要彻底' }
         ];
         function userZones() { return (PROFILE.zones || []).filter(z => z && z.name); }
-        function zonesAvoiding(type) { return userZones().filter(z => (z.avoid || []).includes(type)).map(z => z.name); }
+        // 分区避开项 = 她自己设的 + 顾问方案加的。🔴 只能加不能减:顾问的方案里漏了某个区,也照样避开(安全闸 ⑤)
+        function zonesAvoiding(type) {
+            const set = userZones().filter(z => (z.avoid || []).includes(type)).map(z => z.name);
+            const ai = aiRegimen();
+            if (ai) {
+                (ai.rules.zonesAdd || []).forEach(z => { if (z && z.name && (z.avoid || []).includes(type) && set.indexOf(z.name) < 0) set.push(z.name); });
+                if (type === 'acid') (ai.rules.acidZones || []).forEach(n => { if (n && set.indexOf(n) < 0) set.push(n); });
+            }
+            return set;
+        }
         // 某一类活性成分该避开哪些区域 → 直接拼进步骤提示，让"避开人中"变成每晚看得见的指令
         function zoneHintFor(type) {
             const zs = zonesAvoiding(type);
@@ -2997,7 +3019,9 @@
         // ⚠️ 8/08 那条"修护品常规全脸"的依据是 AAD 讲**痤疮外用药**(BPO/维A酸)全脸薄涂,
         //    迁移到"修护膏"是错的类比;CLAUDE.md 也标了那批结论属未经对抗核证的单源结论。
         function repairUse() {
-            if (PROFILE.repairUse) return PROFILE.repairUse;
+            if (PROFILE.repairUse) return PROFILE.repairUse;                 // 她自己设的优先级最高
+            const ai = aiRegimen();                                           // 其次是顾问方案
+            if (ai && (ai.rules.repair === 'spot' || ai.rules.repair === 'full')) return ai.rules.repair;
             if (jrnlLastNDays(14).some(e => (e.status || []).some(s => s === '闭口' || s === '爆痘'))) return 'spot';
             const b = barrierScore();
             return (b !== null && b >= 70 && (PROFILE.skinType || '').includes('油')) ? 'spot' : 'full';
@@ -3005,6 +3029,8 @@
         // 修护霜为什么这么涂 —— 文案跟着真实原因走,别写死"近期有闭口"(方案卡上会照着念)
         function repairReason() {
             if (PROFILE.repairUse) return '你自己设定的';
+            const ai = aiRegimen();
+            if (ai && (ai.rules.repair === 'spot' || ai.rules.repair === 'full')) return ai.rules.repairWhy || '顾问方案定的';
             if (jrnlLastNDays(14).some(e => (e.status || []).some(x => x === '闭口' || x === '爆痘'))) return '近期有闭口/痘，全脸厚涂容易更闷';
             const b = barrierScore();
             if (b !== null && b >= 70 && (PROFILE.skinType || '').includes('油')) return '屏障稳、偏油，不必全脸厚涂';
@@ -3069,6 +3095,12 @@
             if (mn) mn.checked = !!PROFILE.minimalMode;
             if (at) at.value = PROFILE.acidTiming || '';
             if (ru) ru.value = PROFILE.repairUse || '';
+            const al = document.getElementById('set-acidlevel');
+            if (al) {
+                al.value = [1, 2, 3].indexOf(+PROFILE.acidLevel) >= 0 ? String(PROFILE.acidLevel) : '';
+                // 极简模式不记录,「自动」= 停在 1 档不动(见 acidLadder);文案照实说
+                if (al.options[0]) al.options[0].textContent = PROFILE.minimalMode ? '自动（极简模式：停在每周 1 次）' : '自动（没刺激就一档档加）';
+            }
         }
         function onProfileEdit() {
             const a = document.getElementById('set-shave'), b = document.getElementById('set-hrt'), c = document.getElementById('set-skintype');
@@ -3084,6 +3116,11 @@
             if (mn) PROFILE.minimalMode = !!mn.checked;
             PROFILE.acidTiming = at ? at.value : PROFILE.acidTiming;
             PROFILE.repairUse  = ru ? ru.value : PROFILE.repairUse;
+            const al = document.getElementById('set-acidlevel');
+            if (al) {
+                const v = al.value ? +al.value : null;
+                if (v !== (PROFILE.acidLevel || null)) { PROFILE.acidLevel = v; PROFILE.acidLevelAt = v ? today() : ''; }
+            }
             saveProfile(); applyProfileVisibility();
             // 全量重渲染：产品卡文案(visNotes/visCat)、日志芯片、快速记录按钮、日历标签都随开关变，
             // 旧版只重渲今晚+排班，其余要等下一次 renderAll 才跟上。
@@ -3187,7 +3224,7 @@
             // 引导里选的优先于模版里的 profile
             PROFILE.skinType = skin.sub + (concerns.length ? ' · ' + concerns[0].split('/')[0] : '');
             PROFILE.shaving = shaving; PROFILE.hrt = false; PROFILE.onboarded = true;
-            PROFILE.phase = 'repair'; PROFILE.phaseStart = today();
+            PROFILE.concerns = concerns.slice();   // 顾问要看全部诉求(以前只存第一个当目标)
             const zoneNames = [...document.querySelectorAll('#ob-zones .ob-opt.on')].map(b => b.dataset.v);
             PROFILE.zones = ZONE_PRESETS.filter(z => zoneNames.includes(z.name)).map(z => JSON.parse(JSON.stringify(z)));
             if (concerns.length) setGoalFromConcern(concerns[0]);
@@ -3364,15 +3401,33 @@
         let editingProdId = null;
         function tglHTML(id, checked) { return `<label class="tgl"><input type="checkbox" id="${id}" ${checked?'checked':''}><span class="tgl-slider"></span></label>`; }
         function toggleSchedFields() { const t=document.getElementById('m-stype').value; document.getElementById('sched-fields').style.display=['acid','mask','retinol'].includes(t)?'block':'none'; }
-        function showProdModal(id) {
+        // 新产品默认的排班方式:按角色给(酸 → 自动排、间隔 2 天;其余 → 每晚固定步骤)
+        function defaultScheduleFor(role) {
+            const base = { time: ['pm'], maxPerWeek: 1, minDaysBetween: 0, preferShowerNight: false, avoidShaveDay: false, avoidAcid: false, avoidRetinol: false, enableAutoSchedule: false };
+            if (role === 'acid') return Object.assign(base, { type: 'acid', minDaysBetween: 2, avoidShaveDay: true, avoidAcid: true, avoidRetinol: true, enableAutoSchedule: true });
+            if (role === 'mask') return Object.assign(base, { type: 'mask', minDaysBetween: 6, avoidShaveDay: true, avoidAcid: true, enableAutoSchedule: true });
+            if (role === 'retinol') return Object.assign(base, { type: 'retinol', minDaysBetween: 3, avoidShaveDay: true, avoidAcid: true, enableAutoSchedule: true });
+            if (role === 'spf') return Object.assign(base, { type: 'daily', time: ['am'], maxPerWeek: 0 });
+            return Object.assign(base, { type: 'base', maxPerWeek: 0, time: ['eye', 'moist', 'serum', 'cleanse'].indexOf(role) >= 0 ? ['am', 'pm'] : ['pm'] });
+        }
+        // prefill:认图「读成分标」的结果 {name, role, traits[], note} —— 预填进添加产品弹窗,她看一眼再存
+        function showProdModal(id, prefill) {
             editingProdId = id || null;
             const prod = id ? PD.find(p => p.id === id) : null;
-            document.getElementById('modal-title').textContent = prod ? '编辑产品' : '添加产品';
+            const pf = (!prod && prefill) ? prefill : null;
+            document.getElementById('modal-title').textContent = prod ? '编辑产品' : (pf ? '添加产品（按成分标预填）' : '添加产品');
             const TYPES = [{value:'acid',label:'酸类'},{value:'retinol',label:'视黄醇'},{value:'mask',label:'面膜'},{value:'base',label:'基础固定步骤'},{value:'daily',label:'日常(不排班)'},{value:'none',label:'不排班'}];
-            const sch = prod ? prod.schedule : {type:'none',time:['pm'],maxPerWeek:1,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false};
+            const role0 = prod ? prod.role : (pf && pf.role) || '';
+            const sch = prod ? prod.schedule : (role0 ? defaultScheduleFor(role0) : {type:'none',time:['pm'],maxPerWeek:1,minDaysBetween:0,preferShowerNight:false,avoidShaveDay:false,avoidAcid:false,avoidRetinol:false,enableAutoSchedule:false});
             const pTime = sch.time || ['pm'];
+            const tr0 = prod ? traitsOf(prod) : cleanTraits(pf && pf.traits);
+            const roleOpts = ROLE_ORDER.map(r => `<option value="${r}" ${role0 === r ? 'selected' : ''}>${esc(ROLE_LABEL[r] || r)}</option>`).join('');
             document.getElementById('modal-body').innerHTML = `
-                <div class="fg"><label class="fg-label">产品名称</label><input class="fg-input" id="m-name" value="${esc(prod?prod.name:'')}"></div>
+                ${pf && pf.note ? `<div class="alert info" style="margin-bottom:12px;font-size:12px">${esc(pf.note)}</div>` : ''}
+                <div class="fg"><label class="fg-label">产品名称</label><input class="fg-input" id="m-name" value="${esc(prod ? prod.name : (pf && pf.name) || '')}"></div>
+                <div class="fg"><label class="fg-label">在流程里站哪一格</label><select class="fg-select" id="m-role"><option value="">自动判断</option>${roleOpts}</select></div>
+                <div class="fg"><label class="fg-label">成分特性（判断温不温和、闷不闷、能不能镇静靠这个）</label>
+                    <div class="ob-opts" id="m-traits">${TRAIT_DEFS.map(t => `<button type="button" class="ob-opt${tr0.indexOf(t.k) >= 0 ? ' on' : ''}" data-v="${t.k}" onclick="this.classList.toggle('on')">${esc(t.l)}</button>`).join('')}</div></div>
                 <div class="fg-row"><div class="fg"><label class="fg-label">分类</label><input class="fg-input" id="m-cat" value="${esc(prod?visCat(prod):'')}"></div>
                 <div class="fg"><label class="fg-label">图标</label><input class="fg-input" id="m-icon" value="${prod?prod.icon:'🧴'}" style="width:60px"></div></div>
                 <div class="fg"><label class="fg-label">备注（每行一条）</label><textarea class="fg-input" id="m-notes" rows="3" style="resize:vertical">${prod?visNotes(prod).join('\n'):''}</textarea></div>
@@ -3431,20 +3486,31 @@
                 enableAutoSchedule: document.getElementById('m-auto').checked
             };
             const paoMonths = parseInt(document.getElementById('m-pao').value)||0;
+            const roleSel = (document.getElementById('m-role') || {}).value || '';
+            const traits = cleanTraits([...document.querySelectorAll('#m-traits .ob-opt.on')].map(b => b.dataset.v));
             if (editingProdId) {
                 const p = PD.find(p => p.id === editingProdId);
-                // role 必须跟着重算：否则把「精华」改成「酸类」后 role 停在 serum，
+                // role 必须跟着重算(或用她选的)：否则把「精华」改成「酸类」后 role 停在 serum，
                 // 同一瓶东西会被当两种角色在同一晚重复排。
-                if (p) { Object.assign(p, {name,icon,cat,notes,journalTag,schedule,paoMonths}); p.role = ROLE_MAP[p.id] || inferRole(p); }
+                if (p) {
+                    Object.assign(p, {name,icon,cat,notes,journalTag,schedule,paoMonths});
+                    p.role = roleSel || ROLE_MAP[p.id] || inferRole(p);
+                    // 成分特性是数据:她点过的就存进产品自己身上(随 sk_proddefs1 同步);跟老表一样就不存,继续用老表
+                    const legacy = TRAIT_MAP[p.id] || [];
+                    if (traits.length && (traits.join() !== legacy.join() || Array.isArray(p.traits))) p.traits = traits;
+                    else if (!traits.length) delete p.traits;
+                }
             } else {
                 const id = 'custom_'+Date.now();
                 // 新增也要立刻定 role，否则 role=undefined，byRole 严格比较永不匹配 → 加了产品却不进任何步骤
-                const np = {id,icon,name,cat,notes,journalTag,statuses:['active','paused'],labels:{active:'使用中',paused:'备用'},pillCls:{active:'active',paused:'paused'},schedule,paoMonths,builtin:false};
-                np.role = ROLE_MAP[id] || inferRole(np);
+                const np = {id,icon,name,cat,notes,journalTag,statuses:['active','paused'],labels:{active:'正常使用',paused:'备用'},pillCls:{active:'active',paused:'paused'},schedule,paoMonths,builtin:false,addedOn:today()};
+                np.role = roleSel || ROLE_MAP[id] || inferRole(np);
+                if (traits.length) np.traits = traits;
                 PD.push(np);
                 PS[id] = 'active'; ls(K.prods, PS);
+                if (!POPEN[id]) { POPEN[id] = today(); ls(K.popen, POPEN); }
             }
-            ls(K.prodDefs, PD); closeProdModal(); renderProds(); updateProdUI(); renderProdChips(); renderWk(); renderTn();
+            ls(K.prodDefs, PD); closeProdModal(); invalidatePlanCache(); renderProds(); updateProdUI(); renderProdChips(); renderWk(); renderTn();
         }
         function deleteProd(id) {
             const prod = PD.find(p => p.id === id); if (!prod) return;
@@ -3583,38 +3649,47 @@
             }).catch(() => alert(txt));
         }
 
-        // ══ Barrier Health Score ════════════════════════════════════
-        // 基准 60 分 + 窗口内"每日平均状态权重" × 3.5，再按记录密度向 60 收敛。
-        // 归一化的理由：旧版是累加，记得越勤分越极端 —— 7 天全"稳定"=100，2 天全"稳定"=76，
-        // 同样的皮肤只因记录频率不同就差 24 分，且停止记录后分数会永久冻结在最后几条上。
-        // 返回 null 表示窗口内无数据。该分数直接驱动酸类/视黄醇上限。
-        const BARRIER_W = { '变差': -10, '爆痘': -6, '泛红': -7, '敏感': -5, '干燥': -3, '出油': -2, '稳定': 8, '好转': 12 };
-        const BARRIER_GAIN = 3.5;   // 平均权重 → 分数的放大倍数
-        const BARRIER_FULL_N = 4;   // 记录满 4 天才给满信度，不足则向 60 收敛
-        function calcScore(entries) {
-            // 只吃"记了皮肤状态"的条目：只传照片/只写备注的空条目会进分母，把分数往 60 稀释、连带改动刷酸闸门
+        // ══ 皮肤评估 v3:「没有损伤信号 = 健康」(2026-10-29 推翻重做) ═══════════════════
+        // 旧版以 60 分为底、只有勾「稳定/好转」才往上加、出油 -2。一个混油皮、诚实勾「出油+闭口」、从不勾「稳定」的人
+        // 永远 53–60 → 落在 45–64「谨慎」区 → 酸被锁 1 次/周、视黄醇永远关(Cait 被锁在「维稳」半年,B1.5 查实)。
+        // 体质(出油/闭口)不是屏障损伤;它压低屏障分、屏障分又卡住治闭口的酸 = 想治的症状在压制治它的手段。
+        // 现在:每个标签只扣它真正伤到的那条轴。出油只扣「控油」、闭口只扣「清透」,都不碰屏障;没记坏信号 = 100。
+        // 🔴 这些分**只用来描述**(徽章 / 评估卡 / 给顾问的快照),不再直接卡酸频率:
+        //    酸频率由方案定(顾问方案,或离线阶梯 acidLadder),危险情况由 safetyGate() 按**硬事实**拦。
+        const AX_PENALTY = {
+            '变差': { barrier: 30, calm: 25, congestion: 10 },
+            '泛红': { barrier: 25, calm: 25 },
+            '敏感': { barrier: 20, calm: 10 },
+            '干燥': { barrier: 15 },
+            '爆痘': { calm: 25, congestion: 10 },
+            '出油': { oil: 30 },
+            '闭口': { congestion: 30 },
+            '粗糙': { congestion: 15 }
+        };
+        const AX_RELIEF = 10;        // 记了「比昨天好」:当天每条轴少扣 10
+        const SCORE_PRIOR = 80;      // 记录不足 3 天时向 80 收敛:没数据 ≠ 有问题,也 ≠ 完美
+        const SCORE_FULL_N = 3;
+        const IRRITATION_TAGS = ['泛红', '敏感', '爆痘', '变差'];
+        function dayAxisScore(key, e) {
+            const st = (e && e.status) || [];
+            const ps = st.map(t => (AX_PENALTY[t] || {})[key] || 0).filter(x => x > 0).sort((a, b) => b - a);
+            let pen = 0;
+            ps.forEach((p, i) => { pen += i === 0 ? p : p * 0.5; });   // 同一天几个标签:最重的全额,其余减半
+            if (st.indexOf('好转') >= 0) pen = Math.max(0, pen - AX_RELIEF);
+            return Math.max(0, 100 - pen);
+        }
+        function axisScore(key, entries) {
+            // 只吃记了皮肤状态的条目:只传照片 / 只写备注 / 极简模式推定的空条目不进分母
             entries = (entries || []).filter(e => e && (e.status || []).length);
             if (!entries.length) return null;
-            let sum = 0;
-            // 同一天多个负标签做衰减：最重的一项全额计，其余各打 5 折。
-            // 否则混油皮如实勾「出油+干燥+泛红」会线性叠加把阈值打穿，被永久锁在修护模式。
-            entries.forEach(e => {
-                const ws = (e.status || []).map(t => BARRIER_W[t]).filter(w => w !== undefined);
-                const pos = ws.filter(w => w > 0), neg = ws.filter(w => w < 0).sort((a, b) => a - b);
-                sum += pos.reduce((a, b) => a + b, 0);
-                neg.forEach((w, i) => { sum += i === 0 ? w : w * 0.5; });
-            });
-            const avg = sum / entries.length;
-            const conf = Math.min(1, entries.length / BARRIER_FULL_N);
-            return Math.max(0, Math.min(100, Math.round(60 + avg * BARRIER_GAIN * conf)));
+            const raw = entries.reduce((s, e) => s + dayAxisScore(key, e), 0) / entries.length;
+            const conf = Math.min(1, entries.length / SCORE_FULL_N);
+            return Math.max(0, Math.min(100, Math.round(SCORE_PRIOR + (raw - SCORE_PRIOR) * conf)));
         }
-
-        function barrierScore() {
-            // 近 7 个自然日（含今天）内的日志，按日期去重。没记录的日子不参与平均，也不再"顶着旧分数不动"。
-            return calcScore(jrnlLastNDays(7));
-        }
-        // 窗口内实际有几天记录 —— 用于在界面上标注置信度
-        function barrierSampleN() { return jrnlLastNDays(7).length; }
+        function calcScore(entries) { return axisScore('barrier', entries); }
+        function barrierScore() { return calcScore(jrnlLastNDays(7)); }
+        // 窗口内实际有几天记了状态 —— 界面上标置信度用
+        function barrierSampleN() { return jrnlLastNDays(7).filter(e => (e.status || []).length).length; }
         function barrierLabel(s) {
             if (s >= 85) return { label: '屏障优秀', cls: 'great' };
             if (s >= 65) return { label: '状态良好', cls: 'good' };
@@ -3622,49 +3697,15 @@
             return { label: '重点修护', cls: 'repair' };
         }
 
-        // ══ 皮肤评估引擎 v2：多维(屏障/控油/清透/无炎) + 趋势 + 行动建议 ═══════════
-        // 每个状态标签对各轴的权重(负=让该轴变差)。轴分 = 60 + 平均权重×3.5×置信度，夹 0–100(同屏障分口径)。
-        const AX_W = {
-            '稳定': { barrier: 8,  oil: 4,   congestion: 5,  calm: 8  },
-            '好转': { barrier: 12, oil: 6,   congestion: 10, calm: 12 },
-            '出油': { barrier: -2, oil: -10 },
-            '干燥': { barrier: -3 },
-            '敏感': { barrier: -5, calm: -4 },
-            '泛红': { barrier: -7, calm: -8 },
-            '爆痘': { barrier: -6, congestion: -4, calm: -8 },
-            '变差': { barrier: -10, congestion: -6, calm: -10 },
-            '闭口': { congestion: -10 },
-            '粗糙': { congestion: -6 }
-        };
         const AXES = [
             { key: 'barrier',    name: '屏障' },
             { key: 'oil',        name: '控油' },
             { key: 'congestion', name: '清透' },
             { key: 'calm',       name: '无炎' }
         ];
-        function axisScore(key, entries) {
-            entries = (entries || []).filter(e => e && (e.status || []).length);   // 同 calcScore：空状态条目不进分母
-            if (!entries.length) return null;
-            let sum = 0;
-            entries.forEach(e => (e.status || []).forEach(t => { const w = AX_W[t] && AX_W[t][key]; if (w !== undefined) sum += w; }));
-            const avg = sum / entries.length;
-            const conf = Math.min(1, entries.length / BARRIER_FULL_N);
-            return Math.max(0, Math.min(100, Math.round(60 + avg * BARRIER_GAIN * conf)));
-        }
-        // 趋势：近3天 vs 前一窗(4–8天前)比较，判方向
-        // 趋势必须用**原始平均权重**比较，不能用带置信度的分数：
-        // 旧版 recent(3天窗,conf≤0.75) 减 prior(5天窗,conf=1) 口径不同 → 状态没变也会系统性偏移，
-        // 天天记「稳定」显示↘、天天「爆痘」反而显示↗，还会把 buildRecs 里的就医红线静默吞掉。
-        function axisAvg(key, entries) {
-            if (!entries || !entries.length) return null;
-            let sum = 0;
-            entries.forEach(e => (e.status || []).forEach(t => { const w = AX_W[t] && AX_W[t][key]; if (w !== undefined) sum += w; }));
-            return sum / entries.length;
-        }
+        // 趋势:方向只认**明确的变化信号**(比昨天好 / 比昨天差),不拿状态标签的多寡去猜。
+        // 她每天记「有痘」是说"痘还在",不是"今天又新爆了";少勾一个标签不等于好转(8/20 真实事故:就医红线被吞)。
         function axisTrend(key) {
-            // 方向只认**明确的变化信号**(比昨天好/比昨天差),不再拿状态标签的均值波动去猜。
-            // 原因(真实反馈):她每天记「有痘」是说"痘还在",不是"今天又新爆了";
-            //   某天少勾一个标签就被算成"好转",甚至把就医红线吞掉。持续状态 ≠ 在变化。
             const recent = jrnlLastNDays(4);
             if (!recent.length) return { dir: 'flat', delta: 0, enough: false };
             const better = recent.filter(e => (e.status || []).includes('好转')).length;
@@ -3673,8 +3714,8 @@
                 const d = (better - worse) * 8;
                 return { dir: d >= 6 ? 'up' : d <= -6 ? 'down' : 'flat', delta: d, enough: true };
             }
-            // 没有明确变化信号:看该轴的负向状态是否已经消失/出现(消失=好转,新出现=变差)
-            const neg = es => es.some(e => (e.status || []).some(t => (AX_W[t] && AX_W[t][key]) < 0));
+            // 没有明确变化信号:看这条轴的扣分标签是消失了(好转)还是新出现了(变差)
+            const neg = es => es.some(e => (e.status || []).some(t => ((AX_PENALTY[t] || {})[key] || 0) > 0));
             const nowBad = neg(jrnlLastNDays(2));
             const wasBad = neg((lg(K.jrnl) || []).filter(x => x && x.date && x.date >= offsetDate(-6) && x.date <= offsetDate(-3)));
             if (wasBad && !nowBad) return { dir: 'up', delta: 8, enough: true };
@@ -3687,99 +3728,252 @@
             const axes = AXES.map(a => ({ ...a, score: axisScore(a.key, e7), trend: axisTrend(a.key) }));
             const scored = axes.filter(a => a.score !== null);
             const overall = scored.length ? Math.round(scored.reduce((s, a) => s + a.score, 0) / scored.length) : null;
-            return { axes, overall, sampleN: e7.length, recs: buildRecs(axes, overall) };
+            return { axes, overall, sampleN: e7.filter(e => (e.status || []).length).length, recs: buildRecs(axes, overall) };
         }
-        // 规则化行动建议(含安全就医红线)，按优先级排序，最多 4 条
-        // 诉求 → 针对性建议(按当前目标出话，不是只给通用四轴话术)
+        // 诉求 → 针对性建议
         const CONCERN_ADVICE = {
-            '闭口/粉刺': '闭口靠"温和疏通 + 别搓脸"：维持温和刷酸的节奏，磨砂和厚重面霜先放一边。',
+            '闭口/粉刺': '闭口靠「温和疏通 + 别搓脸」：温和酸按节奏一档档往上加，磨砂和厚重面霜先放一边。',
             '毛孔粗大': '毛孔改善慢，重点是清洁到位 + 控油 + 长期防晒，别指望短期见效。',
-            '出油/T区': 'T区出油：清洁别过度(越剥越油)，保湿选无油质地，防晒也挑清爽的。',
-            '泛红/敏感': '泛红期做减法：停掉多余活性物，只留清洁+保湿+修护，等稳定再加回来。',
-            '干燥/紧绷': '干燥优先补水锁水，刷酸降频，洗脸水温别高。',
+            '出油/T区': 'T区出油：清洁别过度（越剥越油），保湿选无油质地，防晒也挑清爽的。',
+            '泛红/敏感': '泛红期做减法：停掉多余活性物，只留清洁 + 保湿 + 修护，等稳定再加回来。',
+            '干燥/紧绷': '干燥优先补水锁水，刷酸别加频，洗脸水温别高。',
             '痘痘/炎症': '有炎症时别叠猛料；成片或久不消要考虑就医，不是靠加产品解决。',
             '暗沉/痘印': '痘印主要靠防晒 + 时间，防晒不到位再多美白也白搭。'
         };
+        // 规则化行动建议(含就医红线),按优先级排序,最多 5 条
         function buildRecs(axes, overall) {
             const recs = [];
             const ax = k => axes.find(a => a.key === k) || {};
-            // 分区护理:有关注区域就明确提醒(这是最"私人"的一条)
             const zs = userZones();
             if (zs.length) {
                 const z = zs[0];
-                recs.push({ level: 'info', text: `${z.name}：${z.care || '避开刺激性成分'}${(z.avoid || []).length ? '（该区不用' + (z.avoid || []).map(a => ({acid:'酸类',mask:'面膜/磨砂',retinol:'视黄醇'})[a] || a).join('、') + '）' : ''}` });
+                recs.push({ level: 'info', text: `${z.name}：${z.care || '避开刺激性成分'}${(z.avoid || []).length ? '（该区不用' + (z.avoid || []).map(a => ({ acid: '酸类', mask: '面膜/磨砂', retinol: '视黄醇', scrub: '磨砂' })[a] || a).join('、') + '）' : ''}` });
             }
-            // 诉求驱动
             const goalConcern = PROFILE.goal && PROFILE.goal.concern;
             if (goalConcern && CONCERN_ADVICE[goalConcern]) recs.push({ level: 'info', text: CONCERN_ADVICE[goalConcern] });
+            // 就医红线只看硬事实:近 14 天炎症天数 + 最近 3 天仍在发炎(趋势可能误判,不能挂在推断量上)
             const inflamDays = jrnlLastNDays(14).filter(e => (e.status || []).some(s => s === '泛红' || s === '爆痘')).length;
-            const barrier = ax('barrier').score, cong = ax('congestion').score, oil = ax('oil').score;
-            // 就医红线不能挂在"趋势"上:趋势可能因标签多寡误判成"好转"而把这条吞掉(真实事故)。
-            // 改为看硬事实:近14天炎症天数,且最近3天仍在发炎。
             const stillInflamed = jrnlLastNDays(3).some(e => (e.status || []).some(s => s === '泛红' || s === '爆痘'));
             if (inflamDays >= 5 && stillInflamed) {
                 recs.push({ level: 'safety', text: `近两周有 ${inflamDays} 天泛红/爆痘、且未见好转。若集中在口鼻/嘴周且久不消，可能是口周皮炎(越刷酸越糟)——建议看 GP / 皮肤科。` });
             }
-            if (barrier !== null && barrier < 45) recs.push({ level: 'warn', text: '屏障偏弱：本周已自动停酸、暂停视黄醇/泥膜，专注修护封层。' });
-            else if (barrier !== null && barrier < 65) recs.push({ level: 'warn', text: '屏障一般：本周刷酸限 1 次，别叠猛料。' });
-            if (cong !== null && cong < 50 && (barrier === null || barrier >= 60)) recs.push({ level: 'info', text: '闭口/毛孔偏多而屏障稳：维持温和刷酸(杏仁酸即可)，别上磨砂搓脸。' });
-            if (oil !== null && oil < 50) recs.push({ level: 'info', text: 'T区出油：控油但别过度清洁(越剥越油)，防晒选无油款。' });
-            if (!recs.filter(r => r.level !== 'info').length && overall !== null && overall >= 75) recs.push({ level: 'good', text: '整体不错，保持当前节奏。' });
-            if (jrnlLastNDays(7).length < 2) recs.push({ level: 'info', text: '多记几天皮肤状态，评估会更准。' });
-            // 按重要性排序：就医红线 > 警告 > 个性化提示 > 其它。分区/诉求建议不能把 safety 挤掉。
+            const g = safetyGate();
+            if (g.irritated) recs.push({ level: 'warn', text: g.acidCapMax === 0
+                ? `近 3 天记了${g.tags.join('/')}${g.worsening ? '，还记了「比昨天差」' : '，而且是刷酸后两天内出现的'}：酸先停，猛酸/磨砂/泥膜/视黄醇都不上，只做清洁 + 保湿 + 修护。`
+                : `近 3 天记了${g.tags.join('/')}：猛酸、磨砂、泥膜、视黄醇先不上；温和酸最多每周 1 次（避开发红处）。` });
+            const barrier = ax('barrier').score, cong = ax('congestion').score, oil = ax('oil').score;
+            if (barrier !== null && barrier < 45) recs.push({ level: 'warn', text: '屏障分低：以修护为主，洗完全脸要有东西护着，别为了控油把脸洗干。' });
+            if (cong !== null && cong < 60 && !g.irritated) recs.push({ level: 'info', text: `闭口/粗糙偏多：温和酸按节奏走（现在每周 ${maxAcidPerWeek()} 次），没刺激就会一档档往上加；别上磨砂搓脸。` });
+            if (oil !== null && oil < 60) recs.push({ level: 'info', text: 'T区出油：控油但别过度清洁（越剥越油），防晒选无油款。' });
+            if (!recs.filter(r => r.level !== 'info').length && overall !== null && overall >= 80) recs.push({ level: 'good', text: '没有损伤信号，保持当前节奏。' });
+            if (jrnlLastNDays(7).filter(e => (e.status || []).length).length < 2) recs.push({ level: 'info', text: '多记几天皮肤状态，评估会更准。' });
             const order = { safety: 0, warn: 1, info: 2, good: 3 };
             recs.sort((a, b) => (order[a.level] ?? 9) - (order[b.level] ?? 9));
             return recs.slice(0, 5);
         }
-        // ══ Round 3:阶段化方案(修护→建立耐受→维持，按屏障趋势自动进阶/回退) + 目标追踪 ══
-        const PHASES = {
-            repair:      { name: '修护期',     acidCap: 1,  next: 'tolerance',   desc: '专注屏障，酸类≤1次/周' },
-            tolerance:   { name: '建立耐受期', acidCap: 2,  next: 'maintenance', desc: '逐步加频，观察反应' },
-            maintenance: { name: '维持期',     acidCap: 99, next: null,          desc: '状态稳定，正常维持' }
-        };
-        function currentPhase() { return (PROFILE.phase && PHASES[PROFILE.phase]) ? PROFILE.phase : 'repair'; }
-        function phaseAcidCap() { return PHASES[currentPhase()].acidCap; }
-        function daysSince(dateStr) { if (!dateStr) return 999; const a = new Date(dateStr + 'T12:00:00'), b = new Date(today() + 'T12:00:00'); return Math.round((b - a) / 86400000); }
-        function suggestPhase() {
-            const barrier = barrierScore();
-            if (barrier === null) return null;
-            const ph = currentPhase();
-            if (barrier < 45 && ph !== 'repair') return 'repair';           // 屏障掉了 → 安全回退
-            const held = daysSince(PROFILE.phaseStart);
-            const recentBO = jrnlLastNDays(14).some(e => (e.status || []).includes('爆痘'));
-            if (ph === 'repair' && barrier >= 65 && held >= 7) return 'tolerance';
-            if (ph === 'tolerance' && barrier >= 65 && !recentBO && held >= 10) return 'maintenance';
+
+        // ══ 安全闸:唯一红线 —— 顾问方案、离线阶梯、今晚的小改,上脸之前都过这一道 ══════════════
+        // 只拦真危险的,只看**硬事实**(最近几天记了什么、HRT 记录、货架上真有什么),不看推断出来的分数。
+        //   ① 近 3 天记了 泛红/敏感/爆痘/变差 → 猛酸、磨砂、泥膜、视黄醇不上;温和酸最多 1 次/周
+        //      (「持续但没恶化」保留 1 次/周维持量是 8/20 定的:主诉闭口的人停光去角质只会被永久锁死)
+        //      记了「比昨天差」、或刺激出现在刷酸后两天内 → 酸也停(0)
+        //   ② 近两周有炎症 → 猛酸不上;近两周有炎症或闷闭口 → 磨砂不上(8/26 的配套闸门,保留)
+        //   ③ HRT 波动/爆发期(只看本人开了 HRT 的记录)→ 酸 ≤1 次/周、停面油、不上猛酸和视黄醇
+        //   ④ 只排产品库里真有、没被标「我不用」的 —— 见 gateBlocks()
+        //   ⑤ 分区避开项(zones)永远生效,顾问只能加不能减 —— 见 zonesAvoiding()
+        let _gateMemo = { key: null, val: null };
+        function _gateKey() { return today() + '|' + (localStorage.getItem(K.jrnl) || '') + '|' + (PROFILE.hrt ? 1 : 0) + '|' + getExfoliantTags().join(','); }
+        function _statusDays(days, tags) { return jrnlLastNDays(days).filter(e => (e.status || []).some(s => tags.indexOf(s) >= 0)); }
+        // 最近一次刷酸后 48 小时内(当天 / 次日 / 第三天)记到刺激 —— 这次酸很可能就是诱因
+        function acidReactedRecently() {
+            const tags = getAcidTags();
+            const recent = jrnlLastNDays(3);
+            const used = recent.filter(e => (e.products || []).some(p => tags.includes(p))).map(e => e.date).sort();
+            if (!used.length) return false;
+            const first = used[0];
+            return recent.some(e => e.date >= first && (e.status || []).some(s => IRRITATION_TAGS.indexOf(s) >= 0));
+        }
+        function safetyGate() {
+            const key = _gateKey();
+            if (_gateMemo.key === key) return _gateMemo.val;
+            const irr3 = _statusDays(3, IRRITATION_TAGS);
+            const tags = [];
+            irr3.forEach(e => (e.status || []).forEach(s => { if (IRRITATION_TAGS.indexOf(s) >= 0 && tags.indexOf(s) < 0) tags.push(s); }));
+            const irritated = irr3.length > 0;
+            const worsening = _statusDays(4, ['变差']).length > 0;
+            const react = irritated && acidReactedRecently();
+            const inflamed14 = _statusDays(14, ['泛红', '敏感', '爆痘']).length > 0;
+            const clogged14 = _statusDays(14, ['闭口']).length > 0;
+            const hrtFlare = !!PROFILE.hrt && jrnlLastNDays(5).some(x => isHrtFluctuation(x.phase));
+            let acidCapMax = 7;
+            const notes = [];
+            if (irritated) {
+                acidCapMax = (worsening || react) ? 0 : 1;
+                notes.push(acidCapMax === 0
+                    ? `近 3 天记了${tags.join('/')}${worsening ? '、还记了「比昨天差」' : '、出现在刷酸后两天内'} → 酸先停`
+                    : `近 3 天记了${tags.join('/')} → 温和酸最多每周 1 次，猛酸/磨砂/泥膜/视黄醇不上`);
+            }
+            if (hrtFlare) { acidCapMax = Math.min(acidCapMax, 1); notes.push('HRT 波动期 → 酸最多每周 1 次、面油先停'); }
+            const val = {
+                irritated, tags, worsening, react, inflamed14, clogged14, hrtFlare, acidCapMax, notes,
+                banStrong: irritated || inflamed14 || hrtFlare,
+                banScrub: irritated || inflamed14 || clogged14,
+                banRetinol: irritated || hrtFlare,
+                banMask: irritated,
+                banOil: hrtFlare
+            };
+            _gateMemo = { key, val };
+            return val;
+        }
+        // 某支产品现在能不能上脸:null = 可以;否则返回原因(界面上原样告诉她为什么没生效)
+        function gateBlocks(p, g) {
+            g = g || safetyGate();
+            if (!p) return '产品库里没有这支';
+            if (p.hidden || isGone(p.id)) return '家里已经没有这支了';
+            if ((PROFILE.excluded || []).includes(p.id)) return '你标了「我不用这个」';
+            const type = (p.schedule && p.schedule.type) || '';
+            const why3 = g.tags.length ? `近 3 天记了${g.tags.join('/')}` : '';
+            if (hasTrait(p, 'scrub')) {
+                if (g.banScrub) return (why3 || (g.inflamed14 ? '近两周有泛红/爆痘' : '近两周在闷闭口')) + ' → 磨砂不上';
+            } else if (hasTrait(p, 'strong-exfo')) {
+                if (g.banStrong) return (why3 || (g.hrtFlare ? 'HRT 波动期' : '近两周有泛红/爆痘')) + ' → 猛酸不上';
+            }
+            if (g.banRetinol && (p.role === 'retinol' || type === 'retinol')) return (why3 || 'HRT 波动期') + ' → 视黄醇先停';
+            if (g.banMask && (p.role === 'mask' || type === 'mask' || hasTrait(p, 'clay'))) return why3 + ' → 泥膜/去角质面膜先停';
+            if (g.banOil && p.role === 'oil') return 'HRT 波动期 → 面油先停';
+            if (g.acidCapMax === 0 && (p.role === 'acid' || type === 'acid')) return g.worsening ? '记了「比昨天差」→ 酸先停' : '刷酸后两天内记到刺激 → 酸先停';
             return null;
         }
-        function updatePhase() {
-            if (!((lg(K.jrnl) || []).length)) return;                        // 没数据不动
-            if (!PROFILE.phaseStart) { PROFILE.phaseStart = today(); saveProfile(); }  // 锚定阶段起点
-            const s = suggestPhase();
-            if (s && s !== currentPhase()) {
-                const up = PHASES[s].acidCap >= phaseAcidCap();
-                PROFILE.phase = s; PROFILE.phaseStart = today(); saveProfile();
-                invalidatePlanCache();
-                if (typeof showSyncStatus === 'function') showSyncStatus(up ? `🎉 进入「${PHASES[s].name}」` : `↩ 回到「${PHASES[s].name}」`, 'ok');
-            }
+
+        // ══ 离线兜底:按真实反应爬坡的刷酸阶梯 ══════════════════════════════════
+        // 只在**没有顾问方案**时生效(不在白名单 / 后端连不上 / 离线)。从 1 次/周温和酸起步:
+        //   完整模式:刷酸后 48 小时内(当天/次日/第三天)**记了状态而且没有**泛红/敏感/爆痘/变差 = 一次「干净」;
+        //            连续 3 次干净 → 升一档,封顶 3 次/周;一记到刺激 → 降一档(最低 1,当晚停不停交给安全闸);
+        //            那几天什么状态都没记 = 不算数(不升不降)—— 没数据不是证据;两次刷酸隔了 3 周以上 → 降一档(耐受会退)。
+        //   🔴 极简模式:她不记录,排上的酸会被推定「用了」(absorbPrescribedHistory)。「没记到刺激」在这里**不是**耐受的证据,
+        //      把它当耐受自动加量,就是 8/15 连排三晚酸的老路。所以极简模式**从不自动升档**:停在她手动设的档(默认 1),
+        //      只在记到刺激时降;要升只能由顾问(看她偶尔的对话/照片)或她自己在「我」里改。
+        const LADDER_MAX = 3, LADDER_STEP_N = 3, LADDER_WINDOW = 60, LADDER_GAP_RESET = 21;
+        let _ladderMemo = { key: null, val: null };
+        function _addDays(ds, n) { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + n); return localD(d); }
+        function acidLadder() {
+            const manual = [1, 2, 3].indexOf(+PROFILE.acidLevel) >= 0 ? +PROFILE.acidLevel : null;
+            const minimal = !!PROFILE.minimalMode;
+            const key = _gateKey() + '|' + manual + '|' + (PROFILE.acidLevelAt || '') + '|' + (minimal ? 1 : 0);
+            if (_ladderMemo.key === key) return _ladderMemo.val;
+            const t = today();
+            let from = offsetDate(-LADDER_WINDOW);
+            if (manual && PROFILE.acidLevelAt && PROFILE.acidLevelAt > from) from = PROFILE.acidLevelAt;
+            const byDate = {};
+            (lg(K.jrnl) || []).forEach(e => { if (e && e.date && !byDate[e.date]) byDate[e.date] = e; });
+            const tags = getAcidTags();
+            const uses = Object.keys(byDate).filter(d => d >= from && d <= t &&
+                (byDate[d].products || []).some(p => tags.includes(p))).sort();
+            let level = manual || 1, streak = 0, prev = null;
+            const events = [];
+            uses.forEach(d => {
+                if (prev && !minimal && Math.round((new Date(d + 'T12:00:00') - new Date(prev + 'T12:00:00')) / 86400000) > LADDER_GAP_RESET && level > 1) {
+                    level--; streak = 0; events.push({ date: d, kind: 'gap', level });
+                }
+                prev = d;
+                const win = [0, 1, 2].map(i => byDate[_addDays(d, i)]).filter(Boolean);
+                const irritated = win.some(e => (e.status || []).some(s => IRRITATION_TAGS.indexOf(s) >= 0));
+                if (irritated) {
+                    if (level > 1) level--;
+                    streak = 0; events.push({ date: d, kind: 'react', level });
+                    return;
+                }
+                if (minimal) { events.push({ date: d, kind: 'nolog', level }); return; }   // 极简:没记到 ≠ 耐受
+                if (_addDays(d, 2) > t) { events.push({ date: d, kind: 'pending', level }); return; }   // 两天还没过完,先不下结论
+                const logged = win.some(e => (e.status || []).length && !e.auto);
+                if (!logged) { events.push({ date: d, kind: 'unknown', level }); return; }
+                streak++;
+                if (streak >= LADDER_STEP_N && level < LADDER_MAX) { level++; streak = 0; events.push({ date: d, kind: 'up', level }); }
+                else events.push({ date: d, kind: 'clean', level, streak });
+            });
+            const last = events[events.length - 1];
+            let why;
+            if (minimal) why = manual ? `你设的 ${manual} 次/周；极简模式不会自己加，想加跟顾问说或在「我」里改` : '起步 1 次/周；极简模式不记录，不会自己往上加';
+            else if (!uses.length) why = manual ? `你设的 ${manual} 次/周，还没有刷酸记录` : '起步：每周 1 次温和酸，盯两天反应';
+            else if (last && last.kind === 'up') why = `连续 ${LADDER_STEP_N} 次刷酸后两天内都没泛红/爆痘 → 升到 ${level} 次/周`;
+            else if (last && last.kind === 'react') why = `${last.date} 刷酸后两天内记到刺激 → 回到 ${level} 次/周`;
+            else if (last && last.kind === 'gap') why = '隔了 3 周以上没刷，耐受会退 → 降一档';
+            else if (level >= LADDER_MAX) why = `已到 ${LADDER_MAX} 次/周（离线阶梯封顶）`;
+            else why = `再干净 ${LADDER_STEP_N - streak} 次（刷完两天内记了状态、没泛红/爆痘）就加到 ${level + 1} 次/周`;
+            const val = { level, streak, manual, minimal, events, why, uses: uses.length };
+            _ladderMemo = { key, val };
+            return val;
         }
+
+        // ══ 当前方案的规矩:顾问方案在位时它就是权威(只过安全闸);没有就用离线阶梯 ══════════════
+        function aiRegimen() { const r = currentRegimen(); return (r && r.source === 'ai' && r.rules) ? r : null; }
+        function regimenRules() {
+            const ai = aiRegimen();
+            if (ai) return Object.assign({ acidZones: [], resting: [], include: [], zonesAdd: [] }, ai.rules, { source: 'ai' });
+            const L = acidLadder();
+            return { source: 'ladder', acidCap: L.level, acidName: '', acidZones: [], resting: [], include: [], zonesAdd: [], ladder: L };
+        }
+        function _regimenNameSet(field) {
+            const ai = aiRegimen();
+            const set = new Set();
+            if (ai) (ai.rules[field] || []).forEach(x => { const n = typeof x === 'string' ? x : (x && x.name); if (n) set.add(String(n).trim()); });
+            return set;
+        }
+        function restedNow(p) { return !!p && _regimenNameSet('resting').has(p.name); }      // 顾问这一版点名「先不排」的
+        function includedNow(p) { return !!p && _regimenNameSet('include').has(p.name); }    // 顾问这一版点名「正式排进来」的(备用的也算启用)
+        // 今晚能不能把它排进流程:家里有、没标不用、这一版没被停、状态启用(或被顾问点名启用)
+        function usableTonight(p) {
+            return !!p && !p.hidden && !isExcluded(p) && !restedNow(p) &&
+                (isSchedActive(p, PS[p.id] || p.statuses[0]) || includedNow(p));
+        }
+        // 每周去角质上限 = 方案定的次数(顾问 / 离线阶梯),再被安全闸压一道
+        function maxAcidPerWeek() {
+            const r = regimenRules();
+            const cap = Math.max(0, Math.min(7, Math.round(+r.acidCap || 0)));
+            return Math.min(cap, safetyGate().acidCapMax);
+        }
+        // 视黄醇:安全闸放行 + 有一点耐受(离线阶梯 ≥2 档,或顾问点名)+ 这周刺激负荷没超
+        function allowRetinol() {
+            if (safetyGate().banRetinol) return false;
+            const r = regimenRules();
+            if (r.source !== 'ai' && acidLadder().level < 2) return false;
+            const cap = maxAcidPerWeek();
+            if (cap > 0 && exfoliantCountInLastNDays(7) > cap) return false;
+            return true;
+        }
+        function allowMask() { return !safetyGate().banMask; }
+
+        // 阶段只是**标签**(给人看 / 给顾问看),不再卡任何东西。旧版 PHASES 带 acidCap、按屏障分自动进退 ——
+        // 和被污染的屏障分一起把人锁在「修护期」。现在:顾问方案写了阶段就用它;否则在发炎=修护,阶梯封顶=维持,其余=建立耐受。
+        const PHASES = {
+            repair:      { name: '修护期',     desc: '在发炎：先做减法，猛料全停' },
+            tolerance:   { name: '建立耐受期', desc: '温和酸一档档往上加，盯反应' },
+            maintenance: { name: '维持期',     desc: '节奏稳了，保持' }
+        };
+        function currentPhase() {
+            const ai = aiRegimen();
+            if (ai && PHASES[ai.rules.phase]) return ai.rules.phase;
+            if (safetyGate().irritated) return 'repair';
+            return acidLadder().level >= LADDER_MAX ? 'maintenance' : 'tolerance';
+        }
+        function daysSince(dateStr) { if (!dateStr) return 999; const a = new Date(dateStr + 'T12:00:00'), b = new Date(today() + 'T12:00:00'); return Math.round((b - a) / 86400000); }
         const CONCERN_AXIS = { '闭口/粉刺': 'congestion', '毛孔粗大': 'congestion', '出油/T区': 'oil', '泛红/敏感': 'barrier', '干燥/紧绷': 'barrier', '痘痘/炎症': 'calm', '暗沉/痘印': 'calm' };
         function setGoalFromConcern(concern) {
             const axis = CONCERN_AXIS[concern] || 'congestion';
             const cur = axisScore(axis, jrnlLastNDays(7));
-            const start = cur === null ? 60 : cur;
-            // 目标必须高于起点，否则 span 为负、进度条整个反向
-            PROFILE.goal = { concern, axis, start: today(), startScore: start, target: Math.max(75, Math.min(100, start + 10)) };
+            const start = cur === null ? SCORE_PRIOR : cur;
+            // 目标必须高于起点,否则 span 为负、进度条整个反向
+            PROFILE.goal = { concern, axis, start: today(), startScore: start, target: Math.max(85, Math.min(100, start + 10)) };
         }
         function goalProgress() {
             const g = PROFILE.goal; if (!g) return null;
             const cur = axisScore(g.axis, jrnlLastNDays(7));
             const span = g.target - g.startScore;
-            if (span <= 0) return Object.assign({}, g, { cur, pct: 100, days: daysSince(g.start) });   // 起点已达标
+            if (span <= 0) return Object.assign({}, g, { cur, pct: 100, days: daysSince(g.start) });
             const pct = cur === null ? 0 : Math.max(0, Math.min(100, Math.round((cur - g.startScore) / span * 100)));
             return Object.assign({}, g, { cur, pct, days: daysSince(g.start) });
         }
-        // 注：logStreak / weekLoggedCount 的唯一实现在文件后半段(统计区),这里不再重复定义
-        // （旧版在此处有一份同名函数，被后面的声明覆盖，属死代码，已删）
+        // 注：logStreak 的唯一实现在文件后半段(统计区)
         function weekLoggedCount() {
             const from = offsetDate(-6), to = today();
             return new Set((lg(K.jrnl) || []).filter(x => x && x.date && x.date >= from && x.date <= to && (x.status || []).length).map(x => x.date)).size;
@@ -3787,6 +3981,12 @@
         function renderAssessment() {
             const box = document.getElementById('assess-card'); if (!box) return;
             const a = assessSkin();
+            // safety 级(就医红线)必须无条件显示——极简模式会隐藏整张评估卡,不能把它一起藏了
+            const safetyBox = document.getElementById('safety-alert');
+            if (safetyBox) {
+                const sf = a.recs.filter(r => r.level === 'safety');
+                safetyBox.innerHTML = sf.map(r => `<div class="alert danger" style="margin-bottom:.75rem"><div class="at">⚠️ 建议去看医生</div>${esc(r.text)}</div>`).join('');
+            }
             if (a.overall === null) { box.innerHTML = ''; return; }
             const ov = barrierLabel(a.overall);
             const ovCol = a.overall >= 65 ? 'var(--gr)' : a.overall >= 45 ? 'var(--am)' : 'var(--rd)';
@@ -3797,75 +3997,26 @@
             }).join('');
             const recHtml = a.recs.map(r => `<div class="assess-rec ${r.level}">${r.level === 'safety' ? '⚠ ' : r.level === 'good' ? '✓ ' : '▸ '}${esc(r.text)}</div>`).join('');
             const ph = PHASES[currentPhase()];
+            const rr = regimenRules();
             const g = goalProgress();
-            const phaseHtml = `<div class="assess-phase"><span>阶段 · ${ph.name}</span><span style="color:var(--tx3);font-weight:400">${esc(ph.desc)}</span></div>`;
+            const pace = rr.source === 'ai' ? '按顾问方案' : '离线阶梯 · ' + rr.ladder.why;
+            const phaseHtml = `<div class="assess-phase"><span>阶段 · ${ph.name}</span><span style="color:var(--tx3);font-weight:400">刷酸 ${maxAcidPerWeek()} 次/周</span></div><div class="assess-goal" style="color:var(--tx3)">${esc(pace)}</div>`;
             const goalHtml = g ? `<div class="assess-goal">🎯 ${esc(g.concern.split('/')[0])} ${g.startScore}→${g.cur === null ? '—' : g.cur}<span style="color:var(--tx3)"> / 目标 ${g.target}</span><span class="goal-pct">${g.pct}%</span></div>` : '';
             const streak = logStreak(), wk = weekLoggedCount();
             const streakHtml = `<div class="assess-streak">${streak > 0 ? `🔥 连续记录 ${streak} 天 · ` : ''}本周 ${wk}/7 天</div>`;
-            // safety 级(就医红线)必须无条件显示——极简模式会隐藏整张评估卡,不能把它一起藏了
-            const safetyBox = document.getElementById('safety-alert');
-            if (safetyBox) {
-                const sf = a.recs.filter(r => r.level === 'safety');
-                safetyBox.innerHTML = sf.map(r => `<div class="alert danger" style="margin-bottom:.75rem"><div class="at">⚠️ 建议去看医生</div>${esc(r.text)}</div>`).join('');
-            }
             box.innerHTML = `<div class="assess-card2">
-                <div class="assess-hd"><span>今日评估</span><span style="font-size:13px;color:${ovCol}">${a.overall} · ${ov.label}${a.sampleN < 4 ? ` <span style="color:var(--tx3);font-weight:400">(记${a.sampleN}天)</span>` : ''}</span></div>
+                <div class="assess-hd"><span>今日评估</span><span style="font-size:13px;color:${ovCol}">${a.overall} · ${ov.label}${a.sampleN < SCORE_FULL_N ? ` <span style="color:var(--tx3);font-weight:400">(记${a.sampleN}天)</span>` : ''}</span></div>
                 <div class="ax-list">${bars}</div>
                 ${phaseHtml}${goalHtml}
                 ${recHtml ? `<div class="assess-recs">${recHtml}</div>` : ''}
                 ${streakHtml}
             </div>`;
         }
-        // Dynamic acid limit based on barrier score
-        function maxAcidPerWeek() {
-            const s = barrierScore();
-            let limit = 2;
-            if (s !== null) {
-                if (s < 45) limit = 0;  // repair mode: no acid
-                else if (s < 65) limit = 1;  // caution: max 1
-            }
-            // 「持续但没恶化」不该无限期停酸——那是死胡同:主诉是闭口的人,停光去角质闭口不会好。
-            // 只要不是在**明确恶化**、且手上有温和的酸(杏仁酸/乳酸这类),保留每周 1 次的维持量。
-            // 真的在变差(记了「比昨天差」)、或最近三天新出现炎症,才彻底停。
-            if (limit === 0) {
-                const worsening = jrnlLastNDays(4).some(e => (e.status || []).includes('变差'));
-                const gentleAcid = PD.some(p => !p.hidden && !isExcluded(p) && p.role === 'acid' &&
-                    isSchedActive(p, PS[p.id] || p.statuses[0]) &&
-                    /杏仁酸|乳酸|mandelic|lactic|PHA|葡糖酸/i.test((p.name || '') + (p.cat || '')));
-                if (!worsening && gentleAcid) limit = 1;
-            }
-            
-            // Check HRT phases in past 5 days（按日期窗口，不是"最近5条"——否则几个月前的一条能永久压低上限）
-            const recent = jrnlLastNDays(5);
-            const hrtFluctuation = recent.some(x => isHrtFluctuation(x.phase));
-            
-            if (hrtFluctuation && limit > 0) limit -= 1; // force downgrade during HRT fluctuations
-            limit = Math.min(limit, phaseAcidCap());     // 阶段上限:修护期≤1、建立耐受≤2、维持不额外限
-            return Math.max(0, limit);
-        }
-        // 屏障分闸门：修护模式(<45) 停掉全部去角质与视黄醇；谨慎模式(45–64) 停视黄醇、酸类限1次。
-        // 旧版只掐酸类，视黄醇和泥膜照排，导致"修护模式"红条底下第二步就是视黄醇。
-        function allowRetinol() {
-            const s = barrierScore();
-            if (s !== null && s < 65) return false;
-            // 近7天去角质已经超过上限时也不排视黄醇。产品备注自己写着"E2 本身促皮肤更新，视黄醇引入更保守"，
-            // 而旧版只管"同一晚不叠加"，完全不看这一周整体的刺激负荷。
-            const cap = maxAcidPerWeek();
-            if (cap > 0 && exfoliantCountInLastNDays(7) > cap) return false;
-            return true;
-        }
-        function allowMask()    { const s = barrierScore(); return s === null || s >= 45; }
+        // 今晚页顶上的横幅:安全闸正在拦什么(不再是「屏障分 53 → 谨慎模式」那种按推断分数卡人的话)
         function barrierModeText() {
-            const s = barrierScore();
-            if (s === null) return null;
-            if (s < 45) {
-                const cap = maxAcidPerWeek();
-                return cap > 0
-                    ? { cls: 'repair-mode', txt: `🛑 屏障健康分 ${s} · 修护模式：泥膜与视黄醇已停；温和酸类保留 ${cap} 次/周做维持（避开发红处），状态若再变差会自动停掉` }
-                    : { cls: 'repair-mode', txt: `🛑 屏障健康分 ${s} · 修护模式：本周暂停酸类、泥膜与视黄醇，专注屏障修复` };
-            }
-            if (s < 65) return { cls: '', txt: `⚠️ 屏障健康分 ${s} · 谨慎模式：本周酸类限 1 次，暂停视黄醇` };
-            return null;
+            const g = safetyGate();
+            if (!g.notes.length) return null;
+            return { cls: (g.acidCapMax === 0 ? 'repair-mode' : ''), txt: '🛡 安全闸：' + g.notes.join('；') };
         }
         function showBarrierBreakdown() {
             const bd = document.getElementById('barrier-breakdown');
@@ -3876,8 +4027,9 @@
             const el = document.getElementById('barrier-badge');
             if (!el) return;
             if (s === null) { el.innerHTML = ''; return; }
-            const { label, cls } = barrierLabel(s);
-            el.innerHTML = `<div class="barrier-num ${cls}">${s}</div><div class="barrier-lbl">${label}</div>`;
+            const g = safetyGate();
+            const { label, cls } = g.irritated ? { label: '在发炎', cls: 'repair' } : barrierLabel(s);
+            el.innerHTML = `<div class="barrier-num ${cls}">${s}</div><div class="barrier-lbl">屏障 · ${label}</div>`;
         }
 
         // ══ Acid tracking (single source: journal) ═════════════════
@@ -3929,6 +4081,12 @@
             return tn;
         }
         let TN = initTN();
+
+        // 今晚的小改(顾问 change_tonight 落地的数据):只认今天的;过了今天自动失效,不用清
+        function tonightOverride() {
+            const o = lg(K.tnai);
+            return (o && o.date === today() && Array.isArray(o.ops) && o.ops.length) ? o : null;
+        }
 
         // 手动覆盖必须回写到排班本身：旧版只改 K.tn，而周计划页/日详情读的是 getDayState()，
         // 结果"今天点了刮胡"后今晚面板跳过所有酸，周计划页却仍显示酸类 tag 并把它算进周计数。
@@ -4292,8 +4450,19 @@
             wildsource:['oil-based'],
             sunscreen: ['light']
         };
+        // 成分特性 = 产品自带的数据(p.traits,存在 sk_proddefs1 里、随云同步;认图读成分标 / 编辑产品时写进去)。
+        // 上面的 TRAIT_MAP 只留给 2026-08 那批查过成分表的老内置产品兜底;再没有就按名字/备注猜(最不可靠)。
+        const TRAIT_DEFS = [
+            { k: 'gentle-exfo', l: '温和去角质' }, { k: 'strong-exfo', l: '猛酸/强去角质' }, { k: 'scrub', l: '磨砂颗粒' },
+            { k: 'clay', l: '泥膜' }, { k: 'calm', l: '镇静' }, { k: 'light', l: '轻薄' }, { k: 'oil-based', l: '油基' },
+            { k: 'fragranced', l: '含香精/精油' }, { k: 'occlusive', l: '封闭厚重' }, { k: 'gentle-clean', l: '温和清洁' },
+            { k: 'strong-clean', l: '强清洁' }
+        ];
+        const TRAIT_KEYS = TRAIT_DEFS.map(t => t.k);
+        function cleanTraits(list) { return (Array.isArray(list) ? list : []).map(x => String(x || '').trim()).filter((x, i, a) => TRAIT_KEYS.indexOf(x) >= 0 && a.indexOf(x) === i); }
         function traitsOf(p) {
             if (!p) return [];
+            if (Array.isArray(p.traits) && p.traits.length) return p.traits;
             if (TRAIT_MAP[p.id]) return TRAIT_MAP[p.id];
             const s = (p.name || '') + (p.cat || '') + ((p.notes || []).join(''));
             const t = [];
@@ -4495,7 +4664,7 @@
         // 家里有、但这一版方案**故意不排**的东西 + 为什么(别让人以为是漏掉了)
         function restingProducts() {
             const out = [];
-            const cap = maxAcidPerWeek(), b = barrierScore();
+            const cap = maxAcidPerWeek(), g = safetyGate();
             const planIds = new Set();
             // ⚠️ 只看**未来**排上没有:过去的日志里出现过一次(哪怕是极简模式推定的)也会让它
             //    看起来"排上了",于是这一版明明不排它,却不出现在「先不排」里(在 Cici 账号上实测到)。
@@ -4505,30 +4674,35 @@
                 if (!(t === 'acid' || t === 'mask' || t === 'retinol')) return;
                 if (planIds.has(p.id)) return;
                 let why = '这一版没排上';
-                if (hasTrait(p, 'scrub')) why = '磨砂:正在发炎/闭口的脸上搓只会更糟';
-                else if (hasTrait(p, 'strong-exfo')) why = '偏猛:屏障还没稳,先不用';
-                else if (t === 'mask' && b !== null && b < 45) why = '修护模式:泥膜/面膜暂停';
+                const gb = gateBlocks(p, g);
+                if (gb) why = gb;
+                else if (hasTrait(p, 'scrub')) why = '磨砂：闭口/发炎的脸上搓只会更糟';
+                else if (hasTrait(p, 'strong-exfo')) why = '猛酸：离线规则不自动排，想用跟顾问说（还得先过安全闸）';
                 else if (t === 'acid' && cap === 0) why = '本周去角质额度是 0';
-                else if (t === 'acid') why = '同类里这一版先用另一支,别叠';
+                else if (t === 'acid') why = '同类里这一版先用另一支，别叠';
+                else if (t === 'retinol' && !allowRetinol()) why = '先把温和酸练出耐受再加视黄醇';
                 out.push({ id: p.id, name: p.name, why: why });
             });
             return out;
         }
+        // 离线引擎出的一版(source:'engine')。顾问的方案由 commitAiRegimen() 落成一版(source:'ai')。
         function buildRegimen() {
             const a = assessSkin();
             const b = barrierScore();
             const cap = maxAcidPerWeek();
+            const L = acidLadder();
             const t = today();
             let slot = { items: [] };
             try { slot = computePlanRolling().find(d => d.date === t) || { items: [] }; } catch (e) {}
-            const ns = buildNightSteps(false, false, slot);
+            // 版本快照里的流程不带「今晚的小改」(那只是今晚的事),所以不传 date
+            const ns = buildNightSteps(false, false, { items: slot.items || [] });
             // 方案上写的酸,必须就是排班真的会排的那支(否则方案说 A、今晚给 B,人会不知道信哪个)
             const acidIds = [];
             try {
                 computePlanRolling().forEach(dd => { if (!dd.isPast) (dd.items || []).forEach(it => {
                     if (it.type === 'acid' && it.id && acidIds.indexOf(it.id) < 0) acidIds.push(it.id); }); });
             } catch (e) {}
-            const acids = activeProducts().filter(p => p.role === 'acid');
+            const acids = activeProducts().filter(p => p.role === 'acid' && !hasTrait(p, 'strong-exfo'));
             let acidNames = acidIds.map(id => (PD.find(x => x.id === id) || {}).name).filter(Boolean);
             if (!acidNames.length) { const g = acids.find(p => hasTrait(p, 'gentle-exfo')) || acids[0]; if (g) acidNames = [g.name]; }
             const acidPick = acidNames.length ? { name: acidNames.join(' / ') } : null;
@@ -4536,29 +4710,32 @@
                 ((p.schedule && p.schedule.time) || ['pm']).indexOf('pm') >= 0), { shower: false, acidTonight: false });
             return {
                 date: t,
+                source: 'engine',
                 skin: {
                     overall: a.overall, barrier: b, phase: currentPhase(),
                     tags: regimenSkinTags(),
                     axes: a.axes.map(x => ({ key: x.key, name: x.name, score: x.score, dir: x.trend.dir }))
                 },
+                ladder: { level: L.level, why: L.why },
                 rules: {
                     acidCap: cap,
                     acidName: acidPick ? acidPick.name : null,
                     acidZones: zonesAvoiding('acid'),
                     repair: repairUse(), repairWhy: repairReason(),
                     cleanse: cleanser ? cleanser.name : null,
-                    resting: restingProducts()
+                    resting: restingProducts(),
+                    phase: currentPhase()
                 },
                 steps: ns.steps.map(x => ({ p: x.p, h: x.h })),
-                using: activeProducts().map(x => ({ id: x.id, name: x.name, role: x.role })),
+                using: activeProducts().filter(p => !restedNow(p)).map(x => ({ id: x.id, name: x.name, role: x.role })),
                 gaps: regimenGaps().map(g => ({ key: g.key, label: g.label, why: g.why })),
                 notes: (a.recs || []).filter(r => r.level === 'safety' || r.level === 'warn').map(r => ({ level: r.level, text: r.text }))
             };
         }
-        // 皮肤状况的"指纹":分档取整(15 分一档),否则一分之差天天出新方案
-        // 判断口径一改,旧方案会一直挂在那儿(指纹只看皮肤和货架,不看代码)。
-        // 把引擎版本写进指纹:改口径就 +1 → 所有人下次打开立刻重出一版。
-        const REGIMEN_ENGINE = 'e2';
+        // 皮肤状况的"指纹":分档取整(15 分一档),否则一分之差天天出新方案。
+        // 判断口径一改,旧方案会一直挂在那儿(指纹只看皮肤和货架,不看代码) → 把引擎版本写进指纹,改口径就 +1。
+        // e3(2026-10-29):屏障分不再被出油/闭口拉低;刷酸频率改成离线阶梯 + 安全闸
+        const REGIMEN_ENGINE = 'e3';
         function skinSignature() {
             const a = assessSkin();
             const bk = x => (x === null || x === undefined) ? '-' : Math.floor(x / 15);
@@ -4571,6 +4748,7 @@
         }
         function regimenHistory() { return lg(K.regimen) || []; }
         function currentRegimen() { const h = regimenHistory(); return h.length ? h[h.length - 1] : null; }
+        function newRegimenId() { return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
         // 变了什么 —— 说人话的理由,方便回看"这版为什么会变"
         function regimenDiffReason(prev, next) {
             const bits = [];
@@ -4582,26 +4760,95 @@
             const lost = pIds.filter(x => nIds.indexOf(x) < 0), got = nIds.filter(x => pIds.indexOf(x) < 0);
             (prev.using || []).forEach(x => { if (lost.indexOf(x.id) >= 0) bits.push('少了：' + x.name); });
             (next.using || []).forEach(x => { if (got.indexOf(x.id) >= 0) bits.push('多了：' + x.name); });
-            if (prev.rules && prev.rules.acidCap !== next.rules.acidCap) bits.push('去角质额度 ' + prev.rules.acidCap + '→' + next.rules.acidCap + ' 次/周');
+            if (prev.rules && prev.rules.acidCap !== next.rules.acidCap) bits.push('去角质 ' + prev.rules.acidCap + '→' + next.rules.acidCap + ' 次/周' + (next.ladder ? '（' + next.ladder.why + '）' : ''));
             if (prev.rules && prev.rules.repair !== next.rules.repair) bits.push('修护霜改成' + (next.rules.repair === 'spot' ? '点涂' : '全脸薄涂'));
+            if (prev.source === 'ai' && next.source !== 'ai') bits.push('顾问方案撤销了，回到离线规则');
             return bits.length ? bits.join('；') : '皮肤状况有变化';
         }
         // 唯一入口:指纹变了就出新版本。force=true 用于"用完了/补货了"这种明确事件。
+        // 🔴 顾问方案在位时它就是权威:皮肤状况的变化交给安全闸实时处理(今晚该停的会停),
+        //    不拿离线引擎的新版本把顾问方案盖掉;只有货架真变了(force)才派生一版,摘掉家里已经没有的东西。
+        //    (顺带也少了一类「每次打开都写盘」—— 写盘 = 推送 = 可能的对推,见 8/29 事故)
         function syncRegimen(reason, force) {
             let hist = regimenHistory();
-            const sig = REGIMEN_ENGINE + '||' + skinSignature() + '||' + shelfSignature();
             const last = hist.length ? hist[hist.length - 1] : null;
+            if (last && last.source === 'ai') return force ? deriveAiRegimen(last, reason) : null;
+            const sig = REGIMEN_ENGINE + '||' + skinSignature() + '||' + shelfSignature();
             if (!force && last && last.sig === sig) return null;
             const reg = buildRegimen();
             reg.v = (last ? (last.v || 0) : 0) + 1;
             reg.sig = sig;
-            const engChanged = !!last && String(last.sig || '').indexOf(REGIMEN_ENGINE + '||') !== 0;
+            reg.id = newRegimenId();
+            const engChanged = !!last && last.source !== 'ai' && String(last.sig || '').indexOf(REGIMEN_ENGINE + '||') !== 0;
             reg.reason = reason || (engChanged
-                ? '判断口径升级：只算「今天真会涂到脸上」的东西 —— 被停掉的、只点涂的、洗掉的,不再充数'
+                ? '判断口径升级：出油/闭口不再拉低屏障分；刷酸改成从每周 1 次温和酸起步、按真实反应一档档加'
                 : (last ? regimenDiffReason(last, reg) : '第一版：按现在的皮肤状况和家里现有的东西生成'));
             hist = hist.concat([reg]).slice(-12);      // 只留最近 12 版,localStorage 别撑爆
             ls(K.regimen, hist);
             return reg;
+        }
+        // 货架变了(用完 / 补货)而当前是顾问方案:沿用顾问的规矩,只把家里已经没有的东西摘掉,标「待重排」
+        function deriveAiRegimen(last, reason) {
+            const have = n => !!PD.find(p => p.name === n && !p.hidden);
+            const r = JSON.parse(JSON.stringify(last.rules || {}));
+            const dropped = [];
+            if (r.acidName && !String(r.acidName).split(' / ').every(n => have(n.trim()))) { dropped.push(r.acidName); r.acidName = ''; }
+            r.include = (r.include || []).filter(n => { if (have(n)) return true; dropped.push(n); return false; });
+            r.resting = (r.resting || []).filter(x => x && have(x.name));
+            const reg = Object.assign({}, last, {
+                id: newRegimenId(), v: (last.v || 0) + 1, date: today(), at: new Date().toISOString(),
+                rules: r, kind: 'derived', stale: true, blocked: [], prevId: last.id,
+                reason: (reason || '货架变了') + (dropped.length ? '；方案里的「' + dropped.join('、') + '」家里没有了，这一版先摘掉' : '') + '。规矩沿用顾问上一版，可以让顾问按新货架重排。'
+            });
+            let hist = regimenHistory().concat([reg]).slice(-12);
+            ls(K.regimen, hist);
+            invalidatePlanCache();
+            reg.gaps = regimenGaps().map(g => ({ key: g.key, label: g.label, why: g.why }));
+            reg.using = activeProducts().filter(p => !restedNow(p)).map(x => ({ id: x.id, name: x.name, role: x.role }));
+            hist[hist.length - 1] = reg; ls(K.regimen, hist);
+            return reg;
+        }
+        // 顾问的方案落成一版(ai.js 调用;规矩已经过 _validateRegimen 安全闸)。
+        // 快照部分(皮肤、在用的东西、缺口、这一版的流程)照常算;rules 用顾问的。
+        // meta = {kind:'plan'|'chat'|'review', reason, rationale, blocked[], model, cost}
+        function commitAiRegimen(rules, meta) {
+            meta = meta || {};
+            let hist = regimenHistory();
+            const last = hist.length ? hist[hist.length - 1] : null;
+            const base = buildRegimen();
+            const reg = Object.assign(base, {
+                id: newRegimenId(), v: (last ? (last.v || 0) : 0) + 1, source: 'ai', kind: meta.kind || 'plan',
+                at: new Date().toISOString(), sig: 'ai', prevId: last ? last.id : null,
+                reason: meta.reason || '顾问出的方案', rationale: meta.rationale || '',
+                blocked: meta.blocked || [], model: meta.model || '', cost: meta.cost == null ? null : meta.cost,
+                rules: Object.assign({ acidCap: 1, acidName: '', acidZones: [], cleanse: '', repair: '', repairWhy: '',
+                    resting: [], include: [], zonesAdd: [], phase: '' }, rules)
+            });
+            delete reg.ladder;
+            hist = hist.concat([reg]).slice(-12);
+            ls(K.regimen, hist);
+            // 规矩换了 → 按新规矩把「这一版的流程 / 在用 / 缺口」再算一遍写进快照
+            invalidatePlanCache();
+            try {
+                const slot = computePlanRolling().find(d => d.isToday) || { items: [] };
+                reg.steps = buildNightSteps(false, false, { items: slot.items || [] }).steps.map(x => ({ p: x.p, h: x.h }));
+            } catch (e) {}
+            reg.using = activeProducts().filter(p => !restedNow(p)).map(x => ({ id: x.id, name: x.name, role: x.role }));
+            reg.gaps = regimenGaps().map(g => ({ key: g.key, label: g.label, why: g.why }));
+            reg.skin.phase = currentPhase();
+            hist[hist.length - 1] = reg;
+            ls(K.regimen, hist);
+            return reg;
+        }
+        // 撤销一版顾问方案 = 回到上一版。只有「当前这一版」能撤(后面又出了新版的,撤它会把后面的也搅乱)。
+        function undoRegimen(id) {
+            const hist = regimenHistory();
+            const last = hist[hist.length - 1];
+            if (!last || last.id !== id) return '后面已经有新的一版了，这一版撤不了；要改回去直接跟顾问说';
+            hist.pop();
+            ls(K.regimen, hist);
+            invalidatePlanCache();
+            return '';
         }
         function regimenSummary(reg) {
             if (!reg) return '';
@@ -4618,24 +4865,35 @@
         let _rgOpen = false;
         function toggleRegimenDetail() { _rgOpen = !_rgOpen; renderRegimenCard(); }
         const _RG_BAD = ['爆痘', '泛红', '敏感', '闭口', '干燥', '变差', '粗糙'];
+        // 今晚页最上面的「当前方案」卡。顾问方案和离线规则都在这里;今晚实际按什么来 = 这里的规矩 × 安全闸。
+        // (视觉先沿用旧卡片,等统一设计规范再整体重排 —— 2026-10-29 协调要求)
         function renderRegimenCard() {
             const box = document.getElementById('regimen-card'); if (!box) return;
             const reg = currentRegimen();
             if (!reg) { box.innerHTML = ''; return; }
             const r = reg.rules || {}, sk = reg.skin || {};
+            const isAI = reg.source === 'ai';
+            const g = safetyGate();
             const tags = (sk.tags || []).map(t =>
                 `<span class="rg-tag ${_RG_BAD.indexOf(t) >= 0 ? 'bad' : (t === '稳定' || t === '好转' ? 'ok' : '')}">${esc(t)}</span>`).join('');
             const meta = [];
-            if (sk.barrier !== null && sk.barrier !== undefined) meta.push('屏障 ' + sk.barrier);
-            if (sk.phase && PHASES[sk.phase]) meta.push(PHASES[sk.phase].name);
+            const ph = currentPhase();
+            if (PHASES[ph]) meta.push(PHASES[ph].name);
+            const cap = maxAcidPerWeek(), planned = Math.max(0, Math.round(+r.acidCap || 0));
             const rules = [];
-            rules.push('去角质：' + (r.acidCap
-                ? r.acidCap + ' 次/周' + (r.acidName ? '，用' + esc(r.acidName) : '') + ((r.acidZones || []).length ? '（避开' + esc(r.acidZones.join('、')) + '）' : '')
-                : '这一版先停'));
+            const zonesA = zonesAvoiding('acid');
+            rules.push('去角质：' + (cap
+                ? cap + ' 次/周' + (r.acidName ? '，用' + esc(r.acidName) : '') + (zonesA.length ? '（避开' + esc(zonesA.join('、')) + '）' : '')
+                : '这一版先停') + (cap < planned ? `<span style="color:var(--am)">（方案是 ${planned} 次，安全闸压到 ${cap}）</span>` : ''));
+            if (!isAI) rules.push('节奏：' + esc(acidLadder().why));
             if (r.cleanse) rules.push('洗脸：' + esc(r.cleanse));
-            rules.push('修护霜：' + (r.repair === 'spot' ? '只点涂' : '全脸薄涂') + (r.repairWhy ? '（' + esc(r.repairWhy) + '）' : ''));
-            if ((r.resting || []).length) rules.push('先不排：' + r.resting.map(x => esc(x.name) + '（' + esc(x.why) + '）').join('、'));
-            const gaps = (reg.gaps || []).map(g => `🛒 <b>${esc(g.label)}</b> —— 家里没有能顶的了。${esc(g.why)}`).join('<br>');
+            const ru = repairUse();
+            rules.push('修护霜：' + (ru === 'spot' ? '只点涂' : '全脸薄涂') + '（' + esc(repairReason()) + '）');
+            if ((r.include || []).length) rules.push('正式排进来：' + r.include.map(esc).join('、'));
+            if ((r.resting || []).length) rules.push('先不排：' + r.resting.map(x => esc(x.name) + (x.why ? '（' + esc(x.why) + '）' : '')).join('、'));
+            const gateHtml = g.notes.length ? `<div class="rg-gap" style="background:var(--rd-bg);border-color:var(--rd-br)">🛡 安全闸：${esc(g.notes.join('；'))}</div>` : '';
+            const blocked = (reg.blocked || []).length ? `<div class="rg-gap">没生效的几条（被安全闸拦下）：<br>${reg.blocked.map(b => '· ' + esc(b.text) + ' —— ' + esc(b.why)).join('<br>')}</div>` : '';
+            const gaps = (reg.gaps || []).map(x => `🛒 <b>${esc(x.label)}</b> —— 家里没有能顶的了。${esc(x.why)}`).join('<br>');
             let detail = '';
             if (_rgOpen) {
                 const hist = regimenHistory().slice().reverse();
@@ -4646,15 +4904,19 @@
                     <div class="rg-step">${(reg.using || []).map(x => esc(x.name)).join(' · ') || '—'}</div>
                     ${(reg.notes || []).length ? `<div class="rg-sub">要注意</div>${reg.notes.map(n => `<div class="rg-step">${n.level === 'safety' ? '🚑 ' : '⚠️ '}${esc(n.text)}</div>`).join('')}` : ''}
                     <div class="rg-sub">历史版本</div>
-                    ${hist.map(h => `<div class="rg-hist">v${h.v} · ${esc(h.date)} — ${esc(h.reason || '')}</div>`).join('')}
+                    ${hist.map(h => `<div class="rg-hist">v${h.v} · ${esc(h.date)}${h.source === 'ai' ? ' · 顾问' : ''} — ${esc(h.reason || '')}</div>`).join('')}
                 </div>`;
             }
-            box.innerHTML = `<div class="rg-card">
-                <div class="rg-hd"><div class="rg-t">📋 当前方案</div><div class="rg-v">v${reg.v} · ${esc(reg.date)}</div></div>
-                <div class="rg-why">为什么是这一版：${esc(reg.reason || '')}</div>
+            const actions = (typeof aiRegimenActionsHtml === 'function') ? aiRegimenActionsHtml(reg) : '';
+            box.innerHTML = `<div class="rg-card" data-src="${isAI ? 'ai' : 'engine'}">
+                <div class="rg-hd"><div class="rg-t">📋 当前方案 · ${isAI ? '顾问' : '离线规则'}</div><div class="rg-v">v${reg.v} · ${esc(reg.date)}</div></div>
+                <div class="rg-why">${isAI && reg.rationale ? esc(reg.rationale) : '为什么是这一版：' + esc(reg.reason || '')}</div>
+                ${isAI && reg.rationale ? `<div class="rg-why" style="color:var(--tx3)">${esc(reg.reason || '')}</div>` : ''}
                 <div class="rg-skin">${tags || '<span class="rg-tag">还没记录皮肤状态</span>'}${meta.map(m => `<span class="rg-tag">${esc(m)}</span>`).join('')}</div>
                 <ul class="rg-rules">${rules.map(x => `<li>· ${x}</li>`).join('')}</ul>
+                ${gateHtml}${blocked}
                 ${gaps ? `<div class="rg-gap">${gaps}<br><span style="color:var(--tx2)">（「产品」页最下面有挑选标准和推荐）</span></div>` : ''}
+                ${actions}
                 <button class="rg-more" onclick="toggleRegimenDetail()">${_rgOpen ? '收起' : '看完整方案 / 历史版本'}</button>
                 ${detail}
             </div>`;
@@ -4712,13 +4974,14 @@
             const hasScheduledAcid = !!schedAcid && !shave;
             const pd = id => PD.find(p => p.id === id);
             const active = id => { const p = pd(id); return p && !p.hidden && isSchedActive(p, PS[id] || p.statuses[0]); };
+            // 谁能进今晚:家里有、没标不用、这一版方案没停它(顾问的 resting)、启用中(或被顾问点名启用)
             const byRole = (role, single) => {
-                const list = PD.filter(p => !p.hidden && !isExcluded(p) && p.role === role
-                    && isSchedActive(p, PS[p.id] || p.statuses[0])
+                const list = PD.filter(p => p.role === role && usableTonight(p)
                     && ((p.schedule && p.schedule.time) || ['pm']).includes('pm'));
                 return single ? list.slice(0, 1) : list;
             };
             const hint = p => p.pmHint || visNotes(p)[0] || '';
+            const gate = safetyGate();
             const steps = [], skips = [];
             if (shave) {
                 steps.push({ p: '凉水冲洗（刮胡后立即）', h: '降温止红' });
@@ -4751,7 +5014,9 @@
                 soothers.forEach(p => steps.push({ p: p.name, h: (hint(p) || '敷约5分钟后洗掉') + '（最近有泛红/不适才建议用）', t: 300 }));
                 if (hasScheduledAcid) {
                     const ap = pd(schedAcid.id); const aName = ap ? ap.name : schedAcid.label;
-                    steps.push({ p: aName, h: ((ap && hint(ap)) || '停留3–5分钟，无需冲洗') + zoneHintFor('acid') });
+                    steps.push({ p: aName, h: ((ap && hint(ap)) || '停留3–5分钟，无需冲洗') + zoneHintFor('acid') +
+                        (schedAcid.down ? '　（今晚降一档：只薄涂一层、停留时间减半，有刺痛马上洗掉）' : '') +
+                        (schedAcid.byAI ? '　（顾问今晚加的）' : '') });
                     // 【循证修正】"等 X 分钟让 pH 恢复"没有证据:皮肤自身 30 分钟内就把 pH4 配方缓冲上去 >0.5 单位
                     // (PubMed 40481330);Franz cell 研究显示等 30 分钟也消不掉后续保湿的干扰,真正起作用的是**顺序**。
                     // AAD 官方指南要求"去角质后立即保湿"。故取消等待步骤。
@@ -4764,13 +5029,13 @@
                     // 正在泛红/发炎、或最近一直闷闭口时,含精油·香精的精华和面油先不上。
                     // 它们不解决当下的问题,却是最常见的刺激源与致闭口源 ——
                     // 方案要「对现在这张脸起作用」,不是「把家里的东西都排上」(Cait 2026-08-26)。
-                    const gentleOK = p => !blockedNow(p);   // 与缺口判断共用同一个口径
+                    const gentleOK = p => !blockedNow(p) && !gateBlocks(p, gate);   // 与缺口判断共用同一个口径;HRT 波动期面油也停
                     byRole('serum').forEach(p => gentleOK(p)
                         ? (steps.push({ p: p.name, h: hint(p) || '全脸轻拍至吸收' }), faceCovered = true)
                         : skips.push(p.name + '（含精油/香精 —— 正在泛红或闷闭口时先停）'));
                     if (!shower) byRole('oil').forEach(p => gentleOK(p)
                         ? (steps.push({ p: p.name, h: hint(p) || '1–2滴，两颊和颈部，额头避开' }), faceCovered = true)
-                        : skips.push(p.name + '（面油会闷 —— 闭口/发炎期先停）'));
+                        : skips.push(p.name + '（' + (gateBlocks(p, gate) || '面油会闷 —— 闭口/发炎期先停') + '）'));
                 }
                 byRole('eye', true).forEach(p => steps.push({ p: p.name, h: hint(p) || '无名指轻拍眼眶骨' }));
                 // 手边没有舒缓面膜时,"镇静"这一档由谁顶,要按**能力**挑而不是按分类:
@@ -4800,6 +5065,30 @@
                 //    别让流程静悄悄少一档(2026-08-28:Toleriane 用完后就变成了「洗脸+眼霜+点涂」)。
                 if (!faceCovered) skips.push('⚠️ 洗完全脸没有能涂的东西了 —— 「保湿」这一档现在是空的，去「产品」页最下面看「要不要买新的」');
             }
+            // 今晚的小改(顾问 change_tonight)里**非活性**的那几条在这里落:跳过 / 换一支 / 临时加一支。
+            // 活性(酸/膜/视黄醇)已经在 computePlanRolling 的今天槽位里改过了。只对**今天**生效,模拟场景不受影响。
+            const ov = (slot && slot.date && slot.date === today()) ? tonightOverride() : null;
+            if (ov && !shave) {
+                const roleIdx = n => { const q = PD.find(x => x.name === n); return q ? ROLE_ORDER.indexOf(q.role) : -1; };
+                ov.ops.forEach(c => {
+                    const why = c.why ? '：' + c.why : '';
+                    if (c.op === 'skip') {
+                        const i = steps.findIndex(x => x.p === c.product);
+                        if (i >= 0) { steps.splice(i, 1); skips.push(c.product + '（顾问：今晚先跳过' + why + '）'); }
+                    } else if (c.op === 'swap') {
+                        const st = steps.find(x => x.p === c.product), np = PD.find(x => x.name === c.to);
+                        if (st && np && !gateBlocks(np, gate)) { st.p = np.name; st.h = (hint(np) || '') + '　（顾问今晚换的' + why + '）'; }
+                    } else if (c.op === 'add') {
+                        const np = PD.find(x => x.name === c.product);
+                        const t = np && np.schedule && np.schedule.type;
+                        if (!np || ['acid', 'mask', 'retinol'].includes(t) || steps.some(x => x.p === np.name) || gateBlocks(np, gate)) return;
+                        const ri = ROLE_ORDER.indexOf(np.role);
+                        let at = steps.findIndex(x => roleIdx(x.p) > ri);
+                        if (at < 0) at = steps.length;
+                        steps.splice(at, 0, { p: np.name, h: (hint(np) || '') + '　（顾问今晚加的' + why + '）' });
+                    }
+                });
+            }
             // 「快用完了」的小标记统一在出口贴:步骤的 hint 有十几个拼装点(酸类夜的封层、
             // 洁面、修护霜都各拼各的),逐点去补必定漏 —— 实测漏掉的正是保湿那一步。
             if (LOW.length) {
@@ -4811,8 +5100,7 @@
         function renderTn() {
             const { shower, manual } = TN;
             const shave = !!TN.shave && !!PROFILE.shaving;   // 同上：门控收口
-            updatePhase();
-            syncRegimen();          // 皮肤状况变了就自动出新一版方案(指纹没变就什么都不做)
+            syncRegimen();          // 皮肤状况变了就自动出新一版方案(指纹没变就什么都不做;顾问方案在位时不动它)
             renderRegimenCard();
             renderAssessment();
             renderSoleAlerts();
@@ -4906,6 +5194,7 @@
             const stH = steps.map((s, i) => getStepHtml(s, i, done, 'tn')).join('');
             const skH = skips.map(s => `<div class="tn-skip"><div class="tn-x">✕</div><div class="tn-sp">${s}</div></div>`).join('');
             pl.innerHTML = `<div class="tn-hdr"><div class="tn-hdr-t">${nightType}</div><div class="tn-hdr-s">${nightSub}</div></div>${stH}${skH}`;
+            renderCheckin();
 
             // 改为日期窗口。旧版 slice(0,N) 取的是"最近 N 条"，日志不连续时，
             // 几个月前的一条「爆痘」或「剂量调整」会一直挂在顶部横幅上，用户找不到原因。
@@ -4915,16 +5204,36 @@
             const bnr = document.getElementById('hrt-bnr');
             if (bnr) {
                 let html = '';
-                if (recentHrt && PROFILE.hrt) html += `<div class="alert warn" style="margin-bottom:.75rem"><div class="at">🩸 HRT 评估：激素处于波动/调整期</div>排班引擎已自动调低本周酸类频率，增强维稳修护。</div>`;
-                if (recentBO) {
-                    const sc = barrierScore(), cap = maxAcidPerWeek();
-                    const acted = sc !== null && sc < 65;
-                    html += `<div class="alert warn" style="margin-bottom:.75rem"><div class="at">⚡ 近7天出现爆痘</div>${
-                        acted ? `屏障分已降至 ${sc}，排班引擎已把去角质上限压到 ${cap} 次/7天${sc < 45 ? '，并暂停泥膜与视黄醇' : '，并暂停视黄醇'}。` 
-                              : `屏障分仍在 ${sc === null ? '—' : sc}（未触发降档）。如果爆痘还在扩散，可到「产品」页把酸类的每周上限手动调低。`}</div>`;
+                if (recentHrt && PROFILE.hrt) html += `<div class="alert warn" style="margin-bottom:.75rem"><div class="at">🩸 HRT 评估：激素处于波动/调整期</div>安全闸已把酸压到每周最多 1 次、面油先停，修护为主。</div>`;
+                // 爆痘的处理交给安全闸(近 3 天有痘 → 猛料不上、温和酸 ≤1 次/周),上面那条横幅已经说了;
+                // 这里只在「近 7 天有痘、但最近 3 天没再记」时提醒一句,别让人以为没人管
+                if (recentBO && !safetyGate().irritated) {
+                    html += `<div class="alert warn" style="margin-bottom:.75rem"><div class="at">⚡ 近 7 天出现过爆痘</div>最近 3 天没再记到。还在长的话记一下「有痘」，安全闸会马上把猛料停掉。</div>`;
                 }
                 bnr.innerHTML = html;
             }
+            if (typeof aiRenderTonight === 'function') { try { aiRenderTonight(); } catch (e) { console.warn('ai tonight', e); } }
+        }
+        // ══ 打卡:「今晚做完了」—— 一个明确的动作(状态胶囊是一下一下点的,不能每点一下就去问顾问)══
+        // 打卡只是在今天的记录上标 done;顾问那边会异步给一张反馈卡(ai.js)。没开通 / 连不上也照样能打卡。
+        function todayEntry() { return (lg(K.jrnl) || []).find(x => x.date === today()) || null; }
+        function renderCheckin() {
+            const box = document.getElementById('tn-checkin'); if (!box) return;
+            const e = todayEntry();
+            box.innerHTML = (e && e.done)
+                ? `<div class="tn-logged done" style="margin-top:.5rem">✓ 今晚打过卡了 <button class="rg-more" style="margin:0 0 0 8px" onclick="checkinTonight(true)">撤回</button></div>`
+                : `<button class="bsv" style="width:100%;margin-top:.75rem" onclick="checkinTonight()">今晚做完了 · 打卡</button>`;
+        }
+        function checkinTonight(undo) {
+            const t = today();
+            const e = lg(K.jrnl) || [];
+            let entry = e.find(x => x.date === t);
+            if (!entry) { entry = { date: t, status: [], products: [], note: '', phase: '' }; e.unshift(entry); }
+            if (undo) { delete entry.done; delete entry.doneAt; }
+            else { entry.done = true; entry.doneAt = new Date().toISOString(); }
+            ls(K.jrnl, e.slice(0, 365));
+            renderCheckin();
+            if (!undo && typeof aiAfterCheckin === 'function') aiAfterCheckin(t);
         }
 
         function renderAm() {
@@ -5132,7 +5441,11 @@
             const pdStr = JSON.stringify(PD.map(x => [x.id, !!x.hidden, x.schedule]));
             const jr = lg(K.jrnl) || [];
             const jrStr = JSON.stringify(jr.slice(0, 30).map(x => [x.date, x.products, x.status, x.phase]));
-            const ckey = today() + '|' + wkStr + '|' + jr.length + '|' + jrStr + '|' + pdStr + '|' + JSON.stringify(PS);
+            // 方案(顾问版本 / 离线阶梯档位)、今晚的小改、档案里影响排法的几项,也都会改变排班结果
+            const cr = currentRegimen();
+            const ckey = today() + '|' + wkStr + '|' + jr.length + '|' + jrStr + '|' + pdStr + '|' + JSON.stringify(PS) + '|' +
+                (cr ? (cr.id || cr.v) + ':' + (cr.source || '') : '-') + '|' + JSON.stringify(tonightOverride()) + '|' +
+                JSON.stringify([PROFILE.acidLevel, PROFILE.acidLevelAt, !!PROFILE.minimalMode, !!PROFILE.hrt, PROFILE.zones, PROFILE.excluded, PROFILE.acidTiming]);
             if (_planCache && _planCacheKey === ckey) return _planCache;
 
             const days = getRollingDays();
@@ -5156,9 +5469,9 @@
                             // id 为 null 时步骤名会退化成 journalTag,勾选状态就对不上号
                             const rp = PD.find(p => (p.journalTag || p.name) === tag);
                             const pid = rp ? rp.id : null, plabel = rp ? rp.name : tag;
-                            if (acidTags.includes(tag))    day.items.push({ id: pid, type: 'acid', label: plabel });
-                            if (retinolTags.includes(tag)) day.items.push({ id: pid, type: 'retinol', label: plabel });
-                            if (maskTags.includes(tag))    day.items.push({ id: pid, type: 'mask', label: plabel });
+                            if (acidTags.includes(tag))    day.items.push({ id: pid, type: 'acid', label: plabel, logged: true });
+                            if (retinolTags.includes(tag)) day.items.push({ id: pid, type: 'retinol', label: plabel, logged: true });
+                            if (maskTags.includes(tag))    day.items.push({ id: pid, type: 'mask', label: plabel, logged: true });
                         });
                     }
                     // Derive acid/clay/retinol props for rendering
@@ -5191,36 +5504,38 @@
                 return jrnlLastNDays(7).filter(x => (x.products || []).includes(tag)).map(x => x.date);
             };
 
-            let schedulable = PD.filter(p => !p.hidden && !isExcluded(p) && p.schedule && p.schedule.enableAutoSchedule &&
-                ['acid','mask','retinol'].includes(p.schedule.type) && isSchedActive(p, PS[p.id] || p.statuses[0]) &&
-                capOf(p) > 0);
-            // 屏障闸门：修护模式下不排任何去角质/视黄醇；谨慎模式下不排视黄醇。
+            // 谁有资格被自动排:家里有、没标不用、这一版方案没停它、状态启用(或被顾问点名启用)。
+            // 酸类:**频率由方案定**(顾问 / 离线阶梯),产品自己的「每周上限」不再决定总次数;设成 0 或关掉自动排班仍算「别排它」,
+            // 除非顾问方案点名要用它。面膜/视黄醇仍按各自的每周上限。
+            const rr = regimenRules(), gate = safetyGate();
+            const namedByRule = p => !!rr.acidName && String(rr.acidName).split(' / ').map(x => x.trim()).indexOf(p.name) >= 0;
+            let schedulable = PD.filter(p => !p.hidden && !isExcluded(p) && !restedNow(p) && p.schedule &&
+                ['acid','mask','retinol'].includes(p.schedule.type) &&
+                (isSchedActive(p, PS[p.id] || p.statuses[0]) || includedNow(p)) &&
+                ((p.schedule.enableAutoSchedule && capOf(p) > 0) || (rr.source === 'ai' && (namedByRule(p) || includedNow(p)))));
+            // 安全闸(唯一红线):在发炎 → 猛酸/磨砂/泥膜/视黄醇不上;HRT 波动期 → 猛酸/视黄醇不上;酸记到反应 → 酸停
+            schedulable = schedulable.filter(p => !gateBlocks(p, gate));
             if (!allowMask())    schedulable = schedulable.filter(p => p.schedule.type !== 'mask');
             if (!allowRetinol()) schedulable = schedulable.filter(p => p.schedule.type !== 'retinol');
-            // 皮肤状况闸门(2026-08-26):方案要对**现在这张脸**起作用 ——
-            // 屏障没稳(或干脆没数据)、近两周有炎症时,猛酸(甘醇酸/高浓度)不排;
-            // 有炎症或在闷闭口时,物理磨砂不排(AAD 把它列为加重痤疮的十大坏习惯之一)。
-            // 没有这一层,「所有产品都设成正常使用」的直接后果就是 Good Genes 被排到一张正在发炎的脸上。
-            const _bScore = barrierScore();
-            const _inflamed = jrnlLastNDays(14).some(e => (e.status || []).some(x => x === '泛红' || x === '敏感' || x === '爆痘'));
-            const _clogged  = jrnlLastNDays(14).some(e => (e.status || []).indexOf('闭口') >= 0);
-            if (_bScore === null || _bScore < 65 || _inflamed) schedulable = schedulable.filter(p => !hasTrait(p, 'strong-exfo'));
-            if (_inflamed || _clogged) schedulable = schedulable.filter(p => !hasTrait(p, 'scrub'));
-            const acids    = schedulable.filter(p => p.schedule.type === 'acid');
+            let acids      = schedulable.filter(p => p.schedule.type === 'acid');
             const masks    = schedulable.filter(p => p.schedule.type === 'mask');
             const retinols = schedulable.filter(p => p.schedule.type === 'retinol');
+            // 用哪支酸:顾问方案点了名就只用那支;离线兜底只轮换温和酸 —— 猛酸(甘醇酸这类)**从不自动排**,
+            // 要用只能由顾问方案点名(而且还得过安全闸)。
+            const named = acids.filter(namedByRule);
+            if (named.length) acids = named;
+            else acids = acids.filter(p => !hasTrait(p, 'strong-exfo') || (rr.source === 'ai' && includedNow(p)));
 
             // === Phase 1: Acids ===
             const acidSlotsLeft = Math.max(0, maxAcid - journalAcidCnt);
-            let acidSlots = [];
             let acidOrder = [...acids];
             if (la) {
                 const li = acidOrder.findIndex(a => (a.journalTag||a.name) === la);
                 if (li > 0) acidOrder = [...acidOrder.slice(li), ...acidOrder.slice(0, li)];
                 if (acidOrder.length > 1) acidOrder.push(acidOrder.shift());
             }
-            acidOrder.forEach(a => { for (let n = 0; n < capOf(a); n++) acidSlots.push(a); });
-            acidSlots = acidSlots.slice(0, acidSlotsLeft);
+            const acidSlots = [];
+            for (let n = 0; acidOrder.length && n < acidSlotsLeft; n++) acidSlots.push(acidOrder[n % acidOrder.length]);
 
             const assignedAcidDates = [];
             for (const prod of acidSlots) {
@@ -5329,6 +5644,42 @@
                 }
             });
 
+            // === Phase 3.5:今晚的小改(顾问 change_tonight,存在 sk_tnai1)落到**今天的槽位**上 ===
+            // 必须改在这里而不是只改步骤显示:极简模式跨天后靠 sk_planday1 推定「排上的都用了」——
+            // 顾问说今晚停酸,今天的槽位里就得真的没有酸,否则明天会把没用的酸记成用过(8/15 那类假数据)。
+            // 她已经勾过 / 记过的(logged)是事实,不动。
+            (function applyTonightOverride() {
+                const ov = tonightOverride(); if (!ov) return;
+                const ts = days.find(d => d.isToday); if (!ts) return;
+                const ACT = ['acid', 'mask', 'retinol'];
+                const nameOf = it => { const q = PD.find(x => x.id === it.id); return q ? q.name : it.label; };
+                ov.ops.forEach(c => {
+                    if (c.op === 'acid') {
+                        const ai = ts.items.find(it => it.type === 'acid' && !it.logged); if (!ai) return;
+                        if (c.level === 'stop') { ts.items = ts.items.filter(it => it !== ai); return; }
+                        // down:今晚换一支更温和的;家里没有更温和的就照旧(步骤里会提示薄涂、缩短停留)
+                        const cur = PD.find(x => x.id === ai.id);
+                        if (cur && hasTrait(cur, 'strong-exfo')) {
+                            const mild = acids.concat(PD.filter(x => x.role === 'acid' && usableTonight(x)))
+                                .find(x => x.id !== cur.id && hasTrait(x, 'gentle-exfo') && !gateBlocks(x, gate));
+                            if (mild) { ai.id = mild.id; ai.label = mild.name; ai.down = true; } else ai.down = true;
+                        } else ai.down = true;
+                    } else if (c.op === 'skip') {
+                        ts.items = ts.items.filter(it => it.logged || !ACT.includes(it.type) || nameOf(it) !== c.product);
+                    } else if (c.op === 'swap') {
+                        const it = ts.items.find(x => !x.logged && ACT.includes(x.type) && nameOf(x) === c.product);
+                        const np = PD.find(x => x.name === c.to);
+                        if (it && np && !gateBlocks(np, gate)) { it.id = np.id; it.label = np.name; it.type = (np.schedule && ACT.includes(np.schedule.type)) ? np.schedule.type : it.type; }
+                    } else if (c.op === 'add') {
+                        const np = PD.find(x => x.name === c.product);
+                        const t = np && np.schedule && np.schedule.type;
+                        if (!np || !ACT.includes(t) || gateBlocks(np, gate) || ts.items.some(x => x.type === t)) return;
+                        if (t === 'acid' && (maxAcid === 0 || ts.shave || journalAcidCnt >= gate.acidCapMax)) return;   // 安全闸压到 0 / 已到闸门上限 / 刮胡夜:不加酸
+                        ts.items.push({ id: np.id, type: t, label: np.name, byAI: true });
+                    }
+                });
+            })();
+
             // === Phase 4: Conflicts + shave support (future only) ===
             // 冲突规则必须与 Phase 1–3 的放置约束同源。旧版这里是无条件硬编码，
             // 于是用户一旦关掉某产品的"避开刮胡日"，Phase 1 放行、Phase 4 立刻删掉并报一条永远消不掉的冲突，
@@ -5427,7 +5778,7 @@
             document.getElementById('wk-sum').innerHTML = `
     <div class="wr"><span class="wrl">今后7天 · 洗澡</span><span class="wrv">${futurePlan.filter(p => p.shower).length} 天</span></div>
     ${PROFILE.shaving ? `<div class="wr"><span class="wrl">今后7天 · 刮胡</span><span class="wrv">${futurePlan.filter(p => p.shave).length} 天</span></div>` : ''}
-    <div class="wr"><span class="wrl">酸类上限</span><span class="wrv ${maxAcid < 2 ? 'warn' : ''}">${maxAcid} 次/周（屏障评分动态）</span></div>
+    <div class="wr"><span class="wrl">酸类上限</span><span class="wrv">${maxAcid} 次/周（${regimenRules().source === 'ai' ? '顾问方案' : '离线阶梯'}${safetyGate().acidCapMax < 7 ? ' · 安全闸压过' : ''}）</span></div>
     <div class="wr"><span class="wrl">去角质酸类</span><span class="wrv ${acidOk ? 'ok' : 'bad'}">${journalAcidCnt > 0 ? `已用${journalAcidCnt}次+计划${planAcidD}次，共${totalAcid}次` : `计划${planAcidD}次`}（上限${maxAcid}次）</span></div>
     ${(() => {
         const maskProd = PD.find(p => !p.hidden && p.schedule && p.schedule.type === 'mask' && isSchedActive(p, PS[p.id] || p.statuses[0]));
@@ -5437,7 +5788,8 @@
         if (!clayPlan) {
             const sc = barrierScore();
             const usedMask = jrnlLastNDays(7).filter(x => (x.products || []).includes(maskProd.journalTag || maskProd.name)).length;
-            if (sc !== null && sc < 45) maskWhy = `屏障分 ${sc}，修护模式已暂停`;
+            const gb = gateBlocks(maskProd);
+            if (gb) maskWhy = gb;
             else if (usedMask > 0) maskWhy = `近7天已用 ${usedMask} 次`;
             else if ((maskProd.schedule.maxPerWeek ?? 1) === 0) maskWhy = '每周上限设为 0';
         }
@@ -5452,7 +5804,8 @@
         let retWhy = '';
         if (!hasRet) {
             const sc = barrierScore();
-            if (sc !== null && sc < 65) retWhy = `（屏障分 ${sc}，已暂停）`;
+            if (gateBlocks(retProd)) retWhy = `（${gateBlocks(retProd)}）`;
+            else if (!allowRetinol() && regimenRules().source !== 'ai' && acidLadder().level < 2) retWhy = '（离线阶梯还在 1 档：先把温和酸练出耐受）';
             else if (maxAcid > 0 && exfoliantCountInLastNDays(7) > maxAcid) retWhy = `（近7天去角质 ${exfoliantCountInLastNDays(7)} 次已超上限，本周不叠加）`;
             else if (!retProd.schedule || !retProd.schedule.enableAutoSchedule) retWhy = '（未开启自动排班）';
             else if ((retProd.schedule.maxPerWeek ?? 1) === 0) retWhy = '（每周上限设为 0）';
@@ -5469,7 +5822,7 @@
             if (jal) {
                 const sc = barrierScore(), cap = maxAcidPerWeek();
                 jal.innerHTML = rBO ? `<div class="alert warn" style="margin-bottom:1rem"><div class="at">⚡ 日志提示：近7天出现爆痘</div>${
-                    (sc !== null && sc < 65) ? `屏障分 ${sc}，去角质上限已自动降到 ${cap} 次/7天。` : `屏障分 ${sc === null ? '—' : sc}，尚未触发自动降档。`}</div>` : '';
+                    safetyGate().irritated ? `安全闸已把去角质压到 ${cap} 次/7天，猛料不上。` : `最近 3 天没再记到，按方案 ${cap} 次/7天走；还在长就记一下「有痘」。`}</div>` : '';
             }
 
             // ── Day plan grid (all 15 days) ──
@@ -5702,8 +6055,11 @@
             const phase = (document.getElementById('hrt-ph').value || '').trim();
             const di = document.getElementById('jrnl-date');
             const t = di && di.value ? di.value : today();
+            const prevE = (lg(K.jrnl) || []).find(x => x.date === t) || {};
             const e = (lg(K.jrnl) || []).filter(x => x.date !== t);
-            e.unshift({ date: t, status: [...selS], products: [...selP], note, phase });
+            const rec = { date: t, status: [...selS], products: [...selP], note, phase };
+            if (prevE.done) { rec.done = true; rec.doneAt = prevE.doneAt; }   // 打过卡的标记别被表单覆盖掉
+            e.unshift(rec);
             e.sort((a,b) => b.date.localeCompare(a.date));
             ls(K.jrnl, e.slice(0, 365));
 
@@ -5834,27 +6190,28 @@
             reader.readAsText(file);
         }
 
-        // ══ Countdown ═══════════════════════════════════════════════
-        function saveCd() { ls(K.cd, document.getElementById('cd-start').value); updateCd(); }
+        // ══ 刷酸节奏卡(原「酸类解禁倒计时」)══════════════════════════════
+        // 倒计时那套(「屏障稳定 4 周后再评估」)已经被方案 + 离线阶梯取代;这张卡改成看「现在每周几次、为什么、离下一档还差什么」。
+        // sk_cd1 保留不删(还在 CLOUD_KEYS 里,删了反而要动同步),只是不再读。
+        function saveCd() { updateCd(); }
         function updateCd() {
-            const saved = lg(K.cd) || '', inp = document.getElementById('cd-start'); if (!inp) return;
-            if (saved && !inp.value) inp.value = saved;
-            const sv = inp.value || saved;
-            const badge = document.getElementById('cd-badge'), bar = document.getElementById('cd-bar'), left = document.getElementById('cd-left'), pct = document.getElementById('cd-pct');
+            const badge = document.getElementById('cd-badge'), bar = document.getElementById('cd-bar'),
+                  left = document.getElementById('cd-left'), pct = document.getElementById('cd-pct'), evb = document.getElementById('cd-events');
             if (!badge) return;
-            if (!sv) { badge.textContent = '未设置'; bar.style.width = '0%'; left.textContent = '请设置开始修护日期'; pct.textContent = '0%'; return; }
-            // 日期可以被填成未来（输入框没有 max），旧版会算出负进度并把 width 设成 '-104%'（被浏览器丢弃，进度条卡住）
-            const elapsed = Math.round((new Date(today() + 'T12:00:00') - new Date(sv + 'T12:00:00')) / 86400000);
-            const rem = Math.max(0, 28 - elapsed), prog = Math.max(0, Math.min(100, Math.round(elapsed / 28 * 100)));
-            bar.style.width = prog + '%'; pct.textContent = prog + '%';
-            if (elapsed < 0) { badge.textContent = '尚未开始'; badge.className = 'cdb'; left.textContent = `修护起始日设在 ${Math.abs(elapsed)} 天后`; }
-            else if (elapsed >= 28) {
-                // 取当前账号里"暂缓中的强效酸",没有就说通用的(旧版写死 Good Genes,别人根本没这瓶)
-                const strong = PD.find(p => !p.hidden && p.role === 'acid' && (PS[p.id] || p.statuses[0]) === 'paused');
-                badge.textContent = '✓ 可评估'; badge.className = 'cdb done';
-                left.textContent = strong ? `已满4周，可评估引入 ${strong.name}` : '已满4周，可评估提高酸类频率';
+            const rr = regimenRules(), cap = maxAcidPerWeek(), L = acidLadder(), g = safetyGate();
+            badge.textContent = cap + ' 次/周';
+            badge.className = 'cdb' + (cap >= 2 ? ' done' : '');
+            if (rr.source === 'ai') {
+                bar.style.width = Math.min(100, cap / 3 * 100) + '%';
+                left.textContent = '按顾问方案' + (cap < (+rr.acidCap || 0) ? `（方案 ${rr.acidCap} 次，安全闸压到 ${cap}）` : '');
+                pct.textContent = '';
+            } else {
+                bar.style.width = (L.level >= LADDER_MAX ? 100 : Math.round(((L.level - 1) + L.streak / LADDER_STEP_N) / (LADDER_MAX - 1) * 100)) + '%';
+                left.textContent = L.why + (g.acidCapMax < L.level ? '；' + g.notes[0] : '');
+                pct.textContent = '第 ' + L.level + ' / ' + LADDER_MAX + ' 档';
             }
-            else { badge.textContent = '还剩' + rem + '天'; badge.className = 'cdb'; left.textContent = '已过' + elapsed + '天 / 共28天'; }
+            const KIND = { clean: '✓ 干净', up: '↑ 升档', react: '✕ 有刺激', unknown: '? 没记状态', pending: '… 还在观察', nolog: '· 推定用了', gap: '↓ 隔太久' };
+            if (evb) evb.innerHTML = rr.source === 'ai' ? '' : L.events.slice(-6).reverse().map(e => `${esc(e.date.slice(5))} 刷酸 ${KIND[e.kind] || e.kind}`).join('<br>');
         }
 
         // ══ Stats ════════════════════════════════════════════════════
@@ -5946,20 +6303,20 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
             if (bd) {
                 if (score === null) { bd.innerHTML = '<div style="font-size:12px;color:var(--tx3);padding:8px">暂无日志数据，开始记录后自动计算</div>'; }
                 else {
-                    const entries7 = jrnlLastNDays(7);
+                    // 口径同 axisScore('barrier'):每天 100 减当天的屏障伤害(最重的全额、其余减半,记了好转少扣 10),
+                    // 再按记录天数向 80 收敛。出油/闭口不扣屏障(它们只扣「控油」「清透」)。
+                    const entries7 = jrnlLastNDays(7).filter(e => (e.status || []).length);
                     const nDays = entries7.length;
-                    let sum = 0, details = [];
-                    Object.entries(BARRIER_W).forEach(([tag, w]) => {
-                        const cnt = entries7.filter(x => (x.status||[]).includes(tag)).length;
-                        if (cnt > 0) { sum += cnt * w; details.push(`<span style="color:${w>0?'var(--gr)':'var(--rd)'}">${tag} ×${cnt} = ${cnt*w>0?'+':''}${cnt*w}</span>`); }
+                    const rows = entries7.map(e => {
+                        const hit = (e.status || []).filter(t => ((AX_PENALTY[t] || {}).barrier || 0) > 0);
+                        return `<div style="font-family:var(--mono);font-size:11px;color:var(--tx2)">${e.date.slice(5)} · ${hit.length ? hit.map(t => `<span style="color:var(--rd)">${t} −${AX_PENALTY[t].barrier}</span>`).join(' ') : '<span style="color:var(--gr)">没有屏障伤害</span>'} → ${dayAxisScore('barrier', e)}</div>`;
                     });
-                    const avg = nDays ? sum / nDays : 0;
-                    const conf = Math.min(1, nDays / BARRIER_FULL_N);
-                    let breakdown = `<div style="font-size:11px;color:var(--tx2);margin-bottom:4px">近 7 个自然日内有 <b>${nDays}</b> 天记录（无记录的日子不参与平均）：</div>`;
-                    breakdown += details.length ? details.join(' · ') : '<span style="color:var(--tx3)">无状态标记</span>';
-                    breakdown += `<div style="margin-top:4px;font-family:var(--mono);font-size:11px;color:var(--tx2)">权重合计 ${sum} ÷ ${nDays} 天 = 日均 ${avg.toFixed(1)}</div>`;
-                    breakdown += `<div style="font-family:var(--mono);font-size:11px;color:var(--tx2)">置信度 min(1, ${nDays}/${BARRIER_FULL_N}) = ${conf.toFixed(2)}${conf < 1 ? '（数据不足，向 60 收敛）' : ''}</div>`;
-                    breakdown += `<div style="margin-top:4px;font-weight:500">最终 = clamp(0, 60 + ${avg.toFixed(1)} × ${BARRIER_GAIN} × ${conf.toFixed(2)}, 100) = <span style="color:${score>=65?'var(--gr)':score>=45?'var(--am)':'var(--rd)'}">${score}</span></div>`;
+                    const raw = nDays ? entries7.reduce((x, e) => x + dayAxisScore('barrier', e), 0) / nDays : 0;
+                    const conf = Math.min(1, nDays / SCORE_FULL_N);
+                    let breakdown = `<div style="font-size:11px;color:var(--tx2);margin-bottom:4px">近 7 天有 <b>${nDays}</b> 天记了状态。屏障只看泛红/敏感/干燥/变差，出油、闭口不算屏障问题：</div>`;
+                    breakdown += rows.join('');
+                    breakdown += `<div style="margin-top:4px;font-family:var(--mono);font-size:11px;color:var(--tx2)">平均 ${raw.toFixed(1)}${conf < 1 ? `，只记了 ${nDays} 天 → 向 ${SCORE_PRIOR} 收敛（置信度 ${conf.toFixed(2)}）` : ''}</div>`;
+                    breakdown += `<div style="margin-top:4px;font-weight:500">屏障分 = <span style="color:${score>=65?'var(--gr)':score>=45?'var(--am)':'var(--rd)'}">${score}</span>　<span style="font-weight:400;color:var(--tx3)">（只描述状态；刷酸频率由方案和安全闸决定）</span></div>`;
                     bd.innerHTML = breakdown;
                 }
             }
@@ -5972,12 +6329,16 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
                 // 泛红/爆痘天数就在上面几行算好了却没用，把判断推回给用户，等于没做分析。
                 let msgs = [];
                 const irritated = bo + r14.filter(x => (x.status || []).includes('泛红')).length;
+                const gg = safetyGate();
+                if (gg.notes.length) msgs.push(`🛡 <b>安全闸在拦</b>：${esc(gg.notes.join('；'))}。`);
                 if (score !== null) {
-                    if (score < 45) msgs.push(`⚠️ <b>屏障受损</b>：屏障分 ${score}，已自动停排酸类、泥膜与视黄醇。今晚起走极简：清洁 → 面霜 → B5 点涂。`);
-                    else if (score < 65) msgs.push(`⚠️ <b>需要注意</b>：屏障分 ${score}，酸类上限已降至 1 次/7天，视黄醇暂停。`);
-                    else if (score >= 85) msgs.push(`✅ <b>屏障优秀</b>：屏障分 ${score}，当前频率可以维持。`);
-                    else msgs.push(`💡 <b>状态良好</b>：屏障分 ${score}，处于正常区间，留意微小波动。`);
+                    if (score < 45) msgs.push(`⚠️ <b>屏障受损</b>：屏障分 ${score}（最近反复记泛红/敏感/干燥）。修护为主，洗完全脸要有东西护着。`);
+                    else if (score < 65) msgs.push(`⚠️ <b>需要注意</b>：屏障分 ${score}，有一些泛红/敏感/干燥的记录，留意别叠猛料。`);
+                    else if (score >= 85) msgs.push(`✅ <b>屏障没问题</b>：屏障分 ${score}，没有损伤信号。`);
+                    else msgs.push(`💡 <b>状态良好</b>：屏障分 ${score}，偶有小波动。`);
                 }
+                const rr0 = regimenRules();
+                msgs.push(`🧪 <b>刷酸节奏</b>：现在每周 ${maxAcidPerWeek()} 次 · ${rr0.source === 'ai' ? '按顾问方案' : esc(rr0.ladder.why)}`);
                 // 用酸过频只在"确实伴随刺激反应"时给强建议，否则只作为提示
                 if (acids > 8 && irritated > 0) msgs.push(`⚠️ <b>用酸过频且已有反应</b>：过去4周 ${acids} 次去角质，同期 ${irritated} 天出现泛红/爆痘。建议立刻拉长间隔至少到 3 天。`);
                 else if (acids > 8) msgs.push(`ℹ️ <b>去角质偏密</b>：过去4周 ${acids} 次（>8）。目前未见泛红/爆痘，暂不必减，但值得盯着。`);
@@ -6167,6 +6528,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
             if (id === 'wkly') renderWk();
             if (id === 'prods') renderProds();
             if (id === 'tonight') renderTn();
+            if (id === 'coach' && typeof renderCoach === 'function') renderCoach();
             if (id === 'am') renderAm();
         }
 
@@ -6259,7 +6621,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
         setInterval(checkDayRollover, 60000);
 
         // ══ Firebase 云同步 ═══════════════════════════════════
-        const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_amsteps1','sk_proddefs1','sk_profile1','sk_preset1','sk_planday1','sk_mig1','sk_empty1','sk_gone1','sk_low1','sk_regimen1'];
+        const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_amsteps1','sk_proddefs1','sk_profile1','sk_preset1','sk_planday1','sk_mig1','sk_empty1','sk_gone1','sk_low1','sk_regimen1','sk_tnai1','sk_ai1'];
         let _db = null, _user = null, _pushTimer = null, _pushing = false, _pushDirty = false;
         // 递归按键名排序的序列化——只用于云/本地数据的等价比较
         function _stableStr(v) {
@@ -6317,6 +6679,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
         // 换账号时清掉上一个人的本地数据（localStorage 云键 + 排班模版 + 照片），防止两人串号
         function clearLocalUserData() {
             CLOUD_KEYS.forEach(k => localStorage.removeItem(k));
+            if (typeof aiClearLocal === 'function') aiClearLocal();   // 顾问的本机缓存(对话 / 今日的话 / 开通状态)也是上一个人的
             localStorage.removeItem(K.preset);
             localStorage.removeItem('sk_lastpush');   // 推送时间戳属于上一个账号，留着会让新账号的云端被误判"不比本机新"
             clearAllPhotos();
@@ -6329,6 +6692,7 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
         }
         async function handleAuthChange(user) {
             _user = user; renderAuthBtn();
+            if (typeof aiOnAuth === 'function') { try { aiOnAuth(user); } catch (e) { console.warn('ai auth', e); } }
             if (user) {
                 const prevUid = localStorage.getItem(UIDK);
                 if (prevUid && prevUid !== user.uid) {
@@ -6570,6 +6934,8 @@ ${hrts.length ? `🌡 HRT阶段：${hrts.join(' -> ')}\n` : ''}
             });
         }
     </script>
+    <!-- AI 顾问:单独一个文件(index.html 只留挂载点和钩子)。它挂了 / 没缓存上,离线规则照常跑 -->
+    <script src="ai.js"></script>
 
 </body>
 
