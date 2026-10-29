@@ -54,8 +54,9 @@
 
 /* ⑤ 走势 */
 .trend-rows{margin-top:var(--sp-2)}
-.trend-rows li{display:grid;grid-template-columns:6em 3.5em 1.5em 3.5em auto;align-items:baseline;column-gap:var(--sp-2);min-height:32px}
-.trend-arr{color:var(--faint);font:14px/22px var(--serif)}
+.trend-rows li{display:grid;grid-template-columns:minmax(0,1fr) auto 1.5em auto auto;align-items:baseline;column-gap:var(--sp-2);min-height:32px}
+.trend-rows .note{white-space:nowrap}
+.trend-arr{color:var(--faint);font:14px/22px var(--serif);align-self:center;display:inline-flex}
 
 /* ⑦⑧ 照片分析 / 历史 */
 .pa-rows,.rows.hist{margin-top:var(--sp-2)}
@@ -98,9 +99,13 @@
 .sheet .fm-mk{background:var(--sheet)}
 .fm-mk.on{background:var(--ink);color:var(--paper);box-shadow:none}
 .sheet .fm-mk.on{background:var(--ink);color:var(--sheet)}
+:root[data-theme="dark"] .fm-mk.on,:root[data-theme="dark"] .sheet .fm-mk.on{background:var(--tint);color:var(--ink-strong);box-shadow:inset 0 0 0 1.5px var(--ink-strong)}
 .fm-mk.heat.on,.sheet .fm-mk.heat.on{background:var(--paper);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
 .fm-mk.hint{box-shadow:inset 0 0 0 1.5px var(--rev)}
 .fm-b[aria-pressed="true"] .fm-mk{outline:2px solid var(--ink);outline-offset:2px}
 .fz-hair{left:50%;top:11%} .fz-fore{left:50%;top:23.5%} .fz-glab{left:50%;top:35.5%} .fz-nose{left:50%;top:48.5%}
 .fz-cheekR{left:28.125%;top:53%} .fz-cheekL{left:71.875%;top:53%} .fz-phil{left:50%;top:62.5%} .fz-peri{left:50%;top:75%}
 .fz-chin{left:50%;top:87.5%} .fz-jawR{left:25.625%;top:76.5%} .fz-jawL{left:74.375%;top:76.5%}
+
+/* 深色:日志照片和顾问看过的照片压暗一点(§3.7);拍摄中的实时取景不压 */
+:root[data-theme="dark"] :is(.rec-thumb,.sk-thumb,.pa-thumb,.adv-pending img,.cap-img){filter:brightness(.86) contrast(.96)}

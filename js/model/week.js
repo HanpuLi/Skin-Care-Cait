@@ -74,7 +74,7 @@ export function initTN(store, today) {
         const s = getDayState(store, today);
         tn = { shower: s.shower, shave: s.shave, date: today, manual: false };
         store.ls(K.tn, tn, 'system');
-        store.ls(K.tnsteps, { date: today, done: [] }, 'system');
+        store.ls(K.tnsteps, { date: today, done: [], skipped: [] }, 'system');
     }
     return tn;
 }

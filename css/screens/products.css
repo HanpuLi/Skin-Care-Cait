@@ -44,8 +44,8 @@
 .prod-main{display:flex;flex-direction:column;min-width:0}
 .prod-name{font:18px/var(--lh-item) var(--serif);color:var(--ink);overflow-wrap:anywhere}
 .prod-sub{display:flex;justify-content:space-between;align-items:baseline;gap:var(--sp-2)}
-.prod-state{display:inline-flex;align-items:center;font:14px/22px var(--serif);color:var(--muted);min-width:0}
-.prod-state .dot{margin-right:6px}
+.prod-state{display:inline-flex;align-items:flex-start;font:14px/22px var(--serif);color:var(--muted);min-width:0}
+.prod-state .dot{margin-right:6px;margin-top:8px;flex:none}   /* 折行时跟着第一行:(22 − 6) / 2 */
 .prod:active{background:var(--tint)}
 #pr-dropped .row-main .note,#pr-empties .row-main .meta{display:block}
 

@@ -72,4 +72,8 @@ export function autoMatchProfile(store, uid, user) {
 export function setMedical(store, state, extra, today) {
     return updateProfile(store, p => { p.medical = Object.assign({ state, at: today }, state === 'seen' ? { seenAt: today } : {}, extra || {}); });
 }
+// 撤销「看过了」:放回改之前那一份(没有就删掉 medical 字段)
+export function restoreMedical(store, prev) {
+    return updateProfile(store, p => { if (prev && typeof prev === 'object') p.medical = JSON.parse(JSON.stringify(prev)); else delete p.medical; });
+}
 export function userZones(profile) { return ((profile && profile.zones) || []).filter(z => z && z.name); }

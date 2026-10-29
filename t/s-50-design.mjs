@@ -54,6 +54,24 @@ export default async function ({ origin, S, open }) {
             if (p.errors.length) S.ok(false, `${who}/${scheme}:页面报错`, p.errors);
         }
     }
+    // ── 窄屏:375 / 320 宽(上面整轮只量 390):未来 7 晚、设置里的星期芯片命中区 ≥44,没有横向滚动;走势行不被挤成一字一行 ──
+    if (PART !== 'states') for (const width of [375, 320]) {
+        const p = await open({ width });
+        await p.nav(origin + '/index.html', 200);
+        await p.eval(`return __seed.full({profile:{showJournal:true},status:i=>i>=-9?['闭口']:['出油']})`);
+        await p.reload(900);
+        await p.eval(PROBE + ';return 1');
+        for (const [tab, act, name] of [['advisor', ''], ['tonight', `document.getElementById('btn-settings').click()`, '设置'], ['record', '']]) {
+            const tag = `full/light/${width}/${tab}${name ? ' + ' + name : ''}`;
+            const r = await p.eval(`${CLEAR}${TAB(tab)}try{${act ? act + ';' + W8(250) : ''}}catch(e){return {miss:String(e.message)}}const o=__probe();o.hscroll=document.documentElement.scrollWidth>innerWidth+1;
+                o.trendH=Math.max(0,...[...document.querySelectorAll('#rec-trend .trend-rows li')].map(li=>li.getBoundingClientRect().height));return o`);
+            if (r.miss) { S.ok(false, `${tag}:打不开这一屏`, r.miss); continue; }
+            S.ok(!r.smallN, `${tag}:可点的都 ≥44×44`, r.small);
+            S.ok(!r.hscroll, `${tag}:没有横向滚动`);
+            if (tab === 'record') S.ok(r.trendH <= 40, `${tag}:走势一行不折成一字一行`, r.trendH);
+        }
+        if (p.errors.length) S.ok(false, `窄屏 ${width}:页面报错`, p.errors);
+    }
     // ── 特殊状态:没登录就能到的 ──
     const STATES = [
         ['minimal', '就医红线', `minimal({status:i=>i>=-6?['泛红']:[]})`, TAB('tonight')],

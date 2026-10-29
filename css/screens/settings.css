@@ -12,6 +12,8 @@
 .set-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:var(--sp-1)}
 .set-days+.set-days{margin-top:var(--sp-2)}
 .set-days .chip{min-width:0;padding:0;font-size:14px}
+/* 320 宽:同「未来 7 晚」,顶到 sheet 边、间距 1px,每格 ≥44px */
+@media(max-width:360px){.set-days{margin-left:calc(-1 * var(--gutter));margin-right:calc(-1 * var(--gutter));gap:1px}}
 #settings-sheet .sheet-sec>.note{margin-top:var(--sp-2)}
 #settings-sheet .sheet-sec>.btn-row{margin-top:var(--sp-1)}
 .set-adv{margin-top:var(--sp-3)}

@@ -88,6 +88,7 @@ export function createSync(env) {
     // ── 状态显示:不弹吐司;离线 / 暂停时头部挂一个安静的小标,设置里显示上次同步时间 ──
     function syncLineText() {
         if (S.storageBlocked) return '这台设备存不进去了：先导出备份、腾点空间。';
+        if (!st.user && st.sdkMissing && S.owner) return '离线 · 登录服务没加载出来，改动先存在这台设备上，连上会接着传。';
         if (!st.user) return '没登录：数据只在这台设备上。';
         if (st.conflict) return '同步先停着：这台设备和云端都改过，等你选一份。改动照样存在这台设备上。';
         const lp = S.doc.pushedAt || +(store.getLocal(LOCAL_KEYS.lastPush) || 0) || 0;
@@ -98,7 +99,7 @@ export function createSync(env) {
         state = state || 'ok';
         if (state !== 'syncing') st.syncState = state;
         const paused = !!st.conflict;
-        const offline = !!(env.navigator && env.navigator.onLine === false && st.user);
+        const offline = !!(env.navigator && env.navigator.onLine === false && st.user) || !!(st.sdkMissing && S.owner && !st.user);   // 登录服务没加载出来(离线首开):照样挂离线小标
         if (ui.status) ui.status({ msg, state, paused, badge: paused || st.syncState === 'err' || offline,
             badgeText: paused ? '同步暂停 · 去设置里选' : '离线 · 改动先存在本机', line: syncLineText() });
     }
@@ -300,7 +301,7 @@ export function createSync(env) {
             : '这台设备有还没传上去的改动，云端同时也被别的设备改过。';
         ui.openSheet({ id: 'sync-conflict', title: '两边的记录对不上', noClose: true, stack: true,
             text: head + '不会自动合并，选一份接着用。\n\n这台设备：' + syncSummary(S.doc.data) + '\n云端：' + syncSummary(c.cloud)
-                + '\n\n两份都已另存，选哪份，另一份都还在「设置 → 数据 → 恢复副本」里。',
+                + '\n\n两份都已另存，选哪份，另一份都还在「设置 › 数据 › 恢复副本」里。',
             actions: [
                 { label: '用这台设备的', fn: () => resolveSyncConflict('local', c.uid, c.session) },
                 { label: '用云端的', fn: () => resolveSyncConflict('cloud', c.uid, c.session) },
@@ -353,16 +354,21 @@ export function createSync(env) {
         const body = c.data ? JSON.stringify(Object.assign({ _meta: { version: 3, exported: c.savedAt, app: '护肤计划', recovery: c.reason } }, c.data), null, 2) : String(c.raw || '');
         if (ui.download) ui.download('skincare_recovery_' + String(c.savedAt).slice(0, 19).replace(/[:T]/g, '-') + '.json', body);
     }
+    // 「换成这一份」(恢复副本 / 导入备份共用):先另存恢复副本,存不上就不换;整份一次提交(不会只换进一半);重画;推送。返回 true = 换好了
+    function replaceWithData(data, reason) {
+        try {
+            store.backup(S.owner, S.doc.data, reason || 'before-restore');
+            store.commit(Object.assign({}, S.doc, { data: cloudSyncData(data), rev: S.doc.rev + 1 }), CLOUD_KEYS);
+        } catch (e) { storageErr(); return false; }
+        hook('reloadFromStore'); hook('renderAll');
+        schedulePush();
+        return true;
+    }
     function restoreSyncCopy(i) {
         const c = st.recoveryList[i]; if (!c || !c.data) return;
         ui.sysConfirm('换成这份记录？现在的记录会先另存一份副本，换完会照常同步。', () => {
-            try {
-                store.backup(S.owner, S.doc.data, 'before-restore');
-                store.commit(Object.assign({}, S.doc, { data: cloudSyncData(c.data), rev: S.doc.rev + 1 }), CLOUD_KEYS);
-            } catch (e) { storageErr(); return; }
+            if (!replaceWithData(c.data, 'before-restore')) return;
             ui.closeSheet('sync-recovery');
-            hook('reloadFromStore'); hook('renderAll');
-            schedulePush();
             ui.toast('换好了');
         }, { title: '换成这份', ok: '换成这份' });
     }
@@ -454,9 +460,10 @@ export function createSync(env) {
     return {
         state: st, get doc() { return S.doc; },
         setDb(db) { st.db = db; },
+        setSdkMissing(v) { st.sdkMissing = !!v; },
         isOwner(user) { return isOwnerEmail(user && user.email); },
         handleAuthChange, onCloudSnapshot, schedulePush, pushToCloud, flushPendingPush, onOnline,
-        showSyncConflict, resolveSyncConflict, showSyncRecovery, restoreSyncCopy, downloadSyncCopy, syncRecoveryCopies,
+        showSyncConflict, resolveSyncConflict, showSyncRecovery, restoreSyncCopy, replaceWithData, downloadSyncCopy, syncRecoveryCopies,
         backupSyncData: (uid, data, reason) => store.backup(uid, data, reason),
         legacySyncDecision, syncLineText, showSyncStatus, hasPendingSync: hasPending, applyCloudThenRender
     };
@@ -487,10 +494,24 @@ export function startWithLock(env, boot) {
         ov.querySelector('.sheet-b').textContent = text;
         ov.querySelector('.sheet-actions').hidden = !retry;
     }
+    // boot() 的异常不能穿进锁回调:那样锁会被放掉、提示错写成「浏览器没给这一页加上保护」、重试按钮也点不动(v1 是另起 <script> 跑 App,天然隔离)
+    function bootFailed(e) {
+        let ov = doc.getElementById('boot-fail');
+        if (!ov) {
+            ov = doc.createElement('div'); ov.id = 'boot-fail'; ov.className = 'sheet-ov'; ov.dataset.noesc = '1';
+            ov.innerHTML = '<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="boot-fail-t"><div class="sheet-h"><h2 class="sheet-t" id="boot-fail-t">启动时出错了</h2></div>'
+                + '<div class="sheet-b text"><p class="lede">记录都在这台设备上，一个字没动。重新加载一次通常就好。</p><p class="note" id="boot-fail-msg"></p></div>'
+                + '<div class="sheet-actions"><button class="btn btn-primary" type="button">重新加载</button></div></div>';
+            (doc.getElementById('sheet-root') || doc.body).appendChild(ov);
+            ov.querySelector('button').onclick = () => { try { win.location.reload(); } catch (x) { } };
+        }
+        const m = ov.querySelector('#boot-fail-msg'); if (m) m.textContent = (e && e.message) ? String(e.message).slice(0, 200) : '';
+        try { console.error(e); } catch (x) { }
+    }
     function run() {
         started = true;
         const ov = doc.getElementById('app-lock'); if (ov) ov.remove();
-        boot();
+        try { boot(); } catch (e) { bootFailed(e); }   // 锁照样拿着(下面返回一个永不结束的 Promise)
     }
     function start() {
         if (started || pending) return;
@@ -513,6 +534,8 @@ export function startWithLock(env, boot) {
             notice('暂时打不开', '浏览器没给这一页加上保护，先不打开，记录都还在。关掉别的护肤计划窗口再点重试。', true);
         });
     }
+    // 模块都加载到了(能跑到这里):告诉 index.html 的看门狗别报「没加载完整」(等锁 / 锁提示另有它们自己的界面)
+    try { const de = doc.documentElement; if (de && de.dataset && de.dataset.boot !== 'ok') de.dataset.boot = 'locking'; } catch (e) { }
     // 关掉另一个窗口回到这里时自己再试一次
     if (win && win.addEventListener) win.addEventListener('focus', () => { if (!started && doc.getElementById('app-lock')) { tries = 4; start(); } });
     start();

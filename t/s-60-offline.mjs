@@ -23,6 +23,14 @@ export default async function ({ origin, S, open }) {
     const used = [...new Set(src.match(/[一-鿿]/g) || [])];
     const miss = used.filter(c => !have.has(c));
     S.ok(!miss.length, `宋体子集覆盖界面源码里的全部 ${used.length} 个汉字`, miss.join(''));
+    // 界面用到的非 ASCII 字符都得落在三款自托管字体的 unicode-range 里(否则 iPhone 上落到系统字体,字形和粗细对不上;比如「→」)
+    //   范围从 css/tokens.css 现读;源码里先去掉注释、正则里的字符区间
+    const tok = fs.readFileSync(path.join(ROOT, 'css/tokens.css'), 'utf8');
+    const ranges = (tok.match(/unicode-range:([^;}]+)/g) || []).flatMap(r => r.replace('unicode-range:', '').split(',')).map(x => x.trim().replace(/^U\+/i, '').split('-').map(h => parseInt(h, 16))).map(a => [a[0], a.length > 1 ? a[1] : a[0]]);
+    const inFont = c => { const n = c.codePointAt(0); return n < 0x80 || ranges.some(([a, b]) => n >= a && n <= b); };
+    const strip = x => x.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '').replace(/(^|[\s;{}(),])\/\/.*$/gm, '$1').replace(/[\u3000-\u9fff]-[\u3000-\u9fff]/g, '');
+    const outside = [...new Set([...strip(html + mods.map(f => fs.readFileSync(f, 'utf8')).join('\n'))].filter(c => !inFont(c)))];
+    S.ok(ranges.length >= 10 && !outside.length, '界面源码里的非 ASCII 字符都在三款自托管字体的 unicode-range 里', outside.map(c => c + ' U+' + c.codePointAt(0).toString(16).toUpperCase()));
     const meta = JSON.parse(fs.readFileSync(path.join(ROOT, 'fonts/noto-serif-sc-400-skin.meta.json'), 'utf8'));
     S.ok(have.size >= 3700 && fs.statSync(path.join(ROOT, FONTS[0])).size < 1.6e6, `子集 ${have.size} 字、${(fs.statSync(path.join(ROOT, FONTS[0])).size / 1e6).toFixed(2)} MB(一次性预缓存)`, meta);
     S.ok(fs.existsSync(path.join(ROOT, 'fonts/LICENSES.txt')) && /SIL OPEN FONT LICENSE/i.test(fs.readFileSync(path.join(ROOT, 'fonts/LICENSES.txt'), 'utf8')), 'fonts/LICENSES.txt 带 OFL 原文');

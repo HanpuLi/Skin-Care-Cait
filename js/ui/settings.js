@@ -93,12 +93,14 @@ function curUser(app) { return (app.sync && app.sync.state && app.sync.state.use
 function isOwner(app) { try { return !!app.sync.isOwner(curUser(app)); } catch (e) { return false; } }
 const TIMING_TXT = { neutral: '无所谓', avoid: '避开刚洗完热水澡', prefer: '洗澡夜优先' };
 export const DATA_NOTE = [
-    '你的记录（每天的皮肤、货架、方案、设置）存在这台设备上；登录后同步到 Google Firebase 里你自己账号的那一份，只有你自己能读写。',
-    '问顾问、顾问写今晚、出方案、每周复盘、读成分表、「要不要买新的」：这些请求带着你记录的快照，先到 Cait 家里的顾问服务器，再用 Cait 的 Anthropic API 组织调用 Claude 生成回答。服务器只记每次花了多少钱，和你让顾问「记住」的那几句（在这里能看、能删），不存对话和照片。',
+    '你的记录（每天的皮肤、货架、方案、设置）存在这台设备上；登录后同步到 Google Firebase 里你自己账号的那一份，只有你自己能读写。顾问对你记录的回应、每周复盘的结果也跟着同步。',
+    '今晚页每天会自动请顾问排一次；你记完皮肤、完成今晚后顾问会自动回一句；问顾问、出方案、每周复盘、读成分表、「要不要买新的」也一样：这些请求带着你记录的快照，先到 Cait 家里的顾问服务器，再用 Cait 的 Anthropic API 组织调用 Claude 生成回答。服务器只记每次花了多少钱，和你让顾问「记住」的那几句（在这里能看、能删），不存对话和照片。',
     '对话、「要不要买新的」的结果只存在这台设备上，换设备不带过去。',
-    '照片只存在这台设备上（浏览器的本机数据库），不进云端同步。只有你点了分析、读成分表或随消息发图时，才把那几张发给顾问；分析完服务器不留，存下来的只有分析结果（进当天的记录）。',
+    '照片只存在这台设备上（浏览器的本机数据库），不进云端同步。只有你点了分析、读成分表或随消息发图时，才把照片发给顾问：分析时是这次拍的那几张，这台设备上存着上一次分析时的正脸照片的话，也会一起发过去对比（拍之前能选不带）。分析完服务器不留，存下来的只有分析结果（进当天的记录）。',
     'HRT 只在你自己打开了 HRT 时才进顾问看到的快照；两个账号的数据互相看不到。'
 ];
+// 主账号:家里的服务器会另外附上运营者自己在服务器上记的 HRT 用药和化验(server 端,和 App 里的开关无关;这里照实说,不写具体内容)
+export const DATA_NOTE_OWNER = '你是主账号：家里的服务器会另外附上你在服务器上单独记的 HRT 用药和化验，和 App 里的 HRT 开关无关。';
 
 function body(app) {
     const s = app.sync, u = s.state.user, W = app.world(), P = W.profile || {};
@@ -125,7 +127,7 @@ function body(app) {
     <div class="sheet-sec" id="set-you"><div class="sec-t">你的情况</div>
         ${sw('set-shave', '刮胡', !!P.shaving)}
         ${sw('set-hrt', 'HRT', !!P.hrt)}
-        <p class="note set-hint">只影响你自己这个账号：开了 HRT 才会按周期调酸，顾问也才看得到。</p>
+        <p class="note set-hint">${owner ? '只影响你自己这个账号：App 里记的 HRT 阶段只在打开时带给顾问，也只在打开时按周期调酸；家里的服务器另外会附上你在服务器上记的用药和化验，和这个开关无关。' : '只影响你自己这个账号：开了 HRT 才会按周期调酸，顾问也才看得到。'}</p>
         ${sw('set-premakeup', '需要卸妆步骤', !!P.useMakeupRemoval)}
         ${skinChipsHtml(P)}</div>
 
@@ -133,7 +135,7 @@ function body(app) {
         ${P.shaving ? '<div class="set-days-l">洗澡</div>' : ''}
         <div class="chips set-days" id="set-shower" role="group" aria-label="洗澡">${WEEK_ORDER.map(d => chip(!!(hp.find(x => x.dow === d) || {}).shower, WD[d], `data-hd="${d}" data-hk="shower" aria-label="周${WD[d]}洗澡"`)).join('')}</div>
         ${P.shaving ? `<div class="set-days-l">刮胡</div><div class="chips set-days" id="set-shavedays" role="group" aria-label="刮胡">${WEEK_ORDER.map(d => chip(!!(hp.find(x => x.dow === d) || {}).shave, WD[d], `data-hd="${d}" data-hk="shave" aria-label="周${WD[d]}刮胡"`)).join('')}</div>` : ''}
-        <p class="note">和顾问页「未来 7 晚」的「存成每周习惯」是同一份。改了以后，明天起两周按新习惯排；今晚在今晚页改。</p></div>
+        <p class="note">和顾问页「未来 7 晚」的「存成每周习惯」是同一份。改了以后，明天起两周按新习惯排；${minimal ? (P.shaving ? '今晚洗澡在「顾问」页的未来 7 晚里点，今晚刮胡在今晚页点。' : '今晚的在「顾问」页的未来 7 晚里点。') : '今晚在今晚页改。'}</p></div>
 
     <div class="sheet-sec" id="set-timing"><div class="sec-t">刷酸时机</div>
         ${seg('timing', P.acidTiming || '', [['', '交给方案'], ['avoid', '避开刚洗完澡'], ['prefer', '洗澡夜优先'], ['neutral', '无所谓']], '刷酸时机')}
@@ -145,12 +147,12 @@ function body(app) {
 
     <div class="sheet-sec" id="set-photo"><div class="sec-t">照片分析</div>
         ${sw('set-photoai', '拍的皮肤照片可以发给顾问分析', photoOn)}
-        <p class="note">${photoOn ? '开着：你点「分析」时，那几张照片发给顾问逐区看，结果记进当天。' : '关着：照片只存在这台设备上，不发给顾问。'}每个账号单独开关，只有本人能开。</p></div>
+        <p class="note">${photoOn ? '开着：你点「分析」时，那几张照片（本机有上一次的正脸照片的话也一起）发给顾问逐区看，结果记进当天。' : '关着：照片只存在这台设备上，不发给顾问。'}每个账号单独开关，只有本人能开。</p></div>
 
     <div class="sheet-sec" id="set-look"><div class="sec-t">外观</div>
         ${seg('theme', currentTheme(), [['system', '跟随系统'], ['light', '纸'], ['dark', '夜'], ['auto', '晚上自动']], '外观')}
         <p class="note">晚上自动：21:00 到早上 7:00 用夜间配色。</p>
-        <label class="field field-row"><span>印章上的字</span><input type="text" id="set-seal" maxlength="1" autocomplete="off" placeholder="一个字" value="${esc(P.stamp || P.seal || '')}"></label></div>
+        <label class="field field-row"><span>印章上的字</span><input type="text" id="set-seal" maxlength="1" autocomplete="off" placeholder="一个字" value="${esc(P.seal || P.stamp || '')}"></label></div>
 
     <div class="sheet-sec" id="set-ai"><div class="sec-t">顾问</div>
         <p class="note" id="set-ai-st">${esc(accTxt)}</p>
@@ -163,7 +165,7 @@ function body(app) {
     <div class="sheet-sec" id="set-data"><div class="sec-t">数据</div>
         <div class="btn-row"><button type="button" class="btn" data-act="export">导出备份</button><label class="btn file-btn">恢复备份<input type="file" accept=".json,application/json" id="set-import"></label><button type="button" class="btn" data-act="recovery">恢复副本</button></div>
         <p class="note">备份里有全部记录和这台设备上的照片。恢复之前，现在的记录会先另存一份恢复副本。</p>
-        <details class="fold" id="set-privacy"><summary><span class="fold-sum"><span class="lede">数据说明</span><span class="note">存在哪、发给谁</span></span></summary><div class="fold-body"><ul class="list note">${DATA_NOTE.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div></details></div>
+        <details class="fold" id="set-privacy"><summary><span class="fold-sum"><span class="lede">数据说明</span><span class="note">存在哪、发给谁</span></span></summary><div class="fold-body"><ul class="list note">${DATA_NOTE.concat(owner ? [DATA_NOTE_OWNER] : []).map(x => `<li>${esc(x)}</li>`).join('')}</ul></div></details></div>
 
     <div class="sheet-sec set-end"><div class="btn-row"><button type="button" class="btn-link quiet" data-act="oobe">重新做引导</button><button type="button" class="btn-link quiet" data-act="whatsnew">这一版改了什么</button></div></div>`;
 }
@@ -205,11 +207,12 @@ function bind(ov, app) {
     on('set-premakeup', el => setProfile(app, p => { p.useMakeupRemoval = el.checked; }));
     on('set-repairuse', el => setProfile(app, p => { if (el.value) p.repairUse = el.value; else delete p.repairUse; }));
     on('set-acidlevel', el => setProfile(app, p => { const v = el.value ? +el.value : null; if (v !== (p.acidLevel || null)) { p.acidLevel = v; p.acidLevelAt = v ? t() : ''; } }));
-    on('set-seal', el => setProfile(app, p => { const c = Array.from(String(el.value || '').trim())[0] || ''; p.stamp = c; p.seal = c; }));
+    // 印章字只写 v1 的字段 seal(v2 早期写过 stamp,顺手删掉,免得两边各读各的)
+    on('set-seal', el => setProfile(app, p => { const c = Array.from(String(el.value || '').trim())[0] || ''; if (c) p.seal = c; else delete p.seal; delete p.stamp; }));
     on('set-photoai', el => {
         if (!el.checked) { setProfile(app, p => { p[PHOTO_FIELD] = false; }); return; }
         el.checked = false;   // 先不算开:本人点「同意」才开
-        openSheet({ id: 'photo-consent', title: '让顾问看照片？', html: `<p class="note ink">打开以后，你在「记录」里点「分析」时，拍的那几张照片会发到 Cait 家里的顾问服务器，再交给 Anthropic 的 Claude 模型逐区看，结果记进当天的记录。</p>
+        openSheet({ id: 'photo-consent', title: '让顾问看照片？', html: `<p class="note ink">打开以后，你在「记录」里点「分析」时，拍的那几张照片会发到 Cait 家里的顾问服务器，再交给 Anthropic 的 Claude 模型逐区看，结果记进当天的记录。这台设备上存着上一次分析时的正脸照片的话，也会一起发过去对比（每次拍之前能选不带）。</p>
             <p class="note">照片本身只存在这台设备上；服务器分析完不留。随时能在这里关掉。这个开关只管你自己的账号，要你本人同意才开。</p>`,
             actions: [{ label: '先不' }, { label: '我同意，打开', primary: true, fn: () => setProfile(app, p => { p[PHOTO_FIELD] = true; p.photoAnalysisAt = t(); }) }] });
     });
@@ -295,15 +298,28 @@ function importBackup(app, file) {
         if (!keys.length) { openSheet({ id: 'import-bad', title: '导入没成功', text: '这个文件读不出来。选的是这里导出的 .json 备份吗？', actions: [{ label: '知道了', primary: true }] }); return; }
         const n = Array.isArray(data.sk_jrnl1) ? data.sk_jrnl1.length : 0;
         sysConfirm('用这份备份（' + n + ' 天的记录）替换这台设备上的记录？现在的记录会先另存一份恢复副本，在「恢复副本」里能换回来。', async () => {
-            const S = app.store.state;
-            try { app.store.backup(S.owner, S.doc.data, 'before-restore'); } catch (e) { }
-            keys.forEach(k => app.store.ls(k, data[k]));   // 只认云键:备份文件写不进信封 / 身份这些本机键
-            const ph = data._photos;
-            if (ph && typeof ph === 'object' && app.photos) {
-                for (const key of Object.keys(ph)) { const [d, view] = key.split('__'); if (/^\d{4}-\d{2}-\d{2}$/.test(d) && typeof ph[key] === 'string') await app.photos.save(d, ph[key], view || undefined); }
+            try {
+                // 只认云键(备份文件写不进信封 / 身份这些本机键);和「恢复副本」同一个「换成这一份」:副本存不上就不换、整份一次提交
+                const picked = {}; keys.forEach(k => { picked[k] = data[k]; });
+                if (!app.sync.replaceWithData(Object.assign({}, app.store.state.doc.data, picked), 'before-restore')) {
+                    openSheet({ id: 'import-bad', title: '导入没成功', text: '这台设备存不进去了（先另存一份恢复副本没成功），所以没换，现在的记录一个字没动。先导出备份、腾点空间再试。', actions: [{ label: '知道了', primary: true }] });
+                    return;
+                }
+                let bad = 0;
+                const ph = data._photos;
+                if (ph && typeof ph === 'object' && app.photos) {
+                    for (const key of Object.keys(ph)) {
+                        const [d, view] = key.split('__');
+                        if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || typeof ph[key] !== 'string') continue;
+                        let ok = false; try { ok = await app.photos.save(d, ph[key], view || undefined); } catch (e) { ok = false; }
+                        if (!ok) bad++;
+                    }
+                }
+                app.renderAll(); paint(app);
+                toast(bad ? '备份恢复好了；有 ' + bad + ' 张照片没导进来（这台设备的本机照片存储用不了）' : '备份恢复好了', bad ? 4500 : 3000);
+            } catch (e) {
+                openSheet({ id: 'import-bad', title: '导入没成功', text: '导入时出错了：' + ((e && e.message) || e) + '。', actions: [{ label: '知道了', primary: true }] });
             }
-            app.renderAll(); paint(app);
-            toast('备份恢复好了');
         }, { title: '恢复备份？', ok: '恢复' });
     };
     rd.readAsText(file);

@@ -389,6 +389,29 @@ export async function runSyncUnit(S) {
         if (mode === 'occupied') S.ok(calls === 5 && /关掉另一个窗口再点重试/.test(notice.text) && notice.hidden === false, '被别的窗口占着:先悄悄重试几次,再提示「关掉另一个窗口再点重试」,有重试按钮', { calls, notice });
         if (mode === 'missing') S.ok(notice.hidden === true && /记录都还在/.test(notice.text), '浏览器没有 Web Locks:暂停,说明记录没动,不给没用的重试', notice);
     });
+    // boot() 抛错:锁不能被放掉、提示不能是「浏览器没给保护 / 关掉别的窗口」,按钮能重新加载(相对 v1 的回归)
+    await T('锁 boot 抛错', async () => {
+        let lockHeld = null, boots = 0, reloaded = 0;
+        const made = {};
+        const mkEl = () => { const el = { dataset: {}, onclick: null, textContent: '', set innerHTML(v) { el.html = v; }, get innerHTML() { return el.html; },
+            querySelector(q) { el.q = el.q || {}; return el.q[q] || (el.q[q] = { textContent: '', hidden: null, onclick: null }); }, remove() { } }; return el; };
+        const env = {
+            navigator: { locks: { request(name, o, cb) {   // 按规范:回调抛错 → 锁放掉、promise 被拒;回调返回的 promise 没结束 → 一直拿着
+                let r; try { r = cb({}); } catch (e) { lockHeld = false; return Promise.reject(e); }
+                lockHeld = true; return Promise.resolve(r).then(() => { lockHeld = false; }, () => { lockHeld = false; });
+            } } },
+            setTimeout(f) { }, window: { addEventListener() { }, location: { reload() { reloaded++; } } },
+            document: { getElementById(id) { return made[id] || null; }, createElement() { const el = mkEl(); return new Proxy(el, { set(t, k, v) { t[k] = v; if (k === 'id') made[v] = t; return true; } }); }, body: { appendChild() { } } }
+        };
+        const oldErr = console.error; console.error = () => { };
+        try { startWithLock(env, () => { boots++; throw new Error('坏数据'); }); await flush(); } finally { console.error = oldErr; }
+        const bf = made['boot-fail'], lock = made['app-lock'];
+        S.ok(boots === 1 && lockHeld === true, 'boot 抛错:锁照样拿着(第二个窗口进不来)', { boots, lockHeld });
+        S.ok(bf && !lock && /启动时出错了/.test(bf.html) && !/浏览器没给/.test(bf.html), '提示是「启动时出错了」,不是「暂时打不开 / 浏览器没给保护」', bf && bf.html);
+        const btn = bf && bf.q && bf.q['button'];
+        if (btn && btn.onclick) btn.onclick();
+        S.ok(reloaded === 1, '按钮是重新加载(不是点了没反应的重试)', { reloaded });
+    });
 }
 function closeAll(h) { h.sheets.clear(); }
 

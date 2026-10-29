@@ -23,12 +23,15 @@ export default async function ({ origin, S }) {
     }
     // ── 登录了:第一次进顾问页弹一次;点「知道了」记下,再进 / 刷新都不弹;换个账号再弹 ──
     {
-        const p = await fresh(origin, { seed: 'full', mode: 'on', login: true });
+        const p = await fresh(origin, { seed: 'full', mode: 'on', login: true, notice: false });
         try {
             const tn = await p.eval(`${tab('tonight')}return !!document.getElementById('ai-privacy')`);
             S.ok(!tn, '登录后停在今晚页:不弹(第一次进顾问页才弹)', tn);
+            // 没看过说明之前不自动外发:今晚照离线排,给「先看一下」
+            const tn0 = await p.eval(`${W8(300)}return {src:(document.getElementById('tn-src')||{}).textContent||'',n:(__AIF.log||[]).filter(x=>x.p==='/api/tonight').length}`);
+            S.ok(/先看一下/.test(tn0.src) && tn0.n === 0, '没看过「顾问会看到什么」:今晚页不自动请顾问,写明离线排法 + 「先看一下」', tn0);
             const r = await p.eval(`${tab('advisor')}const ov=document.getElementById('ai-privacy');return ov?{t:ov.querySelector('.sheet-t').textContent,b:ov.querySelector('.sheet-b').innerText,btn:[...ov.querySelectorAll('.sheet-actions .btn')].map(x=>x.textContent)}:null`);
-            S.ok(r && r.t === '顾问会看到什么' && /Anthropic/.test(r.b) && /不存对话和照片/.test(r.b) && /只存在这台设备上/.test(r.b) && /设置 → 数据说明/.test(r.b) && r.btn.includes('知道了'),
+            S.ok(r && r.t === '顾问会看到什么' && /Anthropic/.test(r.b) && /不存对话和照片/.test(r.b) && /只存在这台设备上/.test(r.b) && /设置 › 数据说明/.test(r.b) && r.btn.includes('知道了'),
                 '第一次进顾问页:弹「顾问会看到什么」(发到哪、存什么、不存什么,详细的在设置)', r);
             await p.eval(PROBE + ';return 1');
             const pr = await p.eval(`return __probe('#ai-privacy')`);
@@ -36,6 +39,8 @@ export default async function ({ origin, S }) {
             const k = await p.eval(`[...document.querySelectorAll('#ai-privacy .sheet-actions .btn')].find(b=>b.textContent==='知道了').click();${W8(150)}
                 const v=JSON.parse(localStorage.getItem('sk_aiprivacy1')||'null');${tab('products')}${tab('advisor')}return {v,again:!!document.getElementById('ai-privacy'),cloud:Object.keys((${'(()=>{const ks=Object.keys(localStorage).filter(k=>k.startsWith("sk_sync_v1:"));const k=ks.find(x=>x!=="sk_sync_v1:")||ks[0];return JSON.parse(localStorage.getItem(k)).data})()'})).includes('sk_aiprivacy1')}`);
             S.ok(k.v && k.v.uid === 'u-test' && k.v.at > 0 && !k.again && !k.cloud, '点「知道了」:按账号记在本机(不进云),再进顾问页不弹', k);
+            const tn1 = await p.eval(`${tab('tonight')}for(let i=0;i<30&&!(__AIF.log||[]).some(x=>x.p==='/api/tonight');i++)${W8(100)}return (__AIF.log||[]).filter(x=>x.p==='/api/tonight').length`);
+            S.ok(tn1 >= 1, '看过之后回到今晚页:才自动请顾问排今晚', tn1);
             await p.reload(600);
             await p.eval(`fakeCloud.auth({uid:'u-test',email:'t@example.com',displayName:'Tester Name',getIdToken:async()=>'fake-id-token'});${W8(400)}return 1`);
             const again = await p.eval(`${tab('advisor')}return !!document.getElementById('ai-privacy')`);

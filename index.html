@@ -26,10 +26,28 @@
     <link rel="stylesheet" href="css/screens/capture.css">
     <link rel="stylesheet" href="css/screens/settings.css">
     <link rel="stylesheet" href="css/screens/oobe.css">
-    <!-- Firebase SDK(compat v9,全局 firebase);加载不到(离线 / 被墙)就只用本机数据 -->
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <!-- Firebase SDK(compat v9,全局 firebase)不在这里同步加载:弱网下三个同步脚本会挡住解析。
+         js/app.js 画完第一屏后再按顺序插入(SW 也缓存它们);加载不到(离线 / 被墙)就只用本机数据 -->
+    <!-- 看门狗(经典脚本,不依赖任何模块):模块图里任何一个文件没加载到 / 链接失败,App 会变成没有提示的空壳。
+         8 秒(有加载错误时 1.5 秒)后还没启动、也没有锁提示 / 启动出错提示,就给一张「重新加载」;不往 window 上挂东西 -->
+    <script>(function(){var de=document.documentElement,tries=0;try{tries=+sessionStorage.getItem('sk_bootfail')||0;}catch(e){}
+function ok(){var b=de.getAttribute('data-boot');return b==='ok'||b==='locking'||document.getElementById('app-lock')||document.getElementById('boot-fail');}
+function clearCaches(){if(!window.caches)return Promise.resolve();return caches.keys().then(function(ks){return Promise.all(ks.filter(function(k){return k.indexOf('skincare-app-')===0;}).map(function(k){return caches.delete(k);}));}).catch(function(){});}
+function reload(clean){if(navigator.onLine===false){var n=document.getElementById('boot-fail-msg');if(n)n.textContent='现在没网：连上网再点。';return;}
+try{sessionStorage.setItem('sk_bootfail',String(tries+1));}catch(e){}
+var up=navigator.serviceWorker&&navigator.serviceWorker.getRegistration?navigator.serviceWorker.getRegistration().then(function(r){return r&&r.update();}).catch(function(){}):Promise.resolve();
+up.then(function(){return clean?clearCaches():null;}).then(function(){location.reload();},function(){location.reload();});}
+function show(){if(ok())return;var root=document.getElementById('sheet-root')||document.body;if(!root)return;
+var ov=document.createElement('div');ov.id='boot-fail';ov.className='sheet-ov';ov.setAttribute('data-noesc','1');
+ov.innerHTML='<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="boot-fail-t"><div class="sheet-h"><h2 class="sheet-t" id="boot-fail-t">这一版没加载完整</h2></div><div class="sheet-b text"><p class="lede">网络断了一半，或者刚更新。记录都在这台设备上，一个字没动。</p><p class="note" id="boot-fail-msg"></p></div><div class="sheet-actions"></div></div>';
+var acts=ov.querySelector('.sheet-actions');
+function btn(label,primary,fn){var b=document.createElement('button');b.type='button';b.className='btn'+(primary?' btn-primary':'');b.textContent=label;b.addEventListener('click',fn);acts.appendChild(b);}
+if(tries>0&&navigator.onLine!==false)btn('清掉缓存重新加载',false,function(){reload(true);});
+btn('重新加载',true,function(){reload(false);});
+root.appendChild(ov);}
+function later(){if(de.getAttribute('data-boot')==='ok'){try{sessionStorage.removeItem('sk_bootfail');}catch(e){}return;}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',show);else show();}
+var t=setTimeout(later,8000);
+window.addEventListener('error',function(e){var el=e&&e.target;var mod=el&&el.tagName==='SCRIPT'&&/\/js\//.test(el.src||'');if(!mod&&!(e instanceof ErrorEvent))return;if(ok())return;clearTimeout(t);t=setTimeout(later,1500);},true);})();</script>
     <!-- App:原生 ES modules,无构建步骤。js/app.js 先拿「本设备只开一个窗口」的锁,拿到了才碰记录 -->
     <script type="module" src="js/app.js"></script>
 </head>

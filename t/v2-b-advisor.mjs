@@ -84,6 +84,27 @@ await run('v2-b-advisor', [
         S.ok(/今晚没做/.test(how) && !/每晚点一下做了哪几步/.test(how), '「怎么用」按模式只讲极简那段', how);
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
+    ['对话 · 回答没收完(连接断了)不当完整回答;等的时候有「停一下」', async ({ S, open }) => {
+        const p = await open({ seed: 'full', mode: 'on', login: true });
+        await tab(p, 'advisor', 300);
+        await p.eval(`__AIF.chat=[['delta',{t:'今晚可以刷酸，但先'}]];return 1`);   // 没有 done:半截
+        await p.eval(`const t=document.getElementById('adv-text');t.value='今晚能刷酸吗';t.dispatchEvent(new Event('input'));document.getElementById('adv-send').click();return 1`);
+        await p.waitFor(`!document.getElementById('adv-stream')`, 5000).catch(() => { });
+        await sleep(200);
+        const r = await p.eval(ADV + `return {ai:qa('#adv-log .msg.ai').length,me:qa('#adv-log .msg.me').length,draft:(q('#adv-text')||{}).value||'',toast:(q('#sync-toast-el')||{}).textContent||''}`);
+        S.ok(r.ai === 0 && r.me === 0 && r.draft === '今晚能刷酸吗' && /没收完/.test(r.toast) && !/Load failed|TypeError/.test(r.toast), '没收完:不存半句话,问题放回输入框,提示「这条回答没收完」', r);
+        // 「停一下」:流式进行中出现,点了就停,问题放回输入框
+        await p.eval(`__AIF.chat=[['delta',{t:'想'}],['delta',{t:'想'}],['delta',{t:'想'}],['delta',{t:'想'}],['delta',{t:'想'}],['delta',{t:'想'}],['delta',{t:'想'}],['delta',{t:'想'}],['delta',{t:'想'}],['delta',{t:'想'}],['done',{text:'想想想',model:'claude-test',effort:'medium',cost:0.01}]];
+            const f=window.fetch;window.fetch=async(u,i)=>{const res=await f(u,i);if(!String(u).endsWith('/api/chat'))return res;const rd=res.body.getReader();
+              return new Response(new ReadableStream({async pull(c){await new Promise(r=>setTimeout(r,150));const x=await rd.read();if(x.done)c.close();else c.enqueue(x.value);}}),{status:200});};
+            const t=document.getElementById('adv-text');t.value='慢慢说';t.dispatchEvent(new Event('input'));document.getElementById('adv-send').click();return 1`);
+        await p.waitFor(`!!document.getElementById('adv-stop')`, 3000);
+        await p.eval(`document.getElementById('adv-stop').click();return 1`);
+        await p.waitFor(`!document.getElementById('adv-stop')`, 4000).catch(() => { });
+        const s2 = await p.eval(ADV + `return {ai:qa('#adv-log .msg.ai').length,draft:(q('#adv-text')||{}).value||'',busy:!!q('#adv-stream')}`);
+        S.ok(s2.ai === 0 && !s2.busy && s2.draft === '慢慢说', '「停一下」:停下、不存回答、问题放回输入框', s2);
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
     ['对话 · 顾问改今晚:修订线两处联动', async ({ S, open }) => {
         const p = await open({ seed: 'full', mode: 'on', login: true });
         await tab(p, 'tonight', 400);
@@ -127,7 +148,7 @@ await run('v2-b-advisor', [
         let v = await advView(p);
         const reg = await p.eval(`const h=${DATA}.sk_regimen1;return h[h.length-1]`);
         S.ok(reg.source === 'ai' && reg.rules.acidCap === 2 && /顾问/.test(v.ver) && v.ver !== v0, '改方案直接生效:新的一版(source ai,每周 2 次),上面版本行跟着变', { ver: v.ver, cap: reg.rules.acidCap });
-        S.ok(/^applied:撤销/.test(v.revs[0]) && /改了方案 v\d+ → v\d+/.test(await text(p, '#adv-log .rev-h')) && /不在你产品库里/.test(await text(p, '#adv-log .rev')), '修订线:「改了方案 vN → vN+1」+ 撤销;不在库的提一句', v.revs);
+        S.ok(/^applied:撤销/.test(v.revs[0]) && /改了方案 v\d+ 改成 v\d+/.test(await text(p, '#adv-log .rev-h')) && /不在你产品库里/.test(await text(p, '#adv-log .rev')), '修订线:「改了方案 vN 改成 vN+1」+ 撤销;不在库的提一句', v.revs);
         S.ok(v.lad.some(x => /^now:.*顾问定的/.test(x)), '阶梯「现在」那档换成顾问定的', v.lad);
         await p.waitFor(`(__AIF.log||[]).some(x=>x.p==='/api/shop')`, 3000).catch(() => { });
         const sh = await p.eval(`return (__AIF.log||[]).filter(x=>x.p==='/api/shop').map(x=>x.body.trigger)`);

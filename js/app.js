@@ -14,7 +14,7 @@ import { syncRegimen } from './model/regimen.js';
 import { buildWorld, planNow } from './model/world.js';
 import { createPhotoStore } from './model/photos.js';
 import { createAiClient, aiBase } from './ai/client.js';
-import { openSheet, closeSheet, hasSheet, toast, sysAlert, sysConfirm, download, bindEscape } from './ui/sheets.js';
+import { openSheet, closeSheet, hasSheet, toast, sysAlert, sysConfirm, download, bindEscape, esc } from './ui/sheets.js';
 import { openSettings, watchTheme } from './ui/settings.js';
 import { onBoot as oobeOnBoot, onFirstSnapshot as oobeOnFirstSnapshot } from './ui/oobe.js';
 import { ensureShopRunner } from './ui/products.js';
@@ -52,18 +52,29 @@ function boot() {
         b.toggle('hide-shave', !p.shaving);
         b.toggle('hide-hrt', !p.hrt);
         b.toggle('hide-rec', !!p.minimalMode && !!p.hideRecords);
-        const seal = document.getElementById('seal-ch'); if (seal) seal.textContent = (p.stamp && String(p.stamp).slice(0, 1)) || '我';
+        const seal = document.getElementById('seal-ch'); if (seal) seal.textContent = sealChar(p);
         if (b.contains('hide-rec') && current === 'record') show('tonight');
     }
     function renderHeader() {
         const t = today(), el = document.getElementById('hdr-date');
         if (el) el.textContent = mdOf(t) + ' ' + WEEK[dowOf(t)];
     }
+    // 印章字:和 v1 同一个字段 profile.seal(v2 早期写过 stamp,读的时候兼容);没设就退到登录名的首个汉字(v1 sealChar)
+    function sealChar(p) {
+        const c = p.seal || p.stamp;
+        if (c) return Array.from(String(c))[0];
+        let n = ''; try { n = (sync.state.user && sync.state.user.displayName) || ''; } catch (e) { }   // 首帧时 sync 可能还没建好
+        return /^[一-鿿]/.test(n) ? n[0] : '我';
+    }
     // ── 路由:#/tonight /advisor /record /products ──
+    // 四个 tab 共用文档滚动(外壳不另起 overflow 容器):切 tab 时各记各的位置,没记过的从顶上开始(真机 844 高,每屏都从标题看起)
     let current = 'tonight';
+    const scrollAt = {};
     function show(id) {
         if (!SCREENS.some(s => s.id === id)) id = 'tonight';
         if (id === 'record' && document.body.classList.contains('hide-rec')) id = 'tonight';
+        const prev = current, moved = prev !== id;
+        if (moved) scrollAt[prev] = window.scrollY || 0;
         current = id;
         SCREENS.forEach(s => {
             const sec = document.getElementById(s.id), tab = document.getElementById('tab-' + s.id);
@@ -73,12 +84,21 @@ function boot() {
         });
         renderScreen(id);
         if (location.hash !== '#/' + id) history.replaceState(null, '', '#/' + id);
+        if (moved) try { window.scrollTo(0, scrollAt[id] || 0); } catch (e) { }
     }
+    // 一屏的数据出了问题,只拖垮这一屏:画一张「这一屏出错了」,其余三屏和启动照常
     function renderScreen(id) {
         const s = SCREENS.find(x => x.id === (id || current)); if (!s) return;
         const root = document.getElementById(s.id); if (!root) return;
-        root.innerHTML = s.render(app);
-        s.mount(root, app);
+        try {
+            root.innerHTML = s.render(app);
+            s.mount(root, app);
+        } catch (e) {
+            root.innerHTML = `<section class="sec screen-err"><h2 class="sec-t">这一屏出错了</h2><p class="lede">记录都在这台设备上，一个字没动。重新加载一次通常就好。</p>
+                <p class="note">${esc((e && e.message) || String(e))}</p><div class="btn-row"><button type="button" class="btn" data-reload>重新加载</button></div></section>`;
+            const b = root.querySelector('[data-reload]'); if (b) b.addEventListener('click', () => location.reload());
+            try { console.error(e); } catch (x) { }
+        }
     }
     function renderAll() { maintain(); applyVisibility(); renderHeader(); renderScreen(current); }
     function reloadFromStore() { initTN(store, today()); applyVisibility(); }
@@ -95,7 +115,12 @@ function boot() {
             reloadFromStore, renderAll,
             absorbPrescribedHistory: () => absorbPrescribedHistory(store, today()),
             autoMatchProfile: (uid, user) => autoMatchProfile(store, uid, user),
-            clearLocalExtras: () => { ai.clearLocal(); photos.clearLegacyUnprefixed(); },
+            // 换账号:顾问本机缓存、旧照片,还有各屏模块里的半截状态(草稿、待发照片、一句话解析、今晚的「重做」)一起清
+            clearLocalExtras: () => {
+                try { ai.abort(); } catch (e) { }
+                ai.clearLocal(); photos.clearLegacyUnprefixed();
+                SCREENS.forEach(sc => { if (typeof sc.resetForUser === 'function') try { sc.resetForUser(); } catch (e) { } });
+            },
             // 登录后核一次顾问开通;核成了就补「新的一天」那次今晚(核不成不再追着核;页面在后台时 tonight.js 自己会跳过,等切回来)
             onAuthUser: user => { fbUser = user || null; if (user) Promise.resolve(ai.probe()).then(() => { if (ai.ready()) tonightScreen.onAiReady(app); }, () => { }); },
             onFirstSnapshot: () => oobeOnFirstSnapshot(app)   // 新用户引导 / 改版说明(oobe.js 另有兜底:第一份快照走待推分支时这里不来)
@@ -111,6 +136,9 @@ function boot() {
         signOut() { sysConfirm('退出登录？退出后用这台设备上的数据。', () => firebase.auth().signOut(), { ok: '退出' }); }
     });
 
+    // Firebase SDK 有了结果(加载到 / 没加载到)时 resolve(oobe 的「1.8 秒还没登录」从这之后算)
+    let sdkDone;
+    app.firebaseReady = new Promise(r => { sdkDone = r; });
     // 启动维护(都是 'system')
     store.migrateOlderKeys();
     seedProfile(store);
@@ -135,18 +163,42 @@ function boot() {
     window.addEventListener('focus', checkDayRollover);
     setInterval(checkDayRollover, 60000);
 
-    // Firebase:CDN 没加载到(离线 / 被墙)就只用本机数据,不报错
-    try {
-        if (typeof firebase !== 'undefined' && FIREBASE_CONFIG.apiKey) {
-            if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
-            sync.setDb(firebase.firestore());
-            firebase.auth().onAuthStateChanged(u => sync.handleAuthChange(u));
-        }
-    } catch (e) { sync.showSyncStatus('', 'ok'); }
+    // Firebase:第一屏画完再按顺序加载 SDK(async=false 保证顺序;SW 缓存优先),三个都有了结果(加载到 / 没加载到)再初始化。
+    //   CDN 没加载到(离线 / 被墙 / HTTP 缓存被系统清了)就只用本机数据,不报错;文案说「登录服务没加载出来」,别说「没登录」。
+    const SDK = ['firebase-app-compat.js', 'firebase-auth-compat.js', 'firebase-firestore-compat.js'].map(f => 'https://www.gstatic.com/firebasejs/9.23.0/' + f);
+    let sdkLeft = SDK.length;
+    function initFirebase() {
+        let ok = false;
+        try {
+            if (typeof firebase !== 'undefined' && FIREBASE_CONFIG.apiKey) {
+                if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+                sync.setDb(firebase.firestore());
+                firebase.auth().onAuthStateChanged(u => sync.handleAuthChange(u));
+                ok = true;
+            }
+        } catch (e) { ok = false; }
+        if (sync.setSdkMissing) sync.setSdkMissing(!ok);
+        sync.showSyncStatus('', 'ok');
+        if (!ok) renderAll();   // 「没登录」→「登录服务没加载出来」
+        sdkDone(ok);
+    }
+    const sdkSettled = () => { if (--sdkLeft === 0) initFirebase(); };
+    if (typeof firebase !== 'undefined' && firebase.apps) { sdkLeft = 0; initFirebase(); }   // 已经有了(测试替身 / 别处加载过)
+    else SDK.forEach(src => {
+        const sc = document.createElement('script');
+        sc.src = src; sc.async = false;
+        sc.onload = sdkSettled; sc.onerror = sdkSettled;
+        document.head.appendChild(sc);
+    });
     sync.showSyncStatus('', 'ok');
 
     const afterLoad = fn => { if (document.readyState === 'complete') fn(); else window.addEventListener('load', fn, { once: true }); };
-    if ('serviceWorker' in navigator) afterLoad(() => { navigator.serviceWorker.register('./sw.js').catch(() => { }); });
+    if ('serviceWorker' in navigator) {
+        afterLoad(() => { navigator.serviceWorker.register('./sw.js').catch(() => { }); });
+        // 新版本的 SW 接管了:这一页已经整套加载完(全是旧版),不硬刷新(可能有没发出去的草稿),提示下次打开生效
+        const hadCtl = !!navigator.serviceWorker.controller;
+        navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadCtl) toast('新版本好了，下次打开生效。', 4000); });
+    }
     // 子集外的生僻字:页面加载完、在线时才挂 Google 的 Noto Serif SC(按 unicode-range 只拉用到的那一片;SW 缓存住)
     afterLoad(() => {
         if (!navigator.onLine) return;

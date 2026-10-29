@@ -103,6 +103,25 @@ await run('v2-b-oobe', [
         S.ok(await has(p, '#whatsnew'), '设置里「这一版改了什么」能再看');
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
+    ['重新做引导:皮肤步点「没有」不抹掉今天记的泛红,做完不凭空多一版方案', async ({ S, open }) => {
+        const p = await open({ seed: 'full', seedArg: `{today:true,status:i=>i===0?['泛红']:['出油']}` });
+        const before = await p.eval(`const d=${DATA};return {st:((d.sk_jrnl1||[]).find(e=>e.date===__d(0))||{}).status||[],n:(d.sk_regimen1||[]).length}`);
+        await p.eval(`document.getElementById('btn-settings').click();return 1`); await sleep(300);
+        await p.eval(`document.querySelector('#settings-sheet [data-act=oobe]').click();return 1`); await sleep(400);
+        await ob(p, 'mode-full');
+        if (await step(p) === 'shelf') await ob(p, 'next');
+        S.ok(await step(p) === 'skin', '(前提)走到「你的皮肤」');
+        await ob(p, 'state-ok');
+        await ob(p, 'next');
+        if (await step(p) !== 'first') await ob(p, 'skip');
+        await ob(p, 'finish');
+        await sleep(400);
+        const after = await p.eval(`const d=${DATA};return {st:((d.sk_jrnl1||[]).find(e=>e.date===__d(0))||{}).status||[],n:(d.sk_regimen1||[]).length,last:((d.sk_regimen1||[]).slice(-1)[0]||{}).reason||'',start:d.sk_profile1.startState}`);
+        S.ok(before.st.includes('泛红') && after.st.includes('泛红'), '今天自己记的泛红还在(就医红线数的硬事实)', { before, after });
+        S.ok(after.n === before.n && !/你说的皮肤情况/.test(after.last), '方案版本数不变,没有凭空出「第一版」', { before: before.n, after });
+        S.ok(after.start === 'ok', '只改了档案里的起点(startState)', after.start);
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
     ['极简老账号 · 改版说明讲极简那几条;重新做引导', async ({ S, open }) => {
         const p = await open({ seed: 'minimal', keepSheets: true });
         await p.waitFor(`!!document.getElementById('whatsnew')`, 4000);

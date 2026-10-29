@@ -28,6 +28,12 @@ const CHAT_MAX = 40, CHAT_SEND = 24;
 const DOW = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 // 这一屏自己的界面状态(不进存储)
 const ST = { draft: '', img: null, busy: false, stream: '', ladderOpen: true, n7Prev: null, planBusy: '', reviewBusy: false, focus: false, minOpen: false };
+// 换账号:上一个人的草稿、没发的照片、未来 7 晚的对比基准、流式半截都清掉(app.js clearLocalExtras 调;进行中的请求回来时按 owner 丢弃)
+export function resetForUser() {
+    Object.assign(ST, { draft: '', img: null, busy: false, stream: '', n7Prev: null, planBusy: '', reviewBusy: false, focus: false, minOpen: false });
+    PROBE.busy = false;
+}
+const ownerOf = app => (app.store && app.store.state && app.store.state.owner) || '';
 
 // ── 小工具 ──
 const hm = t => { const d = new Date(t); return isNaN(d) ? '' : String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
@@ -56,19 +62,35 @@ export function dataNoticeSeen(app) {
     try { v = JSON.parse(app.store.getLocal(LOCAL_KEYS.aiPrivacy)); } catch (e) { }
     return !!(v && v.uid && v.uid === uidOf(app));
 }
+// 第一次进顾问页自动弹;今晚页「先看一下」、引导结束、记录后的反馈这些自动外发之前也先过这一道(openDataNotice)
 export function maybeDataNotice(app) {
     const u = uidOf(app);
     if (!u || dataNoticeSeen(app) || typeof document === 'undefined' || document.hidden) return false;
     if (document.querySelector('#sheet-root .sheet-ov')) return false;
     const sec = document.getElementById('advisor'); if (!sec || !sec.classList.contains('active')) return false;
+    return openDataNotice(app);
+}
+// 不管在哪一屏都弹;点「知道了」(或关掉)记成看过,再调 after(比如去请顾问排今晚)
+export function openDataNotice(app, after) {
+    const u = uidOf(app);
+    if (!u || typeof document === 'undefined') return false;
+    if (dataNoticeSeen(app)) { if (after) after(); return false; }
     const P = app.world().profile || {};
-    const seen = () => { app.store.setLocal(LOCAL_KEYS.aiPrivacy, JSON.stringify({ uid: u, at: app.store.now() })); };
+    let fired = false;
+    const seen = () => {
+        if (fired) return; fired = true;
+        if (uidOf(app) !== u) return;   // 弹着的时候换了账号:不替新账号点「看过了」
+        app.store.setLocal(LOCAL_KEYS.aiPrivacy, JSON.stringify({ uid: u, at: app.store.now() }));
+        if (after) after();
+    };
+    // 主账号:家里的服务器还会另外附上运营者自己在服务器上记的 HRT 用药和化验,和 App 里的 HRT 开关无关(server 端的事,这里照实说)
+    const ownerHrt = isOwner(app) ? '<li>服务器上另外记的 HRT 用药和化验（只有主账号会附上，和 App 里的 HRT 开关无关）</li>' : '';
     openSheet({ id: 'ai-privacy', title: '顾问会看到什么', html: `<ul class="list lede">
             <li>你的产品清单和成分特性</li>
             <li>近 14 天的皮肤记录、标在脸上的位置、备注、做了哪几步</li>
             <li>设置里的肤质、想解决的、要避开的区域${P.hrt ? '、HRT 阶段' : ''}；看过医生的记录（如果有）</li>
-            <li>你发的对话和照片</li></ul>
-        <p class="note">这些会发到 Cait 家里的服务器，再转给 Anthropic 的 Claude 模型生成回答。服务器只记每次花了多少钱，不存对话和照片；只存你让顾问「记住」的那几句，可以随时删。对话本身只存在这台设备上。详细的在「设置 → 数据说明」。</p>`,
+            ${ownerHrt}<li>你发的对话和照片</li></ul>
+        <p class="note">今晚页每天会自动请顾问排一次，记完皮肤、完成今晚后顾问也会自动回一句；这些请求都带着上面这些。会发到 Cait 家里的服务器，再转给 Anthropic 的 Claude 模型生成回答。服务器只记每次花了多少钱，不存对话和照片；只存你让顾问「记住」的那几句，可以随时删。对话本身只存在这台设备上。详细的在「设置 › 数据说明」。</p>`,
         actions: [{ label: '知道了', primary: true, fn: seen }], onClose: seen });
     return true;
 }
@@ -129,7 +151,7 @@ function revHtml(W, rec, key) {
     const s = recLive(W, rec), tn = rec.kind === 'tonight';
     const who = rec.kind === 'review' ? '复盘' : '顾问';
     // 对话里这条修订线就挂在「顾问 · 时:分」那条消息下面,不再重复时间(复盘单独一块,留着)
-    const head = who + ' · ' + (rec.kind === 'review' ? hm(rec.at) + ' · ' : '') + (tn ? '改了今晚' : rec.kind === 'plan' ? '出了方案 v' + rec.v : (rec.fromV ? '改了方案 v' + rec.fromV + ' → v' + rec.v : '改了方案 v' + rec.v));
+    const head = who + ' · ' + (rec.kind === 'review' ? hm(rec.at) + ' · ' : '') + (tn ? '改了今晚' : rec.kind === 'plan' ? '出了方案 v' + rec.v : (rec.fromV ? '改了方案 v' + rec.fromV + ' 改成 v' + rec.v : '改了方案 v' + rec.v));
     const rows = recRows(rec);
     const ok = rows.filter(r => !r.bad), bad = rows.filter(r => r.bad);
     let text = '', act = '';
@@ -256,7 +278,7 @@ function n7Note(W, days) {
         const name = d => d.date === W.today ? '今晚' : d.dayName;
         if (lost.length === 1 && gain.length === 1) return { text: name(lost[0]) + (lost[0].shave ? '刮胡' : '') + '，那晚的酸挪到' + name(gain[0]) + '。', moved: true };
         if (lost.length && !gain.length) return { text: lost.map(name).join('、') + '那晚的酸这周排不下了，挪到下周。', moved: true };
-        if (changed.length) return { text: changed.map(d => name(d) + '：' + prev[d.date].split('|')[0] + ' → ' + nightLabel(d)).join('；') + '。', moved: true };
+        if (changed.length) return { text: changed.map(d => name(d) + '：' + prev[d.date].split('|')[0] + ' 改成 ' + nightLabel(d)).join('；') + '。', moved: true };
         if (tapped) return { text: name(tapped) + '改了，排的没变。', moved: false };
     }
     const tm = acidTiming(W);
@@ -339,6 +361,7 @@ function fillWeekHabit(app) {
 // ── 问顾问 ──
 function accessHtml(app) {
     const a = app.ai.access();
+    if (a === 'out' && app.sync && app.sync.state && app.sync.state.sdkMissing && app.store.state.owner) return `<div class="adv-access" id="adv-access" data-acc="out"><p class="lede">现在连不上登录服务。</p><p class="note">离线或网络不好时登录服务加载不出来；你的记录照常存在这台设备上，连上网重新打开就能问顾问。上面的方案和今晚的步骤不受影响。</p></div>`;
     if (a === 'out') return `<div class="adv-access" id="adv-access" data-acc="out"><p class="lede">问顾问要先登录。</p><p class="note">登录后能问护肤问题、拍成分表认产品、让顾问出方案和每周复盘。没登录也不影响上面的方案和今晚的步骤。</p>
         <div class="btn-row"><button type="button" class="btn btn-primary" data-act="signin">用 Google 登录</button></div></div>`;
     if (a === 'mismatch') return `<div class="adv-access" id="adv-access" data-acc="mismatch"><p class="lede">这个账号用不了顾问。</p><p class="note">这个邮箱已经绑定了另一个账号，换回第一次用的登录方式试试。上面的方案和今晚的步骤照常排。</p></div>`;
@@ -373,9 +396,9 @@ function chatHtml(app, W) {
     const owner = isOwner(app), me = app.ai.state.me;
     const status = talk && owner && me ? `今天 $${Number(me.today || 0).toFixed(2)}${me.daily_cap ? ' / $' + Number(me.daily_cap).toFixed(0) : ''} · 本期 $${Number(me.cycle || 0).toFixed(2)}` : talk ? '在线' : '';
     const msgs = st.chat.map((m, mi) => m.role === 'assistant'
-        ? `<div class="msg ai"><span class="who">顾问 · ${esc(hm(m.at))}</span><div class="body">${md(m.text)}</div>${(m.recs || []).map((r, ri) => revHtml(W, r, mi + '.' + ri)).join('')}${m.mem ? `<p class="note">${esc(m.mem)}</p>` : ''}${owner && m.meta && m.meta.cost != null ? `<p class="meta">${esc(m.meta.model || '')} · $${Number(m.meta.cost).toFixed(3)}</p>` : ''}</div>`
+        ? `<div class="msg ai"><span class="who">顾问 · ${esc(hm(m.at))}</span><div class="body">${md(m.text)}</div>${m.partial ? `<p class="note">没收完 · <button type="button" class="btn-link sm" data-reask="${mi}">重新问</button></p>` : ''}${(m.recs || []).map((r, ri) => revHtml(W, r, mi + '.' + ri)).join('')}${m.mem ? `<p class="note">${esc(m.mem)}</p>` : ''}${owner && m.meta && m.meta.cost != null ? `<p class="meta">${esc(m.meta.model || '')} · $${Number(m.meta.cost).toFixed(3)}</p>` : ''}</div>`
         : `<div class="msg me"><span class="who">你 · ${esc(hm(m.at))}${m.img ? ' · 带了一张图' : ''}</span><div class="body">${esc(m.text).replace(/\n/g, '<br>')}</div></div>`).join('')
-        + (ST.busy ? `<div class="msg ai"><span class="who">顾问</span><div class="body" id="adv-stream">${ST.stream ? md(ST.stream) : '<span class="note">在想…</span>'}</div></div>` : '');
+        + (ST.busy ? `<div class="msg ai"><span class="who">顾问</span><div class="body" id="adv-stream">${ST.stream ? md(ST.stream) : '<span class="note">在想…</span>'}</div><p class="btn-row"><button type="button" class="btn-link sm quiet" data-act="stop" id="adv-stop">停一下</button></p></div>` : '');
     const minimal = !!(W.profile || {}).minimalMode;
     const quick = (minimal ? ['今晚要换什么吗？', '这块干皮怎么办？'] : ['今晚能刷酸吗？', '这颗痘怎么办？', '这周怎么样？']);
     return `<section class="sec adv-chat" id="adv-chat">
@@ -400,7 +423,7 @@ function dockHtml(app) {
 function histFor(W, list, n) {
     const send = list.slice(-n).map(m => {
         const after = m.role === 'assistant' ? (m.recs || []).map(r => recAfter(W, r)).join('') : '';
-        return { role: m.role, text: m.text + (after ? '\n\n' + after : '') };
+        return { role: m.role, text: m.text + (m.partial ? '\n\n（这条回答中途断了）' : '') + (after ? '\n\n' + after : '') };
     });
     while (send.length && send[0].role !== 'user') send.shift();
     return send;
@@ -420,6 +443,7 @@ export async function send(app, preset) {
     const text = String(preset != null ? preset : ST.draft || '').trim(), img = ST.img;
     if ((!text && !img) || ST.busy) return;
     if (!(await ensureReady(app))) return;
+    const owner = ownerOf(app);
     const W = app.world(), st = chatState(app);
     if (!st.chat.length || !st.ctx) st.ctx = buildSkincareContext(W, whoOf(app));
     st.chat.push({ role: 'user', text: text || '（看图）', img: !!img, at: Date.now() });
@@ -430,12 +454,16 @@ export async function send(app, preset) {
     app.renderScreen('advisor');
     scrollLog();
     const res = await app.ai.api.chat({ messages: histFor(W, st.chat, CHAT_SEND), context: st.ctx, live: liveContext(app.world()), image: img || undefined },
-        t => { ST.stream = t; const s = document.getElementById('adv-stream'); if (s) s.innerHTML = md(t); });
+        t => { if (ownerOf(app) !== owner) return; ST.stream = t; const s = document.getElementById('adv-stream'); if (s) s.innerHTML = md(t); });
+    if (ownerOf(app) !== owner) return;   // 等回答的时候换了账号:丢掉,不往另一个人的存档和对话里写(ST 已被 resetForUser 清过)
     ST.busy = false; ST.stream = '';
     const t2 = app.today();
     let reply = null;
-    if (res.text) {   // 先执行改动(它会改存档),再读存档追加
+    // 没收完(切后台断了)又没带改动 / 她点了「停一下」:按没回来处理;带了改动的(已经执行)留着,标「没收完」
+    const usable = res.text && !res.aborted && !(res.partial && !res.act && !res.prop);
+    if (usable) {   // 先执行改动(它会改存档),再读存档追加
         reply = { role: 'assistant', text: res.text, meta: res.meta, at: Date.now(), recs: [] };
+        if (res.partial) reply.partial = true;
         if (res.act) { const r = applyTonight(app.store, res.act, t2); if (r) reply.recs.push(Object.assign(r, { date: t2, at: Date.now() })); }
         if (res.prop && Array.isArray(res.prop.changes) && res.prop.changes.length) {
             const fromV = regV(app);
@@ -455,7 +483,7 @@ export async function send(app, preset) {
     if (reply) st2.chat.push(reply);
     else { st2.chat.pop(); if (preset == null) ST.draft = text; ST.img = img; }   // 没回来:撤回刚才那条,字放回输入框
     saveChat(app, st2);
-    if (res.err) toast(res.err);
+    if (res.err && !res.aborted) toast(res.err);
     app.renderAll();
     scrollLog();
 }
@@ -465,8 +493,9 @@ async function askPlan(app, request) {
     ST.planBusy = '顾问在按你现在的皮肤和家里的东西排方案…';
     app.renderScreen('advisor');
     try {
-        const W = app.world(), fromV = regV(app);
+        const W = app.world(), fromV = regV(app), owner = ownerOf(app);
         const r = await app.ai.api.plan(buildSkincareContext(W, whoOf(app)), request);
+        if (ownerOf(app) !== owner) return;   // 换了账号:丢掉
         const d = (r && r.data) || {};
         const reg = applyPlan(app.store, d, { model: r.model, cost: r.cost }, app.today());
         const st = chatState(app);
@@ -487,12 +516,13 @@ export async function runReview(app, auto) {
     if (ST.reviewBusy) return;
     if (auto ? !canTalk(app) : !(await ensureReady(app))) return;
     ST.reviewBusy = true;
-    const t = app.today(), week = isoWeek(t);
+    const t = app.today(), week = isoWeek(t), owner = ownerOf(app);
     if (auto) updateAiState(app.store, s => { s.reviewWeek = week; });   // 先占位:请求回来之前别再触发一次
     if (!auto) app.renderScreen('advisor');
     try {
         const W = app.world(), fromV = regV(app);
         const r = await app.ai.api.review(buildSkincareContext(W, whoOf(app)));
+        if (ownerOf(app) !== owner) return;   // 复盘跑了一分钟,中途换了账号:结果属于上一个人,不写进这个人的方案和 sk_ai1
         const d = (r && r.data) || {};
         const changes = (d.adjustments || []).filter(x => x && TYPE2OP[x.type]).slice(0, 6).map(x => ({ op: TYPE2OP[x.type], product: x.type === 'phase' ? '' : (x.item || ''), value: x.value || '', why: x.reason || '' }));
         const rec = changes.length ? applyRegimen(app.store, changes, { kind: 'review', id: 'rv' + Date.now(), reason: '每周复盘：' + String(d.headline || '').slice(0, 50), rationale: d.summary || '', model: r.model, cost: r.cost }, t) : null;
@@ -500,6 +530,7 @@ export async function runReview(app, auto) {
         updateAiState(app.store, s => { s.reviewWeek = week; s.review = { week, at: new Date().toISOString(), auto: !!auto, data: d, rec, replan: (d.adjustments || []).some(x => x && x.type === 'replan'), meta: { model: r.model, cost: r.cost } }; });
         if (!auto || rec) toast(rec && rec.state === 'applied' ? '复盘好了，方案按复盘调了，可以撤销' : '复盘好了');
     } catch (e) {
+        if (ownerOf(app) !== owner) return;
         if (auto) updateAiState(app.store, s => { if (s.reviewWeek === week && !(s.review && s.review.week === week)) delete s.reviewWeek; });
         else toast(e.message || '顾问出错了');
     }
@@ -508,7 +539,7 @@ export async function runReview(app, auto) {
 }
 // 每周一之后第一次打开顾问页,自动复盘一次(sk_ai1.reviewWeek 跟云走,两台设备不会各跑一遍);近两周至少自己记了 3 天皮肤才跑
 function maybeAutoReview(app) {
-    if (!canTalk(app) || ST.reviewBusy || ST.busy) return;
+    if (!canTalk(app) || ST.reviewBusy || ST.busy || !dataNoticeSeen(app)) return;
     if (app.store.state && app.store.state.applyingCloud) return;
     const W = app.world(), s = aiState(app.store), week = isoWeek(W.today);
     if (s.reviewWeek === week) return;
@@ -524,7 +555,8 @@ function recAct(app, key) {
     if (key === 'review') {
         const s = aiState(app.store); rec = s.review && s.review.rec; if (!rec) return;
         rec = Object.assign({}, rec, { kind: 'review' });
-        save = r => updateAiState(app.store, x => { if (x.review && x.review.rec) Object.assign(x.review.rec, { versionId: r.versionId, v: r.v }); });
+        // v1 靠 review.rec.state 显示和决定能不能撤:撤销 / 重做时一起写(保持 v1 读得懂)
+        save = r => updateAiState(app.store, x => { if (x.review && x.review.rec) Object.assign(x.review.rec, { versionId: r.versionId, v: r.v, state: 'applied' }); });
     } else {
         const [mi, ri] = key.split('.').map(Number), st = chatState(app);
         rec = st.chat[mi] && (st.chat[mi].recs || [])[ri]; if (!rec) return;
@@ -534,6 +566,7 @@ function recAct(app, key) {
     if (s === 'applied') {
         const why = rec.kind === 'tonight' ? undoTonightChange(app.store, rec.id, t) : undoRegimenChange(app.store, rec.versionId, t);
         if (why) { toast(why); return; }
+        if (key === 'review') updateAiState(app.store, x => { if (x.review && x.review.rec) x.review.rec.state = 'undone'; });
         toast(rec.kind === 'tonight' ? '已撤销，今晚回到改之前' : '已撤销，方案回到上一版');
     } else if (s === 'undone') {
         if (rec.kind === 'tonight') {
@@ -642,6 +675,7 @@ export function mount(root, app) {
         else if (a === 'plan') askPlan(app);
         else if (a === 'review') runReview(app, false);
         else if (a === 'unimg') { const ta = document.getElementById('adv-text'); if (ta) ST.draft = ta.value; ST.img = null; app.renderScreen('advisor'); }
+        else if (a === 'stop') { if (app.ai.abort) app.ai.abort(); }
         else if (a === 'newchat') sysConfirm('开始新对话？之前的对话会清掉（已经改过的今晚和方案不受影响）。', () => { saveChat(app, { uid: uidOf(app), chat: [], ctx: null }); app.renderScreen('advisor'); }, { ok: '开始新对话' });
     }));
     const red = root.querySelector('#adv-redeem'), code = root.querySelector('#adv-code');
@@ -655,6 +689,11 @@ export function mount(root, app) {
     if (red) red.addEventListener('click', redeem);
     if (code) code.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); redeem(); } });
     root.querySelectorAll('[data-recact]').forEach(b => b.addEventListener('click', () => recAct(app, b.dataset.recact)));
+    // 没收完的那条:把它前面她问的那句再发一次
+    root.querySelectorAll('[data-reask]').forEach(b => b.addEventListener('click', () => {
+        const chat = chatState(app).chat, mi = +b.dataset.reask;
+        for (let i = mi - 1; i >= 0; i--) if (chat[i] && chat[i].role === 'user') { if (!chat[i].img) send(app, chat[i].text); else askAdvisor(app, chat[i].text); return; }
+    }));
     root.querySelectorAll('[data-quick]').forEach(b => b.addEventListener('click', () => send(app, b.dataset.quick)));
     const ta = root.querySelector('#adv-text');
     if (ta) {

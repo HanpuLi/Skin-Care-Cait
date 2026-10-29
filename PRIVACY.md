@@ -20,9 +20,19 @@ The application loads the Firebase browser SDKs from a third-party CDN. Fonts ar
 
 ## Optional AI adviser (invite-only)
 
-Signed-in accounts on an invite list can use an AI adviser. Only when the adviser is used, the client sends the data needed to answer to a small server operated by the app owner: products and their ingredient traits, the current routine, recent skin-state entries and notes, the conversation text, any photo the user chooses to attach, and hormone-therapy context only if that user has enabled it in their own profile. The server verifies the Firebase ID token and forwards the request to Anthropic's Claude API.
+Signed-in accounts on an invite list can use an AI adviser. Before the first automatic request, the app shows a notice describing what the adviser sees; until the user has seen it on that device, tonight's routine is planned offline and nothing is sent automatically. After that, the client sends requests to a small server operated by the app owner in these situations:
+
+- once a day, when the "tonight" screen is open, to plan tonight's steps (and again after a local change such as tonight's shower or shave answer);
+- after the user logs skin notes or marks tonight as done, for a short piece of feedback;
+- when a new user finishes setup, for a first routine;
+- when the user chats with the adviser, asks for a routine or weekly review, reads an ingredient label, or asks whether to buy something;
+- when the user runs a photo analysis: the one to three photos taken this time, plus the front photo from the previous analysis if it is still stored on this device (the user can choose not to include it).
+
+Each request carries the data needed to answer: products and their ingredient traits, the current routine, recent skin-state entries, face-map positions and notes, tonight's plan, the conversation text and any photo the user chooses to attach, and hormone-therapy context only if that user has enabled it in their own profile. For the operator's own account, the server may additionally attach health context that the operator maintains on the server, independently of the in-app setting. The server verifies the Firebase ID token and forwards the request to Anthropic's Claude API.
 
 The server does not keep the request content. It logs only which account called which endpoint, the model, token counts and estimated cost. The only content it stores is short long-term memory notes that the user explicitly asks the adviser to remember; the user can view and delete them in the app. Conversation history stays on the device.
+
+Some adviser output is saved into the user's own synced record: the photo analysis result (structured findings, not the photos), the adviser's feedback on a day's log, and weekly review results. Photos themselves are never synced; they stay in the browser's local database on the device and can be deleted from the app together with that day's record.
 
 ## Public repository boundary
 

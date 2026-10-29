@@ -1,9 +1,13 @@
 // 护肤计划 PWA 的离线缓存。
 // · 安装时预缓存:页面、js/ 和 css/ 下所有模块(v2)、manifest、主屏图标、三份自托管字体(中文宋体子集约 1.3MB,一次装好以后离线也是宋体)
-//   核心文件缺一个就不装(老版本继续用);字体单独装,某一份没下完不连累整体,运行时再补。
-// · 同源请求:网络优先,拿到就更新缓存;断网回退到当前版本的缓存。
+//   一律绕过 HTTP 缓存(cache:'reload'):Pages 给文件 max-age=600,不绕过的话部署后 10 分钟内装的新版可能混进旧模块。
+//   核心文件缺一个就不装(老版本继续用);字体、Firebase SDK 单独装,某一份没下完不连累整体,运行时再补。
+// · 同源请求:缓存优先,只用当前版本(CACHE_NAME)那一套 —— 一次启动只用一个版本,不会拼出新旧混合的模块集;
+//   缓存里没有的才走网络并补进缓存,已有的不拿网络结果覆盖。版本更新只靠 CACHE_NAME 升版走 SW 更新(原子切换),
+//   所以改了 index.html / js/ / css/ 必须给 CACHE_NAME +1(t/engine-unit.mjs 对着 main 核)。
+// · Firebase SDK(URL 带版本、内容不变):缓存优先。iOS 会清 HTTP 缓存,不放进 SW 的话离线首开就成了「没登录」。
 // · Google 字体域(子集外的生僻字兜底):stale-while-revalidate,先给缓存、后台更新。
-const CACHE_NAME = 'skincare-app-v29';
+const CACHE_NAME = 'skincare-app-v30';
 const CORE = [
   './',
   './index.html',
@@ -64,13 +68,17 @@ const FONTS = [
   './fonts/eb-garamond-latin-400.woff2',
   './fonts/courier-prime-latin-400.woff2'
 ];
-const ASSETS = CORE.concat(FONTS);
+const FIREBASE_SDK = 'https://www.gstatic.com/firebasejs/9.23.0/';
+const SDK = ['firebase-app-compat.js', 'firebase-auth-compat.js', 'firebase-firestore-compat.js'].map((f) => FIREBASE_SDK + f);
 const SWR_DOMAINS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
+const fresh = (u) => new Request(u, { cache: 'reload' });
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(CORE).then(() => Promise.all(FONTS.map((f) => cache.add(f).catch(() => null)))))
+      .then((cache) => cache.addAll(CORE.map(fresh)).then(() => Promise.all(
+        FONTS.map((f) => cache.add(fresh(f)).catch(() => null))
+          .concat(SDK.map((u) => fetch(new Request(u, { mode: 'no-cors' })).then((r) => (r && (r.ok || r.type === 'opaque')) ? cache.put(u, r) : null).catch(() => null))))))
       .then(() => self.skipWaiting())
   );
 });
@@ -84,6 +92,14 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// 缓存优先;没有的才上网,拿到就补进当前版本的缓存
+function cacheFirst(req, opts) {
+  return caches.open(CACHE_NAME).then((cache) => cache.match(req, opts).then((hit) => hit || fetch(req).then((res) => {
+    if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone()).catch(() => null);
+    return res;
+  })));
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
@@ -95,25 +111,17 @@ self.addEventListener('fetch', (event) => {
     })));
     return;
   }
-  if (url.origin !== self.location.origin) return;   // Firebase、顾问后端等:不经过缓存
-  // 字体:缓存优先(文件名带内容,不会变)
-  if (url.pathname.indexOf('/fonts/') >= 0) {
-    event.respondWith(caches.match(req, { cacheName: CACHE_NAME }).then((hit) => hit || fetch(req).then((res) => {
-      if (res && res.ok) { const c = res.clone(); caches.open(CACHE_NAME).then((cache) => cache.put(req, c)); }
-      return res;
-    })));
+  if (req.url.indexOf(FIREBASE_SDK) === 0) { event.respondWith(cacheFirst(req)); return; }
+  if (url.origin !== self.location.origin) return;   // Firestore、登录、顾问后端等:不经过缓存
+  if (req.mode === 'navigate') {
+    // 页面:当前版本缓存里的那一份(带 #/tab 或 ?query 也认);缓存里没有才上网
+    event.respondWith(caches.open(CACHE_NAME).then((cache) => cache.match(req, { ignoreSearch: true })
+      .then((hit) => hit || (/\/$/.test(url.pathname) ? cache.match('./index.html') : null))
+      .then((hit) => hit || fetch(req).then((res) => {
+        if (res && res.status === 200 && res.type === 'basic') cache.put(req, res.clone()).catch(() => null);
+        return res;
+      }))));
     return;
   }
-  event.respondWith(
-    fetch(req)
-      .then((response) => {
-        if (response && response.status === 200 && response.type === 'basic') {
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, responseToCache));
-        }
-        return response;
-      })
-      .catch(() => caches.match(req, { cacheName: CACHE_NAME, ignoreSearch: true })
-        .then((hit) => hit || caches.match(req)))
-  );
+  event.respondWith(cacheFirst(req, { ignoreSearch: true }));
 });

@@ -18,7 +18,10 @@
 .cap-ph{position:absolute;left:var(--sp-4);right:var(--sp-4);bottom:var(--sp-4);text-align:center}
 .cap-oval{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .cap-oval ellipse{fill:none;stroke:var(--line-ctl);stroke-width:1.5;stroke-dasharray:6 6}
-.cap-frame.live .cap-oval ellipse{stroke:var(--paper)}
+.cap-frame.live .cap-oval ellipse{stroke:#f4f1ea}   /* 叠在相机画面上,不跟主题反转(深色下 --paper 是近黑,暗光自拍时看不见) */
+.cap-oval ellipse.under{display:none}
+.cap-frame.live .cap-oval ellipse.under{display:inline;stroke:rgba(0,0,0,.35);stroke-width:3;stroke-dasharray:none}   /* 垫一条暗底线:画面亮的时候也看得清 */
+:root[data-theme="dark"] .cap-frame.live .cap-oval ellipse:not(.under){stroke:var(--ink-strong)}
 .cap-count{text-align:center}
 .cap-why{color:var(--ink)}
 .cap-zones{margin-top:var(--sp-2)}

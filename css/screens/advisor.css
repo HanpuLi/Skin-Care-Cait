@@ -51,7 +51,9 @@
 .n7-b{display:flex;align-items:center;justify-content:center;min-height:44px;min-width:0;border-radius:var(--r-ctl);font:14px/1 var(--serif);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line-ctl);
   transition:background-color .15s,box-shadow .15s}
 .n7-b[aria-pressed="true"]{background:var(--tint);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
-@media(max-width:360px){.n7-type{font-size:16px}.n7-dow{font-size:12px}}
+/* 320 宽:280 的内容宽放 7 格只有 38px。左右顶到屏幕边、格间距收到 1px → (320 − 6) / 7 ≈ 44.9px,保住 44 的触控宽度 */
+@media(max-width:360px){.n7-type{font-size:16px}.n7-dow{font-size:12px}
+  .n7{margin-left:calc(-1 * var(--gutter));margin-right:calc(-1 * var(--gutter));gap:1px}}
 #adv-n7-note{margin-top:var(--sp-2)}
 #adv-n7-note.rev{color:var(--rev)}
 .adv-habit{column-gap:var(--sp-5)}

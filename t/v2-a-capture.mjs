@@ -69,10 +69,12 @@ await run('v2-a-capture', [
         const p = await open({ seed: 'full', seedArg: SEED, after: AFTER, mode: 'on', aif: `{assess:${JSON.stringify(ASSESS)}}`, login: true, hash: '#/record' });
         await p.eval(PUT_PREV + ';return 1');
         await openCap(p);
-        const intro = await p.eval(CAP + `return {t:(q('#capture-sheet .sheet-t')||{}).textContent,full:!!q('#capture-sheet .sheet.full'),tips:qa('#capture-sheet .cap-tips li').map(x=>x.textContent),txt:(q('#cap-body')||{}).innerText||''}`);
+        await p.waitFor(`/那张正脸一起发过去/.test((document.getElementById('cap-body')||{}).innerText||'')`, 3000).catch(() => { });
+        const intro = await p.eval(CAP + `return {t:(q('#capture-sheet .sheet-t')||{}).textContent,full:!!q('#capture-sheet .sheet.full'),tips:qa('#capture-sheet .cap-tips li').map(x=>x.textContent),txt:(q('#cap-body')||{}).innerText||'',noprev:!!q('#cap-noprev')}`);
         S.ok(intro.full && intro.t === '拍照分析', '全屏 sheet', intro.t);
         S.ok(intro.tips.length === 4 && /洗完脸.*先别涂/.test(intro.tips[0]) && /同一个位置.*同样的光/.test(intro.tips[1]) && /闪光灯/.test(intro.tips[2]) && /人像模式.*美颜/.test(intro.tips[3]), '拍前提醒:洗完未涂、同位置同光、关闪光、别开人像 / 美颜', intro.tips);
-        S.ok(/上次拍是.*3 天前.*一起比/.test(intro.txt) && /照片只存在这台设备上/.test(intro.txt), '说明会和上次比、照片只存本机', intro.txt);
+        S.ok(/上次拍是.*3 天前.*一起比/.test(intro.txt) && /照片存在这台设备上/.test(intro.txt), '说明会和上次比、照片存在本机', intro.txt);
+        S.ok(/会把 .* 那张正脸一起发过去/.test(intro.txt) && intro.noprev, '本机有上次的正脸照片:写明会一起发过去,并给「这次不带上次的照片」', intro.txt);
         await shootThree(p);
         const sh = await p.eval(CAP + `return {oval:!!q('#capture-sheet .cap-oval ellipse'),count:(q('.cap-count')||{}).textContent,go:(q('#cap-go')||{}).textContent,views:qa('.cap-view .meta').map(x=>x.textContent)}`);
         S.ok(sh.oval, '画面上有脸部轮廓框', sh);
@@ -100,6 +102,27 @@ await run('v2-a-capture', [
         await tab(p, 'tonight', 300);
         S.ok(await p.eval(`return !document.getElementById('tn-med')`), '照片看出泛红但她没确认:就医红线不亮(只数她点的状态)');
         S.ok(await log(p, '/api/assess') === 1, '只调了一次');
+        // 删掉上一次那天的照片(只删照片):本机拿不到了,下一次分析也不再带 previous_image
+        await tab(p, 'record', 300);
+        await p.eval(`const d=__d(-3);const b=document.querySelector('#record [data-act="day"][data-date="'+d+'"]');if(b)b.click();return 1`); await sleep(400);
+        await p.waitFor(`!!document.getElementById('sk-delphoto') && !document.getElementById('sk-delphoto').hidden`, 3000).catch(() => { });
+        const hadBtn = await p.eval(`return !!document.getElementById('sk-delphoto') && !document.getElementById('sk-delphoto').hidden`);
+        await p.eval(`document.getElementById('sk-delphoto').click();await new Promise(r=>setTimeout(r,150));[...document.querySelectorAll('#sheet-root .sheet-ov:last-child .sheet-actions .btn')].find(b=>b.textContent==='删掉').click();await new Promise(r=>setTimeout(r,400));return 1`);
+        const k2 = await p.eval(`return ${IDB_KEYS}`), d3 = await p.eval(`return __d(-3)`);
+        S.ok(hadBtn && !k2.some(k => k.indexOf('u-test__' + d3) === 0), '某一天「删掉照片」:本机那天的照片(含正 / 左 / 右)都删了', { hadBtn, k2 });
+        await p.eval(`document.querySelectorAll('#sheet-root .sheet-ov').forEach(o=>o.remove());return 1`);
+        // 今天那份已经是「上一次」了:删今天的照片后再分析(用今天的日期重拍)不应再带图;改用 d-3 的结构化结果测「不带 previous_image」
+        await p.eval(`const j=${ENV}.sk_jrnl1;return 1`);
+        await p.eval(`const d=__d(0);const b=document.querySelector('#rec-today [data-act=sheet]')||document.getElementById('rec-more');b.click();return 1`); await sleep(400);
+        await p.eval(`const b=document.getElementById('sk-del');b.click();await new Promise(r=>setTimeout(r,150));[...document.querySelectorAll('#sheet-root .sheet-ov:last-child .sheet-actions .btn')].find(b=>b.textContent==='删掉').click();await new Promise(r=>setTimeout(r,500));return 1`);
+        const k3 = await p.eval(`return ${IDB_KEYS}`), d0b = await p.eval(`return __d(0)`), en0 = await p.eval(`return ${TODAY_EN}`);
+        S.ok(!k3.some(k => k.indexOf('u-test__' + d0b) === 0) && !en0.date, '「删掉这一天的记录」:当天记录和本机照片一起删', { k3, en0 });
+        await openCap(p);
+        await shootThree(p);
+        await click(p, '#cap-go', 300);
+        await p.waitFor(`(__AIF.log||[]).filter(x=>x.p==='/api/assess').length===2`, 8000);
+        const b2 = await p.eval(`const b=(__AIF.log||[]).filter(x=>x.p==='/api/assess')[1].body;return {pimg:'previous_image' in b,pd:b.previous_date||''}`);
+        S.ok(!b2.pimg && b2.pd === d3, '删了照片之后:下一次分析只带上次的结构化结果,不带 previous_image', b2);
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
     ['「确认记上」:建议写进今天的状态 + 脸部地图,要顾问反馈;她确认的泛红才算进红线', async ({ S, open }) => {
@@ -119,6 +142,20 @@ await run('v2-a-capture', [
         await click(p, '#capture-sheet [data-cap=close]', 300);
         await tab(p, 'tonight', 300);
         S.ok(await p.eval(`return !!document.getElementById('tn-med')`), '她确认了泛红(第 5 天):就医红线亮(红线只数她确认过的状态)');
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
+    ['分析中不让关:结果页(确认记上 / 改一下)不会丢', async ({ S, open }) => {
+        const p = await open({ seed: 'full', seedArg: SEED, after: AFTER, mode: 'on', aif: `{assess:${JSON.stringify(ASSESS)},assessMs:1500}`, login: true, hash: '#/record' });
+        await openCap(p);
+        await shootThree(p);
+        await click(p, '#cap-go', 200);
+        const b = await p.eval(CAP + `const ov=q('#capture-sheet');const x=ov.querySelector('.sheet-x');const txt=q('#cap-body').innerText;
+            ov.dispatchEvent(new MouseEvent('click',{bubbles:true}));document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));await new Promise(r=>setTimeout(r,100));
+            return {xHidden:!x||x.hidden,still:!!q('#capture-sheet'),txt}`);
+        S.ok(b.xHidden && b.still && /先别关/.test(b.txt) && !/先去做别的/.test(b.txt), '分析中:关闭按钮藏起来,点背景 / Esc 都不关,写明「先别关」', b);
+        await p.waitFor(`!!document.querySelector('#capture-sheet .cap-overall')`, 8000);
+        const a = await p.eval(CAP + `const x=q('#capture-sheet .sheet-x');return {x:!!x&&!x.hidden,ok:!!q('#cap-fill-ok')}`);
+        S.ok(a.x && a.ok, '看完:结果页在,能「确认记上」,关闭按钮回来了', a);
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
     ['不能用 → 说为什么、重拍;不存结果、不存照片', async ({ S, open }) => {

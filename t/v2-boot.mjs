@@ -78,9 +78,35 @@ try {
         const p2 = await open(br, origin + '/index.html');
         await sleep(2500);
         const r2 = await p2.eval(`return {boot:document.documentElement.dataset.boot||'',lock:(document.querySelector('#app-lock .sheet-t')||{}).textContent||'',empty:!document.getElementById('tonight').innerHTML.trim()}`);
-        S.ok(!r2.boot && /别的窗口/.test(r2.lock) && r2.empty, '第二个窗口:拿不到锁,不启动,提示「已经在别的窗口打开了」', r2);
+        S.ok(r2.boot !== 'ok' && /别的窗口/.test(r2.lock) && r2.empty, '第二个窗口:拿不到锁,不启动,提示「已经在别的窗口打开了」', r2);
         S.ok(!p2.errors.length, '第二个窗口 0 console error', p2.errors);
         await closeTab(p2); await closeTab(p);
+    }
+    // ── 切 tab 回顶:顾问页滚下去后切到今晚,今晚的标题在视口里(四屏共用文档滚动,各记各的位置)──
+    {
+        const p = await open(br, origin + '/index.html');
+        await p.eval(`__seed.full(); return 1`);
+        await p.send('Page.reload', {}); await sleep(300);
+        await p.waitFor(BOOTED, 8000);
+        const r = await p.eval(`document.getElementById('tab-advisor').click();await new Promise(r=>setTimeout(r,100));
+            document.body.style.minHeight='4000px';window.scrollTo(0,1138);await new Promise(r=>setTimeout(r,60));const y0=window.scrollY;
+            document.getElementById('tab-tonight').click();await new Promise(r=>setTimeout(r,100));
+            const h=document.getElementById('tonight-h')||document.querySelector('#tonight h1');const top=h?h.getBoundingClientRect().top:-1;const y1=window.scrollY;
+            document.getElementById('tab-advisor').click();await new Promise(r=>setTimeout(r,100));const y2=window.scrollY;document.body.style.minHeight='';
+            return {y0,y1,top,y2,ih:innerHeight}`);
+        S.ok(r.y0 > 500 && r.top >= 0 && r.top < r.ih, '顾问页滚下去后切到今晚:今晚的标题在视口里', r);
+        S.ok(Math.abs(r.y2 - r.y0) < 2, '切回顾问:回到刚才滚到的位置', r);
+        S.ok(!p.errors.length, '切 tab:0 console error', p.errors);
+        await closeTab(p);
+    }
+    // ── 模块图里一个文件没加载到:不是没有提示的空壳,8 秒内给「重新加载」──
+    {
+        const p = await open(br, origin + '/index.html', { blockPaths: ['/js/ui/guide.js'] });
+        await sleep(300);
+        await p.waitFor('!!document.getElementById("boot-fail")', 9500).catch(() => { });
+        const r = await p.eval(`const ov=document.getElementById('boot-fail');return {boot:document.documentElement.dataset.boot||'',ov:!!ov,t:ov?(ov.querySelector('.sheet-t')||{}).textContent:'',btn:ov?[...ov.querySelectorAll('button')].map(b=>b.textContent):[]}`);
+        S.ok(r.ov && r.boot !== 'ok' && /没加载完整/.test(r.t) && r.btn.indexOf('重新加载') >= 0, '掐掉一个模块:8 秒内出现「这一版没加载完整」+ 重新加载', r);
+        await closeTab(p);
     }
     // ── 深色 ──
     {

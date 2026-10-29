@@ -39,8 +39,8 @@ await run('v2-a-record', [
         // 点历史里的一天 → 那天的 sheet,能改
         const d3 = await p.eval(`return __d(-3)`);
         await click(p, `#rec-hist [data-date="${d3}"]`, 300);
-        const sh = await p.eval(R + `const ov=q('#skin-sheet');return {t:ov&&ov.querySelector('.sheet-t').textContent,photo:!!(ov&&ov.querySelector('.sk-photo'))}`);
-        S.ok(sh.t && /的皮肤$/.test(sh.t) && !sh.photo, '点历史里的一天:那天的 sheet(过去的日子不拍照)', sh);
+        const sh = await p.eval(R + `const ov=q('#skin-sheet');return {t:ov&&ov.querySelector('.sheet-t').textContent,photo:!!(ov&&ov.querySelector('.sk-photo:not([hidden]), [data-sk=capture], #sk-file'))}`);
+        S.ok(sh.t && /的皮肤$/.test(sh.t) && !sh.photo, '点历史里的一天:那天的 sheet(过去的日子不拍照;那天这台设备上没照片就不显示照片栏)', sh);
         await click(p, '#sk-sym-泛红', 150);
         await click(p, '#skin-sheet .sheet-actions .btn-primary', 300);
         const e3 = await p.eval(`return (${ENV}.sk_jrnl1||[]).find(e=>e.date===__d(-3))`);
@@ -154,6 +154,30 @@ await run('v2-a-record', [
         await p.waitFor(`/做得不错/.test((document.getElementById('rec-today')||{}).innerText||'')`, 3000);
         S.ok(true, '「再试一次」:重调,结果换上');
         S.ok(!p.errors.length, '0 console error', p.errors.filter(x => !/502/.test(x)));
+    }],
+    ['记皮肤的 sheet 开着时点「把…加进今天的记录」:关 sheet 不把备注改回旧文;v1 的 noteSaved 也写上', async ({ S, open }) => {
+        const FB = { text: '鼻翼那块今晚先只保湿。', note_add: '鼻翼起皮', next_adjust: [], dropped: [] };
+        const p = await open({ seed: 'full', mode: 'on', aif: `{feedback:${JSON.stringify(FB)}}`, login: true, hash: '#/record' });
+        await tab(p, 'record', 300);
+        await typeNote(p, '今天还行');
+        await click(p, '#rec-q-go', 200);
+        await p.waitFor(`/鼻翼那块/.test((document.getElementById('rec-today')||{}).innerText||'')`, 4000);
+        await click(p, '#rec-more', 400);
+        await p.waitFor(`!!document.querySelector('#skin-sheet [data-fb-act=note]')`, 3000);
+        await click(p, '#skin-sheet [data-fb-act=note]', 300);
+        const mid = await p.eval(`return (document.getElementById('sk-note')||{}).value||''`);
+        await click(p, '#skin-sheet .sheet-actions .btn-primary', 400);
+        const r = await p.eval(`const d=${ENV};return {note:((d.sk_jrnl1||[]).find(e=>e.date===__d(0))||{}).note||'',saved:!!(((d.sk_ai1||{}).feedback||{})[__d(0)]||{}).noteSaved}`);
+        S.ok(/今天还行；鼻翼起皮/.test(r.note) && /鼻翼起皮/.test(mid), '关 sheet 后备注里还有顾问那句(输入框也跟着换了)', { r, mid });
+        S.ok(r.saved, 'sk_ai1.feedback[今天].noteSaved = true(v1 设备不再出按钮)', r);
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
+    ['极简模式记录页从不催:不标「今天还没记」「没记」', async ({ S, open }) => {
+        const p = await open({ seed: 'minimal', seedArg: `{profile:{showJournal:true}}` });
+        await tab(p, 'record', 300);
+        const r = await p.eval(`return {t:(document.getElementById('rec-today')||{}).innerText||'',aria:[...document.querySelectorAll('#rec-14 [aria-label]')].map(x=>x.getAttribute('aria-label'))}`);
+        S.ok(!/今天还没记/.test(r.t) && !r.aria.some(a => /没记/.test(a)), '极简:「今天记下的」写中性的一句,14 天格子不说「没记」', r);
+        S.ok(!p.errors.length, '0 console error', p.errors);
     }],
     ['HRT 只在本人开了时显示;照片不分析时只存本机', async ({ S, open }) => {
         const p = await open({ seed: 'full', seedArg: `{profile:{hrt:true},jrnl:[{date:__d(-2),status:['闭口'],products:[],note:'',phase:'剂量调整'}]}`, hash: '#/record' });

@@ -2,6 +2,7 @@
 // 引擎全是纯函数:造一份假 localStorage → createStore → buildWorld,直接问引擎。数据全是虚构的。
 //   跑:  node t/engine-unit.mjs
 import fs from 'node:fs';
+import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { createStore, CLOUD_KEYS, K, LOCAL_KEYS } from '../js/store.js';
 import { addDays } from '../js/clock.js';
@@ -22,6 +23,9 @@ import { syncRegimen, currentRegimen, commitAiRegimen } from '../js/model/regime
 import { buildSkincareContext } from '../js/ai/context.js';
 import { applyTonight, undoTonightChange, applyRegimen, validatePlan, gateTonightPlan, onShopLocalChange, undoRegimenChange, localToggleLow } from '../js/ai/apply.js';
 import { parseSseBlock, aiClean, createAiClient } from '../js/ai/client.js';
+import { localEditProduct, localDropProduct } from '../js/ui/products.js';
+import { localUnGone as localUnGone2 } from '../js/ai/apply.js';
+import { DEFAULT_PD } from '../js/model/products.js';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const T = '2026-10-29';
@@ -284,11 +288,118 @@ export async function runEngineUnit(S) {
         S.ok(r2 && r2.blocked.some(b => b.product === PC && /这周已经刷过/.test(b.why)), '这周已经刷到上限:顾问写的酸也拦下', r2 && r2.blocked);
         S.ok(gateTonightPlan(w, { steps: [{ product: GG }] }) === null, '一步都不剩:返回 null(退回离线今晚)');
     });
+    t('顾问写的今晚过闸(修复员 r1)', () => {
+        const TS = 'La Roche-Posay Toleriane Sensitive Fluide', IPSA = 'IPSA 深层净化泥面膜', VOT = 'Votary 10%乳酸', LAC = 'Lacura 温和洗面奶';
+        // ⑦ 分区避开项:顾问自己没写避开,也得补上和离线同一句
+        const zw = W(full({ status: () => ['稳定'], profile: { zones: [{ name: '人中/鼻下', avoid: ['acid', 'mask', 'retinol'] }] } }));
+        const z = gateTonightPlan(zw, { steps: [{ product: LAC, how: '洗' }, { product: PC, how: '全脸薄涂' }, { product: TS, how: '封层' }] });
+        const zs = z && z.steps.find(x => x.product === PC);
+        S.ok(zs && /避开人中\/鼻下/.test(zs.how) && /^全脸薄涂/.test(zs.how), '顾问那步没写避开:how 补上「（避开人中/鼻下）」', zs);
+        const z2 = gateTonightPlan(zw, { steps: [{ product: PC, how: '薄涂，避开人中/鼻下' }] });
+        S.ok(z2 && (z2.steps[0].how.match(/人中\/鼻下/g) || []).length === 1, '顾问已经写了避开:不重复补', z2 && z2.steps[0]);
+        // 纯动作点名了酸:红线亮着也不能借一句话写进来
+        const red = W(full({ status: () => ['泛红'] }));
+        S.ok(safetyGate(red).medical, '(前提)近 14 天天天泛红:就医红线亮');
+        const r = gateTonightPlan(red, { steps: [{ product: LAC, how: '洗' }, { product: '', how: "T 区薄涂一层 Paula's Choice 6%杏仁酸+2%乳酸，停 3 分钟" }, { product: '', how: 'T 区再刷一层酸' }, { product: '', how: '凉水冲洗' }, { product: TS, how: '封层' }] });
+        S.ok(r && !r.steps.some(x => /杏仁酸|刷一层酸/.test(x.how) || x.product === PC) && r.steps.some(x => x.how === '凉水冲洗')
+            && r.blocked.some(b => b.product === PC) && r.blocked.some(b => b.act && /就医/.test(b.why)), '红线亮:点名 PC 的纯动作按 PC 过闸被拦;没点名但写了「酸」的纯动作也拦;普通纯动作留着', r);
+        const sw = W(full({ status: () => ['稳定'] }));
+        const r3 = gateTonightPlan(sw, { steps: [{ product: PC, how: '薄涂' }, { product: '', how: '等 PC 酸干了再上保湿' }, { product: TS, how: '封层' }] });
+        S.ok(r3 && r3.steps.length === 3 && r3.steps[1].product === '' && !r3.blocked.length, '纯动作点到的是已经单列的那支:当补充说明留着,不重复过闸', r3);
+        // 泥膜和酸:同晚冲突 + 共用去角质额度
+        const m = gateTonightPlan(sw, { steps: [{ product: LAC, how: '洗' }, { product: PC, how: '薄涂' }, { product: IPSA, how: '敷' }, { product: TS, how: '封层' }] });
+        S.ok(m && m.steps.some(x => x.product === PC) && !m.steps.some(x => x.product === IPSA) && m.blocked.some(b => b.product === IPSA), '完整模式:顾问把 PC 酸和泥膜排同一晚 → 泥膜拦下', m && m.blocked);
+        const mu = W(full({ status: () => ['稳定'], products: i => i === -2 ? ['泥面膜'] : [] }));
+        const m2 = gateTonightPlan(mu, { steps: [{ product: LAC, how: '洗' }, { product: PC, how: '薄涂' }, { product: TS, how: '封层' }] });
+        S.ok(m2 && m2.blocked.some(b => b.product === PC), '本周已经敷过泥膜(和酸共用额度,上限 1):顾问写的酸拦下', m2 && m2.blocked);
+        const m3 = gateTonightPlan(sw, { steps: [{ product: IPSA, how: '敷' }, { product: PC, how: '薄涂' }, { product: TS, how: '封层' }] });
+        S.ok(m3 && !m3.steps.some(x => x.product === PC) && m3.blocked.some(b => b.product === PC), '先排了泥膜、后排酸:酸也拦下(反过来同理)', m3 && m3.blocked);
+        // change_tonight 的 swap:保湿不能被换成酸 / 泥膜
+        const s1 = full({ status: () => ['稳定'], products: i => i === -1 ? ['PC酸'] : [] });
+        const a1 = applyTonight(s1, { id: 'sw1', changes: [{ op: 'swap', product: TS, to: VOT }] }, T);
+        const w1 = W(s1);
+        S.ok(a1 && a1.result[0] && a1.state === 'failed' && !tonight(w1).steps.some(x => x.p === VOT), '本周额度已满:swap 保湿 → Votary 被拦,今晚没有 Votary', a1 && a1.result);
+        const s2 = minimal();
+        const a2 = applyTonight(s2, { id: 'sw2', changes: [{ op: 'swap', product: TS, to: IPSA }] }, T);
+        S.ok(a2 && a2.result[0], '极简:swap 唯一的保湿 → 泥膜被拦', a2 && a2.result);
+        // 就算 sk_tnai1 里已经有这种 swap(旧设备写的):离线今晚也不把活性换进来,保湿空了要报
+        const s3 = minimal({ extra: { sk_tnai1: { date: T, id: 'old', ops: [{ op: 'swap', product: TS, to: IPSA }] } } });
+        const tn3 = tonight(W(s3));
+        S.ok(!tn3.steps.some(x => x.p === IPSA && x.kind === 'base'), '旧记录里的「保湿换泥膜」:离线今晚不把泥膜当普通步骤换进来', tn3.steps);
+        const s4 = full({ status: () => ['稳定'], extra: { sk_tnai1: { date: T, id: 'old2', ops: [{ op: 'skip', product: TS }] } } });
+        const tn4 = tonight(W(s4));
+        S.ok(!tn4.steps.some(x => x.p === TS) && tn4.warnings.some(x => /保湿这一档是空的/.test(x.text)), '顾问跳过了唯一的保湿:「保湿这一档是空的」在小改落地之后才判', tn4);
+    });
     t('client', () => {
         const b = parseSseBlock('event: delta\ndata: {"t":"好"}');
         S.ok(b.event === 'delta' && b.data.t === '好' && parseSseBlock('event: x\ndata: {bad') === null, 'SSE 块解析(坏 JSON 跳过)');
         S.ok(aiClean({ a: ['好的\u{1F600}'] }).a[0] === '好的', '顾问回来的字去 emoji');
     });
+    t('货架:v1 写过的 sk_proddefs1 缺内置产品(用完过的)→ 买回来后能改、能拿掉', () => {
+        // v1 每次改货架写的是滤掉了「用完了」的那份:Votary 不在 sk_proddefs1 里,但在 sk_gone1
+        const v1defs = JSON.parse(JSON.stringify(DEFAULT_PD.filter(x => x.id !== 'votary')));
+        const s = full({ extra: { sk_proddefs1: v1defs, sk_gone1: ['avene', 'toleriane', 'votary'] } });
+        localUnGone2(s, 'votary', T);
+        const e = localEditProduct(s, 'votary', { name: 'Votary 10%乳酸 新瓶' }, T);
+        const defs1 = s.lg(K.prodDefs) || [];
+        S.ok(e && defs1.some(x => x.id === 'votary' && x.name === 'Votary 10%乳酸 新瓶'), '编辑:落盘了(补回来的内置定义第一次写入就持久化)', e && e.name);
+        const d = localDropProduct(s, 'votary', '不想用', T);
+        const defs2 = s.lg(K.prodDefs) || [];
+        S.ok(d && defs2.some(x => x.id === 'votary' && x.hidden && x.dropped), '不要了:能拿掉(返回非 null,定义上标 hidden + dropped)', d);
+        S.ok(defs2.filter(x => x.id === 'votary').length === 1 && defs2.length === DEFAULT_PD.length, '补回来的不重复,其余内置不受影响', defs2.length);
+    });
+    t('client:去 emoji 去干净(肤色修饰符 / 国旗 / §3.12 符号)', () => {
+        const cases = [['\u{1F44D}\u{1F3FB} 好的', '好的'], ['\u{1F1EC}\u{1F1E7} 英国', '英国'], ['\u2713 做完了', '做完了'], ['\u2605 重点', '重点'], ['\u{1F3FB} 今晚照常', '今晚照常'], ['前 7 天 \u2192 这 7 天', '前 7 天 \u2192 这 7 天']];
+        const got = cases.map(([a]) => aiClean(a));
+        S.ok(cases.every(([, b], i) => got[i] === b), '修饰符单独来也删(流式分段)、区域指示符、✓ ★ 都删;→ 不误删', got);
+    });
+    await (async () => {
+        const LS0 = () => { const m = new Map(); return { getItem: k => m.has(k) ? m.get(k) : null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) }; };
+        const user = { uid: 'u1', getIdToken: async () => 'tok' };
+        const mkc = (fetch, extra) => createAiClient(Object.assign({ base: 'http://x', getUser: () => user, fetch, localStorage: LS0(), today: () => T, wait: () => Promise.resolve(), limits: { point: 120, streamHead: 120, streamIdle: 120, assess: 120, shop: 120 } }, extra || {}));
+        const hang = (u, init) => new Promise((res, rej) => { if (init && init.signal) init.signal.addEventListener('abort', () => rej(new DOMException('aborted', 'AbortError'))); });
+        try {
+            // 卡住的请求到点放弃,后面排队的照常跑
+            let calls = 0;
+            const c = mkc((u, init) => { calls++; return /review/.test(u) ? hang(u, init) : Promise.resolve(new Response(JSON.stringify({ data: { ok: 1 } }), { status: 200 })); });
+            const rv = c.api.review({}).catch(e => e);
+            const tn = await c.api.tonight({});
+            const e1 = await rv;
+            S.ok(e1 && e1.code === 0 && /太久没回应/.test(e1.message) && tn && tn.data && tn.data.ok === 1, '卡住的请求超时放弃(code 0,中文提示),排在后面的今晚照常拿到', { e: e1 && e1.message, tn });
+            // 流式中途断开:半截不当完整回答
+            const enc = new TextEncoder();
+            const brk = () => Promise.resolve(new Response(new ReadableStream({ start(ctl) { ctl.enqueue(enc.encode('event: delta\ndata: {"t":"今晚可以刷酸，但先"}\n\n')); setTimeout(() => ctl.error(new TypeError('Load failed')), 5); } }), { status: 200 }));
+            const o = await mkc(brk).api.chat({ message: 'x' });
+            S.ok(o.partial === true && o.code === 0 && /没收完/.test(o.err) && !/Load failed/.test(o.err), '流式断在半截:partial、code 0、中文提示(不透传 Load failed)', o);
+            const eof = () => Promise.resolve(new Response(new ReadableStream({ start(ctl) { ctl.enqueue(enc.encode('event: delta\ndata: {"t":"半句"}\n\n')); ctl.close(); } }), { status: 200 }));
+            const o2 = await mkc(eof).api.chat({ message: 'x' });
+            S.ok(o2.partial === true && o2.err, '读到结尾却没有 done:也算半截', o2);
+            const idle = () => Promise.resolve(new Response(new ReadableStream({ start(ctl) { ctl.enqueue(enc.encode('event: delta\ndata: {"t":"想"}\n\n')); } }), { status: 200 }));
+            const o3 = await mkc(idle).api.chat({ message: 'x' });
+            S.ok(o3.partial === true && o3.code === 0, '流式太久没动静:空闲超时断开,不会永远停在「在想」', o3);
+            // abort:她点「停一下」
+            const c4 = mkc(idle, { limits: { streamIdle: 5000, streamHead: 5000, point: 5000 } });
+            const p4 = c4.api.chat({ message: 'x' });
+            await new Promise(r => setTimeout(r, 30));
+            const ab = c4.abort();
+            const o4 = await p4;
+            S.ok(ab && o4.aborted === true, 'abort() 取消当前这条流', o4);
+            // token 刷新失败(离线):code 0、中文,不透 Firebase 英文
+            const c5 = createAiClient({ base: 'http://x', getUser: () => ({ uid: 'u1', getIdToken: async () => { const e = new Error('Firebase: Error (auth/network-request-failed).'); e.code = 'auth/network-request-failed'; throw e; } }), fetch: () => { throw new Error('不该到这'); }, localStorage: LS0(), today: () => T });
+            const e5 = await c5.api.tonight({}).catch(e => e);
+            S.ok(e5 && e5.code === 0 && !/Firebase/.test(e5.message), 'getIdToken 抛 auth/network-request-failed:按连不上处理(code 0)', e5 && { m: e5.message, c: e5.code });
+            // 401:先强制刷新 token 重试一次;仍 401 换成中文说明,不说「请先登录」
+            const forced = [];
+            const u6 = { uid: 'u1', getIdToken: async f => { forced.push(!!f); return f ? 'tok2' : 'tok1'; } };
+            const f6 = (u, init) => Promise.resolve(new Response(JSON.stringify(init.headers.Authorization === 'Bearer tok2' ? { data: { ok: 2 } } : { error: '请先登录。', status: 'signed_out' }), { status: init.headers.Authorization === 'Bearer tok2' ? 200 : 401 }));
+            const c6 = createAiClient({ base: 'http://x', getUser: () => u6, fetch: f6, localStorage: LS0(), today: () => T });
+            const r6 = await c6.api.tonight({});
+            S.ok(r6 && r6.data && r6.data.ok === 2 && forced.join() === 'false,true', '401:强制刷新 token 重试一次就过', { r6, forced });
+            const c7 = createAiClient({ base: 'http://x', getUser: () => user, fetch: () => Promise.resolve(new Response(JSON.stringify({ error: '请先登录。', status: 'signed_out' }), { status: 401 })), localStorage: LS0(), today: () => T });
+            const e7 = await c7.api.tonight({}).catch(e => e);
+            S.ok(e7 && e7.code === 401 && !/请先登录/.test(e7.message) && /没认出你的登录/.test(e7.message), '一直 401:换成「暂时没认出你的登录」', e7 && e7.message);
+        } catch (e) { S.ok(false, 'client 异步测试抛异常 ' + e.message, e.stack); }
+    })();
 
     // ═══ 存储 / 兼容 / 文件表(s-70 的静态部分)═══
     t('CLOUD_KEYS', () => {
@@ -311,6 +422,15 @@ export async function runEngineUnit(S) {
         S.ok(!/legacy\//.test(sw) && !/legacy\//.test(html) && !/ai\.js/.test(sw), '旧单文件(legacy/)不被新 index.html 加载,也不进 sw 缓存');
         const css = (html.match(/href="(css\/[^"]+)"/g) || []).map(x => x.slice(6, -1)).sort();
         S.ok(JSON.stringify(css) === JSON.stringify(files.filter(f => f.startsWith('./css/')).map(f => f.slice(2)).sort()), 'index.html 引了全部样式表', css);
+        // SW 缓存优先(一次启动只用一个版本):改了 index.html / js/ / css/ 而 CACHE_NAME 没升,已装 App 的人永远拿不到新版
+        try {
+            const sh = c => execSync(c, { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+            const base = sh('git merge-base HEAD main').trim();
+            const name = x => (x.match(/const CACHE_NAME = '([^']+)'/) || [])[1];
+            const changed = sh('git diff --name-only ' + base + ' -- index.html js css').trim();
+            const was = name(sh('git show ' + base + ':sw.js'));
+            S.ok(!changed || name(sw) !== was, 'index.html / js/ / css/ 相对 main 有改动时,sw.js 的 CACHE_NAME 也升了版', { was, now: name(sw), changed: changed.split('\n').slice(0, 5) });
+        } catch (e) { S.ok(true, '(没有 git / main,跳过 CACHE_NAME 升版检查)'); }
         const emo = files.concat(['./index.html', './sw.js', './manifest.json']).filter(f => /\p{Extended_Pictographic}/u.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
         S.ok(!emo.length, 'App 源码里 0 emoji', emo);
     });

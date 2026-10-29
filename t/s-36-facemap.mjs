@@ -43,7 +43,7 @@ export default async function ({ origin, S, open }) {
         const r = await p.eval(`document.getElementById('tab-record').click();${W8(200)}return (document.getElementById('rec-heat')||{}).innerText||''`);
         S.ok(/还没在脸上标过位置/.test(r), '没标过:记录页说一句怎么标', r.slice(0, 80));
     }
-    // ── 线稿、区块虚线、选中描边、左右小字、标记圈:浅 / 深色对底色都 ≥3:1 ──
+    // ── 线稿、区块虚线、选中描边、左右小字、标记圈:浅 / 深色对底色都 ≥3:1(选中的标记:浅色是墨底,深色是 tint 底 + 墨色描边,量描边)──
     for (const scheme of ['light', 'dark']) {
         const p = await boot(`full({today:true,extra:{sk_jrnl1:${J({ 0: { status: ['爆痘', '泛红'], spots: [['口周', '泛红'], ['下巴', '红痘']] }, '-2': { status: ['爆痘'], spots: [['下巴', '红痘']] } })}}})`, { page: { scheme } });
         const r = await p.eval(`document.querySelector('#tonight [data-act="skin"]').click();${W8(200)}
@@ -55,7 +55,7 @@ export default async function ({ origin, S, open }) {
             const q=s=>document.querySelector('#skin-sheet '+s),cs=s=>getComputedStyle(q(s));
             const bg=getComputedStyle(document.querySelector('#skin-sheet .sheet')).backgroundColor;
             return {bg,cr:{line:cr(cs('.fm-line').stroke,bg),zone:cr(cs('.fz:not(.on)').stroke,bg),on:cr(cs('.fz.on').stroke,bg),lr:cr(cs('.fm-lr').fill,bg),
-                mk:cr(cs('.fm-mk.on').backgroundColor,bg),ring:cr(cs('.fm-mk:not(.on)').boxShadow,bg)}}`);
+                mk:(()=>{const s=cs('.fm-mk.on');return s.boxShadow&&s.boxShadow!=='none'?cr(s.boxShadow,bg):cr(s.backgroundColor,bg)})(),ring:cr(cs('.fm-mk:not(.on)').boxShadow,bg)}}`);
         S.ok(Object.values(r.cr).every(c => c >= 3), `${scheme}:线稿、区块虚线、选中描边、左右小字、标记圈对底色都 ≥3:1(看得清)`, r);
         S.ok(!p.errors.length, `${scheme}:0 报错`, p.errors);
     }

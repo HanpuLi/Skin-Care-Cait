@@ -57,7 +57,10 @@ export function readImage(file) {
 export async function addSimplePhoto(app, date, file) {
     const url = await readImage(file);
     if (!url) { toast('这张照片读不出来，换一张试试'); return false; }
-    return !!(await app.photos.save(date, url));
+    let ok = false;
+    try { ok = !!(await app.photos.save(date, url)); } catch (e) { ok = false; }
+    if (!ok) toast(PHOTO_FAIL + '。', 4500);
+    return ok;
 }
 export async function loadDayPhoto(app, date) {
     try { return (await app.photos.get(date, 'front')) || (await app.photos.get(date)); } catch (e) { return null; }
@@ -93,23 +96,27 @@ export function applySuggest(app, date, sug) {
 }
 
 // 上一次能用的分析(同设备有那天的正脸照片就一起送;没有就只送结构化结果)
-async function previousFor(app, W, date) {
+//   noImage = 她选了「这次不带上次的照片」:只送结构化结果
+async function previousFor(app, W, date, noImage) {
     const prev = (W.journal || []).filter(e => e && e.date < date && e.photoAssess && e.photoAssess.usable !== false).sort((a, b) => b.date.localeCompare(a.date))[0];
     if (!prev) return {};
     const pa = Object.assign({}, prev.photoAssess); delete pa.at;
     const out = { previous: pa, previous_date: prev.date };
-    try { const img = await app.photos.get(prev.date, 'front'); if (img) out.previous_image = img; } catch (e) { }
+    if (!noImage) try { const img = await app.photos.get(prev.date, 'front'); if (img) out.previous_image = img; } catch (e) { }
     return out;
 }
+const PHOTO_FAIL = '照片没存上：这台设备的本机照片存储用不了（无痕模式或空间满了）';
 
 // ══ 全屏 sheet ═══════════════════════════════════════════════════════════════════════
 // opts = {date, onChange()(写了记录之后), onSaved()(她点了「确认记上」之后:要顾问反馈), onEdit(hint)(「改一下」:交给记皮肤的 sheet,带上建议做标记)}
 export function openCapture(app, opts) {
     opts = opts || {};
     const date = opts.date || app.today();
-    const s = { step: 'intro', views: {}, cur: 'front', live: false, camErr: '', stream: null, result: null, err: '', saved: false };
-    const W0 = app.world();
+    const s = { step: 'intro', views: {}, cur: 'front', live: false, camErr: '', stream: null, result: null, err: '', saved: false, prevImg: false, noPrevImg: false };
+    const W0 = app.world(), owner = (app.store.state && app.store.state.owner) || '';
     const last = (W0.journal || []).filter(e => e && e.date < date && e.photoAssess && e.photoAssess.usable !== false).sort((a, b) => b.date.localeCompare(a.date))[0];
+    // 本机有上次的正脸照片的话,会一起发过去对比:先查出来,intro 里说清楚(并给「这次不带」)
+    if (last) Promise.resolve(app.photos.get(last.date, 'front')).then(img => { s.prevImg = !!img; if (s.step === 'intro' && ov.isConnected) paint(); }, () => { });
     function stopCam() { if (s.stream) { try { s.stream.getTracks().forEach(tr => tr.stop()); } catch (e) { } } s.stream = null; s.live = false; }
     async function startCam() {
         stopCam(); s.camErr = '';
@@ -132,8 +139,9 @@ export function openCapture(app, opts) {
         if (s.step === 'intro') {
             return `<p class="lede">正脸、左脸、右脸各一张，顾问逐区看、和上次比。</p>
                 <div class="sk-sec"><div class="sec-t">拍之前</div><ul class="list cap-tips">${TIPS.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>
-                <p class="note">${last ? '上次拍是 ' + esc(mdOf(last.date)) + '（' + daysBetween(last.date, date) + ' 天前），这次会一起比。' : '这是第一次，之后每次都会和上一次比。'}</p>
-                <p class="note">照片只存在这台设备上；只有分析结果记进今天。隔两三天拍一次就够，变差那天可以加拍。</p>
+                <p class="note">${last ? '上次拍是 ' + esc(mdOf(last.date)) + '（' + daysBetween(last.date, date) + ' 天前），这次会一起比' + (s.prevImg && !s.noPrevImg ? '：会把 ' + esc(mdOf(last.date)) + ' 那张正脸一起发过去。' : '：只带上次的分析结果，不带照片。') : '这是第一次，之后每次都会和上一次比。'}</p>
+                ${last && s.prevImg ? `<button type="button" class="chip" data-cap="noprev" aria-pressed="${s.noPrevImg}" id="cap-noprev">${s.noPrevImg ? ico('check', 'sm') : ''}这次不带上次的照片</button>` : ''}
+                <p class="note">照片存在这台设备上，分析时发给顾问看；只有分析结果记进今天。隔两三天拍一次就够，变差那天可以加拍。</p>
                 <div class="cap-acts"><button type="button" class="btn btn-primary btn-block" data-cap="start">开始拍</button></div>`;
         }
         if (s.step === 'shoot') {
@@ -143,13 +151,14 @@ export function openCapture(app, opts) {
                 <p class="lede cap-guide" id="cap-guide">${esc(VIEW_GUIDE[cur])}</p>
                 <div class="cap-frame${s.live && !taken ? ' live' : ''}">
                     ${taken ? `<img class="cap-img" src="${taken}" alt="${VIEW_NAME[cur]}的照片">` : s.live ? '<video class="cap-video" id="cap-video" playsinline muted autoplay></video>' : `<p class="note cap-ph">${esc(s.camErr || '')}</p>`}
-                    <svg class="cap-oval" viewBox="0 0 300 400" aria-hidden="true"><ellipse cx="150" cy="196" rx="102" ry="142"/></svg></div>
+                    <svg class="cap-oval" viewBox="0 0 300 400" aria-hidden="true"><ellipse class="under" cx="150" cy="196" rx="102" ry="142"/><ellipse cx="150" cy="196" rx="102" ry="142"/></svg></div>
                 <div class="cap-acts">${taken ? `<button type="button" class="btn" data-cap="redo">重拍这张</button>` : s.live ? `<button type="button" class="btn" data-cap="snap" id="cap-snap">${ico('camera')}拍这张</button>` : ''}
                     <label class="btn file-btn">${s.live ? '用系统相机或相册' : '拍照或从相册选'}<input type="file" accept="image/*" capture="user" id="cap-file" aria-label="${VIEW_NAME[cur]}：拍照或从相册选"></label></div>
                 <p class="meta cap-count">已拍 ${shotN()} / 3${s.views.front ? '' : ' · 至少要一张正脸'}</p>
                 <div class="cap-acts"><button type="button" class="btn btn-primary btn-block" data-cap="go" id="cap-go"${s.views.front ? '' : ' disabled'}>${shotN() < 3 ? '先分析这几张' : '开始分析'}</button></div>`;
         }
-        if (s.step === 'busy') return `<p class="lede" role="status">顾问在看照片，大约半分钟。</p><p class="note">可以先去做别的；看完会记在今天。</p>`;
+        // 看的时候不让关:关了的话结果页(「确认记上 / 改一下」)就再也找不到了
+        if (s.step === 'busy') return `<p class="lede" role="status">顾问在看照片，大约半分钟。</p><p class="note">看完之前先别关这一页，看完了在这里确认记不记。</p>`;
         if (s.step === 'error') {
             return `<p class="lede">这次没分析成。</p><p class="note">${esc(s.err)}</p>
                 <div class="cap-acts"><button type="button" class="btn btn-primary btn-block" data-cap="go">再试一次</button><button type="button" class="btn btn-block" data-cap="keep">先不分析，只存照片</button></div>`;
@@ -194,35 +203,58 @@ export function openCapture(app, opts) {
         if (!v || !v.videoWidth) { toast('相机还没准备好，等一下再拍'); return; }
         took(toJpeg(v, v.videoWidth, v.videoHeight));   // 存原图方向(不镜像):左右要按她自己的左右
     }
+    // 分析中:藏起关闭按钮、挡住点背景和 Esc
+    function lock(on) {
+        s.locked = on;
+        if (on) ov.dataset.noesc = '1'; else delete ov.dataset.noesc;
+        const x = ov.querySelector('.sheet-x'); if (x) x.hidden = on;
+    }
+    const sameOwner = () => ((app.store.state && app.store.state.owner) || '') === owner;
+    async function saveViews(views) {
+        let bad = 0;
+        for (const v of views) { let ok = false; try { ok = await app.photos.save(date, s.views[v], v); } catch (e) { ok = false; } if (!ok) bad++; }
+        return bad;
+    }
     async function analyze() {
         if (!s.views.front) return;
-        stopCam(); s.step = 'busy'; s.err = ''; paint();
+        stopCam(); s.step = 'busy'; s.err = ''; lock(true); paint();
         const W = app.world();
         const u = app.sync && app.sync.state && app.sync.state.user;
         const ctx = buildSkincareContext(W, { name: u && u.displayName ? String(u.displayName).split(' ')[0] : '' });
         const views = PHOTO_VIEWS.filter(v => s.views[v]);
         const images = views.map(v => s.views[v]);
-        const extra = await previousFor(app, W, date);
+        const extra = await previousFor(app, W, date, s.noPrevImg);
         if (views.length < 3) extra.note = '这次的照片依次是：' + views.map(v => VIEW_NAME[v]).join('、');
         let d;
         try { const r = await app.ai.api.assess(ctx, images, extra); d = (r && r.data) || {}; }
-        catch (e) { s.err = e.message || '顾问出错了'; s.step = 'error'; if (ov.isConnected) paint(); return; }
+        catch (e) {
+            lock(false);
+            if (!sameOwner()) { close(); return; }
+            s.err = e.message || '顾问出错了'; s.step = 'error';
+            if (ov.isConnected) paint(); else toast('这次没分析成：' + s.err);
+            return;
+        }
+        lock(false);
+        if (!sameOwner()) { close(); return; }   // 等结果的时候换了账号:这是上一个人的照片和结果,不写进这个人的记录
         s.result = d;
-        if (d.usable === false) { s.step = 'retake'; if (ov.isConnected) paint(); return; }
+        if (d.usable === false) { s.step = 'retake'; if (ov.isConnected) paint(); else toast('这几张不太能用，下次重拍一下'); return; }
         // 能用:结构化结果进当天日志(同步);照片进本机
         setPhotoAssess(app.store, date, d, new Date(app.store.now()).toISOString());
-        for (const v of views) { try { await app.photos.save(date, s.views[v], v); } catch (e) { } }
+        const bad = await saveViews(views);
         s.step = 'result';
         app.renderAll();
         if (opts.onChange) opts.onChange();
-        if (ov.isConnected) paint();
+        if (ov.isConnected) paint(); else toast('照片看完了，分析结果记在今天；建议的状态没写，要记就去「记录」点「加状态和位置」');
+        if (bad) toast(PHOTO_FAIL + '，分析结果已经记上。', 4500);
     }
     async function keepOnly() {
-        for (const v of PHOTO_VIEWS) if (s.views[v]) { try { await app.photos.save(date, s.views[v], v); } catch (e) { } }
-        toast('照片存好了，只在这台设备上'); close();
+        const bad = await saveViews(PHOTO_VIEWS.filter(v => s.views[v]));
+        toast(bad ? PHOTO_FAIL + '。' : '照片存好了，只在这台设备上', bad ? 4500 : 3000); close();
         if (opts.onChange) opts.onChange();
     }
     const ov = openSheet({ id: 'capture-sheet', title: '拍照分析', full: true, html: '<div id="cap-body" class="cap"></div>', onClose: stopCam });
+    // 分析中点背景不关(openSheet 的背景关闭在冒泡阶段;这里在捕获阶段先拦下)
+    ov.addEventListener('click', e => { if (s.locked && e.target === ov) e.stopImmediatePropagation(); }, true);
     ov.addEventListener('click', e => {
         const b = e.target && e.target.closest && e.target.closest('[data-cap]');
         if (!b || b.disabled) return;
@@ -234,6 +266,7 @@ export function openCapture(app, opts) {
         else if (a === 'go') analyze();
         else if (a === 'retake') { s.views = {}; s.cur = 'front'; s.result = null; s.step = 'shoot'; paint(); startCam(); }
         else if (a === 'keep') keepOnly();
+        else if (a === 'noprev') { s.noPrevImg = !s.noPrevImg; paint(); }
         else if (a === 'fill-ok') {
             const sug = suggestOf(cleanPhotoAssess(s.result, ''));
             applySuggest(app, date, sug); s.saved = true;

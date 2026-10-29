@@ -65,6 +65,8 @@
 .step-box{justify-self:end;width:24px;height:24px;margin-top:var(--sp-1);border-radius:var(--r-ctl);box-shadow:inset 0 0 0 1.5px var(--line-ctl);
   display:grid;place-items:center;color:transparent;transition:background-color .15s,box-shadow .15s}
 .step[aria-checked="true"] .step-box{background:var(--ink);box-shadow:none;color:var(--paper)}
+/* 深色:选中态是 tint 底加墨色描边,不反白(§3.7,样稿 selBg / selRing) */
+:root[data-theme="dark"] .step[aria-checked="true"] .step-box{background:var(--tint);color:var(--ink-strong);box-shadow:inset 0 0 0 1px var(--ink-strong)}
 .step[aria-checked="true"] .step-name{color:var(--faint);text-decoration:line-through;text-decoration-thickness:1px}
 .step[aria-checked="true"] .step-idx{color:var(--ok)}
 .step.changed::before{content:"";position:absolute;left:calc(-1 * var(--sp-3));top:var(--sp-4);bottom:var(--sp-4);width:2px;background:var(--rev)}

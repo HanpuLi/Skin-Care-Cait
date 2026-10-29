@@ -12,7 +12,7 @@ import { jrnlEntry, saveJrnl } from '../model/journal.js';
 import { markRunOut, unGone, toggleLow } from '../model/products.js';
 import { PHASES } from '../model/profile.js';
 import { safetyGate, gateBlocks } from '../engine/gate.js';
-import { regimenRules, maxAcidPerWeek } from '../engine/rules.js';
+import { regimenRules, maxAcidPerWeek, zonesAvoiding } from '../engine/rules.js';
 import { tonight as offlineTonight } from '../engine/schedule.js';
 import { exfoliantCountInLastNDays, prodByName } from '../engine/util.js';
 import { shelfSignature } from '../engine/regimen.js';
@@ -46,6 +46,12 @@ export function validateTonight(c, g, stepNames, W) {
     const gb = gateBlocks(p, g, W);
     if (gb) return gb;
     const t = p.schedule && p.schedule.type;
+    const ACT = ['acid', 'mask', 'retinol'];
+    if (c.op === 'swap') {
+        // 活性只能和同一类活性互换:否则保湿被换成酸 / 泥膜,绕过本周额度、同晚冲突,planday 也记不上(第二天推定不到这次酸)
+        const o = prodByName(W, c.product), ot = (o && o.schedule && o.schedule.type) || '';
+        if ((ACT.indexOf(t) >= 0 || ACT.indexOf(ot) >= 0) && t !== ot) return ACT.indexOf(t) >= 0 ? '今晚不能把「' + c.product + '」换成活性；要加活性得过本周额度' : '活性只能换成同一类的活性；想停就说跳过';
+    }
     if (t === 'acid' && c.op === 'add') {
         if (exfoliantCountInLastNDays(W, 7) >= Math.min(g.acidCapMax, 7)) return '这周的刷酸已经到安全闸的上限了';
         const tn = W.tn || {};
@@ -143,36 +149,94 @@ export function validatePlan(data, g, W) {
     return { rules, blocked };
 }
 // 顾问写的今晚(/api/tonight)过闸:产品必须在库;被闸拦的挪进「今晚不用」并写明为什么;酸还要看本周额度和刮胡夜。
+// 和离线排法(engine/schedule.js)同一套:
+//   · 泥膜和酸共用去角质额度(产品备注「使用当晚视为酸类占用」);
+//   · 酸和声明了 avoidAcid 的泥膜 / 维 A 不同晚,泥膜和维 A 也不同晚(schedule.js 第 4 段冲突规则);
+//   · 分区避开项永远生效(gate ⑦):活性步骤的「怎么用」里顾问没提到的避开区,照离线那句补上;
+//   · 纯动作(product 为空)的文字点到了某支产品,就按那支产品过同一道闸;闸收紧的晚上(额度 0 / 刮胡 / 第一晚 / 就医)
+//     文字里带「酸 / 去角质 / 维 A / 视黄 / 面膜 / 磨砂」的纯动作一律拦下(否则红线亮着也能借一句话把酸写进来)。
 // 返回 {title, why, steps[{product, how, why, kind}], skips[{product, why}], blocked[{product, why}], dropped[]};一步都不剩 → null(退回离线)
+// 不用后行断言(老 iOS Safari 不认,整个模块会解析失败):先抹掉保湿类的「酸」再查
+const actWords = x => /酸|去角质|维\s*A|视黄|面膜|磨砂|换肤/i.test(String(x || '').replace(/透明质酸|玻尿酸|氨基酸/g, ''));
+const squash = x => String(x || '').replace(/\s+/g, '').toLowerCase();
+// 纯动作的文字里点名了哪支产品(名字或打卡标签,忽略空格大小写;取最长的那个,免得短标签误配)
+export function productNamedIn(W, text) {
+    const t = squash(text);
+    if (!t) return null;
+    let best = null, len = 0;
+    (W.products || []).forEach(p => {
+        [p.name, p.journalTag].forEach(k => {
+            const q = squash(k);
+            if (q.length >= 2 && t.indexOf(q) >= 0 && q.length > len) { best = p; len = q.length; }
+        });
+    });
+    return best;
+}
 export function gateTonightPlan(W, data) {
     if (!data || !Array.isArray(data.steps)) return null;
     const g = safetyGate(W), P = W.profile || {}, tn = W.tn || {};
     const shave = tn.date === W.today && !!tn.shave && !!P.shaving;
     const cap = maxAcidPerWeek(W), used = exfoliantCountInLastNDays(W, 7);
+    const tight = g.acidCapMax === 0 || cap === 0 || shave || g.firstNight || g.medical;
     const steps = [], blocked = [], dropped = (data.dropped || []).slice(0, 8);
     const skips = (Array.isArray(data.skips) ? data.skips : []).filter(x => x && x.product).map(x => ({ product: String(x.product), why: String(x.why || '') }));
-    let acidTaken = false;
+    const taken = [];   // 今晚已放行的活性 [{type, p}]
+    const avoidsAcid = p => !(p.schedule && p.schedule.avoidAcid === false);
+    // 顾问在步骤里明写了的产品:纯动作点到它们只是那一步的补充说明,跟着那一步走(那一步被拦,说明也拿掉)
+    const explicit = new Set(data.steps.slice(0, 14).map(s => s && prodByName(W, String(s.product || '').trim())).filter(Boolean).map(p => p.name));
     data.steps.slice(0, 14).forEach(s => {
         if (!s) return;
-        const name = String(s.product || '').trim(), how = String(s.how || ''), why = String(s.why || '');
-        if (!name) { if (how) steps.push({ product: '', how, why, kind: 'base' }); return; }   // 纯动作(凉水冲洗之类)
+        let name = String(s.product || '').trim();
+        let how = String(s.how || '');
+        const why = String(s.why || '');
+        if (!name) {   // 纯动作(凉水冲洗之类)
+            if (!how) return;
+            const named = productNamedIn(W, how + ' ' + why);
+            if (named && explicit.has(named.name)) { steps.push({ product: '', how, why, kind: 'base', ref: named.name }); return; }
+            if (named) name = named.name;   // 点名了某支没单列的产品 → 当成那支产品走下面同一段闸
+            else if (tight && actWords(how + ' ' + why)) {
+                const gbw = g.medical ? '就医提醒亮着：今晚不上任何去角质 / 活性' : shave ? '刮胡夜不上酸、维 A、泥膜' : g.firstNight ? '第一晚：先不上任何活性' : '这周去角质额度是 0';
+                blocked.push({ product: how.slice(0, 40), why: gbw, act: true });
+                return;
+            } else { steps.push({ product: '', how, why, kind: 'base' }); return; }
+        }
         const p = prodByName(W, name);
         if (!p) { dropped.push(name); return; }
         const t = (p.schedule && p.schedule.type) || '';
-        const act = ['acid', 'mask', 'retinol'].indexOf(t) >= 0 ? t : (p.role === 'acid' ? 'acid' : '');
+        const act = ['acid', 'mask', 'retinol'].indexOf(t) >= 0 ? t : (p.role === 'acid' ? 'acid' : (p.role === 'mask' || p.role === 'retinol') ? p.role : '');
         let gb = gateBlocks(p, g, W);
         if (!gb && act && shave) gb = '刮胡夜不上酸、维 A、泥膜';
-        if (!gb && act === 'acid') {
-            if (cap === 0) gb = '这周刷酸额度是 0';
-            else if (used >= cap) gb = '这周已经刷过 ' + used + ' 次，到上限了';
-            else if (acidTaken) gb = '一晚只上一支酸';
+        if (!gb && (act === 'acid' || act === 'mask')) {
+            const ex = taken.filter(x => x.type === 'acid' || x.type === 'mask').length;
+            if (cap === 0) gb = '这周去角质额度是 0';
+            else if (used + ex >= cap) gb = (act === 'acid' && !ex ? '这周已经刷过 ' + used + ' 次，到上限了' : (ex ? '算上今晚已排的，' : '') + '这周已经刷酸 / 敷泥膜 ' + (used + ex) + ' 次（两样一起算），到上限了');
+            else if (act === 'acid' && taken.some(x => x.type === 'acid')) gb = '一晚只上一支酸';
+        }
+        if (!gb && act) {
+            const hasT = ty => taken.find(x => x.type === ty);
+            if (act === 'acid') {
+                const m = taken.find(x => (x.type === 'mask' || x.type === 'retinol') && avoidsAcid(x.p));
+                if (m) gb = (m.type === 'mask' ? '面膜' : '维 A') + '和酸不同晚';
+            } else if (act === 'mask') {
+                if (hasT('acid') && avoidsAcid(p)) gb = '面膜和酸不同晚';
+                else if (hasT('retinol')) gb = '面膜和维 A 不同晚';
+                else if (hasT('mask')) gb = '一晚只敷一种面膜';
+            } else if (act === 'retinol') {
+                if (hasT('acid') && avoidsAcid(p)) gb = '维 A 和酸不同晚';
+                else if (hasT('mask')) gb = '面膜和维 A 不同晚';
+            }
         }
         if (gb) { blocked.push({ product: p.name, why: gb }); skips.push({ product: p.name, why: gb }); return; }
-        if (act === 'acid') acidTaken = true;
+        if (act) {
+            taken.push({ type: act, p });
+            const miss = zonesAvoiding(W, act).filter(z => how.indexOf(z) < 0);   // 顾问没写到的避开区,照离线那句补
+            if (miss.length) how += '（避开' + miss.join('、') + '）';
+        }
         steps.push({ product: p.name, how, why, kind: act || 'base' });
     });
-    if (!steps.some(s => s.product)) return null;
-    return { title: String(data.title || ''), why: String(data.why || ''), steps, skips, blocked, dropped };
+    const out = steps.filter(s => !s.ref || steps.some(y => y.product === s.ref)).map(s => { if (s.ref) { const c = Object.assign({}, s); delete c.ref; return c; } return s; });
+    if (!out.some(s => s.product)) return null;
+    return { title: String(data.title || ''), why: String(data.why || ''), steps: out, skips, blocked, dropped };
 }
 // 今晚:顾问版能用就用(已过闸),否则离线版。aiData = 按天缓存的 /api/tonight data(没有就 null)
 export function tonightPlan(W, aiData) {

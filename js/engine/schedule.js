@@ -238,6 +238,7 @@ export function buildNightSteps(W, shower, shave, slot) {
     const gate = safetyGate(W);
     const gb = p => gateBlocks(p, gate, W);
     const steps = [], skips = [], warnings = [];
+    let coverCheck = null, ovApplied = false;
     const add = (p, h, extra) => steps.push(Object.assign({ p, h: h || '', kind: 'base' }, extra || {}));
     if (shave) {
         add('凉水冲洗（刮完立刻）', '降温止红');
@@ -294,11 +295,16 @@ export function buildNightSteps(W, shower, shave, slot) {
             if (!spotUse) faceCovered = true;
         });
         // 【要紧】洗完全脸什么都不涂 = 屏障只会更差。剩下的东西全被停掉 / 只点涂时必须说出来(2026-08-28 事故)
-        if (!faceCovered && PD.some(p => !p.hidden)) warnings.push({ text: '洗完全脸没有能涂的东西了：保湿这一档是空的。去「产品」看「要不要买新的」。', after: 0 });
+        //   在下面「今晚的小改」落地之后才判(顾问跳过 / 换掉了唯一的保湿,也得说)
+        coverCheck = () => {
+            if (ovApplied) faceCovered = steps.some(s => { const q = prodByName(W, s.p); return !!q && (['moist', 'serum', 'oil'].indexOf(q.role) >= 0 || (q.role === 'repair' && !spotUse)); });
+            if (!faceCovered && PD.some(p => !p.hidden)) warnings.push({ text: '洗完全脸没有能涂的东西了：保湿这一档是空的。去「产品」看「要不要买新的」。', after: 0 });
+        };
     }
     // 今晚的小改里**非活性**的那几条在这里落:跳过 / 换一支 / 临时加一支。只对今天生效。
     const ov = (slot && slot.date && slot.date === W.today) ? tonightOverride(W) : null;
     if (ov && !shave) {
+        ovApplied = true;
         const roleIdx = n => { const q = prodByName(W, n); return q ? ROLE_ORDER.indexOf(q.role) : -1; };
         ov.ops.forEach(c => {
             const why = c.why ? '：' + c.why : '';
@@ -307,7 +313,9 @@ export function buildNightSteps(W, shower, shave, slot) {
                 if (i >= 0) { steps.splice(i, 1); skips.push(c.product + '（顾问：今晚先跳过' + why + '）'); warnings.forEach(w => { if (w.after >= i) w.after = Math.max(-1, w.after - 1); }); }
             } else if (c.op === 'swap') {
                 const s = steps.find(x => x.p === c.product), np = prodByName(W, c.to);
-                if (s && np && !gb(np)) { s.p = np.name; s.h = (hint(np) || '') + '（顾问今晚换的' + why + '）'; s.chg = true; }
+                const ty = np && np.schedule && np.schedule.type;
+                // 活性不在这里换进来:活性只走 computePlan 的 applyTonightOverride(同类互换),planday 才对得上
+                if (s && np && !['acid', 'mask', 'retinol'].includes(ty) && np.role !== 'acid' && !gb(np)) { s.p = np.name; s.h = (hint(np) || '') + '（顾问今晚换的' + why + '）'; s.chg = true; }
             } else if (c.op === 'add') {
                 const np = prodByName(W, c.product);
                 const ty = np && np.schedule && np.schedule.type;
@@ -320,6 +328,7 @@ export function buildNightSteps(W, shower, shave, slot) {
             }
         });
     }
+    if (coverCheck) coverCheck();
     const low = W.low || [];
     if (low.length) {
         const lowNames = low.map(id => (pd(id) || {}).name).filter(Boolean);

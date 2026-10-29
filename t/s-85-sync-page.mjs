@@ -67,9 +67,9 @@ export default async function ({ origin, S }) {
         await b.send('Page.navigate', { url: origin + '/index.html' });
         await b.waitFor(`!!document.getElementById('app-lock') && /关掉另一个窗口再点重试/.test(document.getElementById('app-lock').textContent)`, 8000);
         const blocked = await b.eval(`return {boot:document.documentElement.dataset.boot||'',listeners:fakeCloud.listeners.length,tn:(document.getElementById('tonight').innerHTML||'').length,btn:[...document.querySelectorAll('#app-lock button')].map(x=>x.textContent).join()}`);
-        S.ok(blocked.boot === '' && blocked.listeners === 0 && blocked.tn === 0 && blocked.btn === '重试', '整页:第二个窗口拿不到锁 → App 代码一行没跑,提示「关掉另一个窗口再点重试」', blocked);
+        S.ok(blocked.boot !== 'ok' && blocked.listeners === 0 && blocked.tn === 0 && blocked.btn === '重试', '整页:第二个窗口拿不到锁 → App 代码一行没跑,提示「关掉另一个窗口再点重试」', blocked);
         await b.eval(`document.querySelector('#app-lock button').click();${W8(300)}return 1`);
-        S.ok(await b.eval(`return !document.documentElement.dataset.boot && !!document.getElementById('app-lock')`), '整页:第一个还开着时点重试,照样不让进');
+        S.ok(await b.eval(`return document.documentElement.dataset.boot !== 'ok' && !!document.getElementById('app-lock')`), '整页:第一个还开着时点重试,照样不让进');
         // 第一个窗口把改动推上去后关掉(v2:online 立刻推;假 Firestore 的事务等测试手动确认)
         await a.eval(`window.dispatchEvent(new Event('online'));
             for(let i=0;i<60&&!fakeCloud.writes.length;i++)${W8(100)}

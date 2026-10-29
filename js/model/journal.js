@@ -99,12 +99,28 @@ export function setNote(store, date, note) {
     return saveJrnl(store, list);
 }
 // 「今晚没做」:记进当天 skipped(极简模式第二天就不会把它推定成用了)
-export function toggleSkipped(store, date, name) {
+// today 给了而且改的是今天:顺手把 sk_tnsteps1 的 skipped 对齐(见 writeTnSteps)
+export function toggleSkipped(store, date, name, today) {
     const { list, en } = jrnlEntry(store, date, true);
     const s = new Set(en.skipped || []);
     if (s.has(name)) s.delete(name); else s.add(name);
     if (s.size) en.skipped = [...s]; else delete en.skipped;
-    return saveJrnl(store, list);
+    const ok = saveJrnl(store, list);
+    if (today && date === today) writeTnSteps(store, today);
+    return ok;
+}
+// sk_tnsteps1 = {date, done, skipped}(v1 的三字段)。v1 设备读的是 tnsteps.skipped 和当天日志 skipped 的并集,
+// 写的时候又把并集写回日志 —— v2 撤回了「今晚没做」却不改 tnsteps 的话,v1 下次点任何一步都会把它写回去,第二天 absorb 少补一次酸。
+// 所以 v2 每次改今天的步骤状态都整份写:done 用传进来的(没给就沿用今天已有的),skipped 一律等于当天日志的 skipped。
+export function writeTnSteps(store, today, done) {
+    const cur = store.lg(K.tnsteps) || {};
+    const en = journal(store).find(x => x && x.date === today);
+    const d = Array.isArray(done) ? done : (cur.date === today ? (cur.done || []) : []);
+    return store.ls(K.tnsteps, { date: today, done: [...d], skipped: [...((en && en.skipped) || [])] });
+}
+// 删掉某一天的记录(本机照片由调用方用 photos.remove 一起删)
+export function deleteEntry(store, date) {
+    return saveJrnl(store, journal(store).filter(x => !(x && x.date === date)));
 }
 export function setPhotoAssess(store, date, data, at) {
     const pa = cleanPhotoAssess(data, at);

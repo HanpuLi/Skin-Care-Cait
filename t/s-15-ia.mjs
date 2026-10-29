@@ -2,7 +2,7 @@
 //   页头印章不压标题行(390 / 375 / 320 宽 + 刘海安全区,getBoundingClientRect 不相交),页头贴顶、正文在下面滚;
 //   今晚的情况:问句开关 + 点了即时说影响(从点之前 / 之后的真实排班比出来),不写被证据推翻的「洗完澡适合刷酸」;
 //   四个 tab(极简模式默认也有「记录」);空货架时今晚页和顾问页说怎么开始。
-// v2 迁移(P3):等待条件 <html data-boot="ok">;印章字在档案 stamp;问句是 #tn-q-shower / #tn-q-shave 的按钮组(aria-pressed),
+// v2 迁移(P3):等待条件 <html data-boot="ok">;印章字在档案 seal(和 v1 同一个字段);问句是 #tn-q-shower / #tn-q-shave 的按钮组(aria-pressed),
 //   不是 v1 的 switch;影响那一句在 #tn-fx-*。退役 / 挪走的断言见 t/run.mjs:
 //   提醒卡 / 完成流程 / 极简记一下皮肤 → t/v2-a-tonight.mjs;记录页 → t/v2-a-record.mjs;顾问页离线方案与顺序 → t/v2-b-advisor.mjs;
 //   「极简 + 没开刮胡:只问洗澡」→ 样稿 Cici 版今晚页不问(按每周习惯,在顾问页「未来 7 晚」改),退役。
@@ -19,7 +19,7 @@ export default async function ({ origin, S, open }) {
 
     // ── 1. 印章不压标题行:三种 iPhone 宽 × 刘海安全区,印章整个落在页头里,和今晚页所有控件都不相交 ──
     for (const width of [390, 375, 320]) {
-        const p = await boot(`full({profile:{stamp:'膚',seal:'膚'}})`, { page: { width } });
+        const p = await boot(`full({profile:{seal:'膚'}})`, { page: { width } });
         const r = await p.eval(`document.documentElement.style.setProperty('--safe-top','59px');document.getElementById('tab-tonight').click();${W8(150)}
             const R=el=>el.getBoundingClientRect();const seal=R(document.getElementById('btn-settings')),hdr=R(document.querySelector('.hdr'));
             const vis=el=>{const b=el.getBoundingClientRect();if(!b.width||!b.height)return false;for(let e=el;e;e=e.parentElement){if(getComputedStyle(e).display==='none')return false}return true};

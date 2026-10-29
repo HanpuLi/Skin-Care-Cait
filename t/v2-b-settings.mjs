@@ -38,7 +38,7 @@ await run('v2-b-settings', [
         S.ok((await prof(p)).hrt === true && !(await p.eval(`return document.body.classList.contains('hide-hrt')`)), '开 HRT(只影响自己这个账号)');
         // 印章字
         await p.eval(`const i=document.getElementById('set-seal');i.value='茶';i.dispatchEvent(new Event('change'));return 1`); await sleep(200);
-        S.ok((await text(p, '#seal-ch')) === '茶' && (await prof(p)).stamp === '茶', '印章上的字:改了立刻换');
+        S.ok((await text(p, '#seal-ch')) === '茶' && (await prof(p)).seal === '茶' && !('stamp' in (await prof(p))), '印章上的字:改了立刻换(只写 v1 的 seal 字段)');
         // 深浅色:默认跟随系统;只存本机
         S.ok(await p.eval(`return document.querySelector('[data-seg=theme] [data-v=system]').getAttribute('aria-checked')==='true'`), '外观默认「跟随系统」');
         await seg(p, 'theme', 'dark');

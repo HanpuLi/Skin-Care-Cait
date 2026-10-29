@@ -10,12 +10,13 @@
 import { K } from '../store.js';
 import { addDays, mdOf, dowOf } from '../clock.js';
 import { tagLabel, TREND_TAGS, SYMPTOM_TAGS, trendOf, FACE_ZONES, FACE_ZONE_NAMES, SPOT_TYPES, FM_TRIGGER, cleanSpots,
-         jrnlEntry, saveJrnl, setTrend, toggleSym, setSpots, setNote } from '../model/journal.js';
+         jrnlEntry, saveJrnl, setTrend, toggleSym, setSpots, setNote, deleteEntry } from '../model/journal.js';
 import { dayState } from '../model/week.js';
 import { acidTags } from '../engine/util.js';
 import { safetyGate } from '../engine/gate.js';
 import { buildSkincareContext } from '../ai/context.js';
-import { openSheet, closeSheet, toast, esc, ico } from './sheets.js';
+import { openSheet, closeSheet, toast, esc, ico, sysConfirm } from './sheets.js';
+import { dataNoticeSeen } from './advisor.js';
 import { faceHtml, bindFace, spotsByZone, heatData, heatTone } from './facemap.js';
 import { openCapture, canAnalyze, photoAnalysisOn, addSimplePhoto, loadDayPhoto, applySuggest, suggestText } from './capture.js';
 
@@ -29,6 +30,13 @@ const AUTO_NOTE = '（按当天计划推定）';
 // 模块里的界面状态(只是展开 / 选中这类,不是记录)
 const ui = { draft: '', parsed: null, heatSel: '', histN: 10, fmOpen: {}, fmSel: {} };
 const fb = { busy: {}, err: {} };   // 顾问反馈:跑着 / 出错(出错只留在本机内存,不进云)
+// 换账号:上一个人的草稿、一句话解析(按日期存的,不按账号)、地图展开、反馈状态都清掉(app.js clearLocalExtras 调)
+export function resetForUser() {
+    Object.assign(ui, { draft: '', parsed: null, heatSel: '', histN: 10, fmOpen: {}, fmSel: {} });
+    fb.busy = {}; fb.err = {}; fb.again = '';
+}
+const ownerOf = app => (app.store && app.store.state && app.store.state.owner) || '';
+const aiOn = app => !!(app.ai && app.ai.access() === 'on' && !(app.ai.state && app.ai.state.down));
 
 // ── 小工具 ──
 function entryOf(W, date) { return (W.journal || []).find(e => e && e.date === date) || null; }
@@ -63,13 +71,16 @@ export async function requestFeedback(app, date, opts) {
     opts = opts || {};
     const ai = app.ai;
     if (!ai || date !== app.today() || ai.access() !== 'on') return false;
+    if (!opts.force && !dataNoticeSeen(app)) return false;   // 还没看过「顾问会看到什么」:不自动外发
     if (!ai.ready()) { try { await ai.probe(); } catch (e) { } if (!ai.ready()) return false; }
     let W = app.world();
     const en = entryOf(W, date);
     if (!hasLog(en) && !(en && en.done)) return false;
     const session = sessionOf(W, date), sig = sessionSig(session);
     const prev = feedbackOf(W, date);
-    if (!opts.force && prev && prev.sig === sig) return false;
+    // v1 写的反馈没有 sig:有字、没出错就当有效(不然本机一次操作就重调一次、花钱,还把 v1 的 noteSaved 冲掉)
+    if (!opts.force && prev && (prev.sig === sig || (!prev.sig && prev.text))) return false;
+    const owner = ownerOf(app);
     if (fb.busy[date]) { fb.again = date; return false; }
     fb.busy[date] = true; delete fb.err[date];
     paintFeedback(app, date);
@@ -80,10 +91,13 @@ export async function requestFeedback(app, date, opts) {
         f = { text: String(d.text || ''), note_add: String(d.note_add || ''), next_adjust: Array.isArray(d.next_adjust) ? d.next_adjust.slice(0, 4) : [],
               sig, at: new Date(app.store.now()).toISOString(), meta: { model: r && r.model, cost: r && r.cost } };
     } catch (e) { fb.err[date] = e.message || '顾问出错了'; }
+    if (ownerOf(app) !== owner) return false;   // 等回答的时候换了账号:丢掉(resetForUser 已经清了 fb)
     fb.busy[date] = false;
     if (f && date === app.today()) {
         const st = app.store.lg(K.ai) || {};
         st.feedback = st.feedback || {};
+        const old = st.feedback[date];
+        if (old && old.noteSaved && old.note_add && old.note_add === f.note_add) f.noteSaved = true;   // 同一句已经加过了:别再出按钮
         st.feedback[date] = f;
         Object.keys(st.feedback).sort().slice(0, -7).forEach(k => delete st.feedback[k]);   // 只留最近 7 天
         app.store.ls(K.ai, st);
@@ -101,7 +115,7 @@ export function feedbackHtml(app, date) {
     if (!f) return '';
     const adj = f.next_adjust || [];
     const en = entryOf(W, date);
-    const added = !!(f.note_add && noteOf(en).indexOf(f.note_add) >= 0);
+    const added = !!(f.note_add && (f.noteSaved || noteOf(en).indexOf(f.note_add) >= 0));
     return `<div class="fb"><span class="fb-who">顾问${f.at ? ' · ' + esc(hm(f.at)) : ''}</span><p class="fb-text">${esc(f.text)}</p>`
         + (adj.length ? `<ul class="list note fb-adj">${adj.map(x => `<li>${esc(x.item || '')}${x.change ? '：' + esc(x.change) : ''}${x.why ? '<span class="faint">。' + esc(x.why) + '</span>' : ''}</li>`).join('')}</ul>` : '')
         + (f.note_add && !added ? `<button type="button" class="btn-link sm quiet" data-fb-act="note">把「${esc(f.note_add)}」加进今天的记录</button>` : '')
@@ -123,7 +137,14 @@ function bindFeedback(app) {
         else if (b.dataset.fbAct === 'note') {
             const f = feedbackOf(app.world(), date); if (!f || !f.note_add) return;
             const en = entryOf(app.world(), date), cur = noteOf(en);
-            setNote(app.store, date, cur ? cur + '；' + f.note_add : f.note_add);
+            const next = cur ? cur + '；' + f.note_add : f.note_add;
+            setNote(app.store, date, next);
+            // 和 v1 同一个标记:v1 设备靠它不再出按钮(不然同一句会被再追加一次)
+            const st = app.store.lg(K.ai) || {};
+            if (st.feedback && st.feedback[date]) { st.feedback[date].noteSaved = true; app.store.ls(K.ai, st); }
+            // 记皮肤的 sheet 正开着:输入框和它的基准一起换成新的,关 sheet 时才不会拿旧文盖回去
+            const nt = document.getElementById('sk-note');
+            if (nt && nt.dataset.date === date) { nt.value = next; nt.dataset.n0 = next; }
             app.renderAll(); paintFeedback(app, date);
         }
     });
@@ -186,21 +207,32 @@ export function openSkinSheet(app, opts) {
     const hint = opts.hint || {};
     const key = 'sk|' + date;
     const title = mode === 'done' ? '今晚做完了' : date !== t ? dayLabel(date, t) + '的皮肤' : minimal ? '记一下皮肤' : '今天皮肤';
-    const lead = mode === 'done' ? (opts.summary || '') : (minimal && date === t ? '想记就记，不记也没关系。记完顾问会看一眼。' : '');
+    const lead = mode === 'done' ? (opts.summary || '') : (minimal && date === t ? '想记就记，不记也没关系。' + (aiOn(app) ? '记完顾问会看一眼。' : '') : '');
     const en0 = entryOf(app.world(), date) || {};
     const showFb = date === t && app.ai && app.ai.access() === 'on';
     const html = `${lead ? `<p class="note sk-lead">${esc(lead)}</p>` : ''}<div id="sk-top"></div>
         ${P.hrt ? `<label class="field feat-hrt"><span>HRT 阶段</span><input type="text" id="sk-phase" value="${esc(en0.phase || '')}" placeholder="比如：第 3 个月、剂量调整" autocomplete="off"></label>` : ''}
-        <label class="field"><span>备注（选填）</span><textarea id="sk-note" rows="2" placeholder="今天有什么特别的？">${esc(noteOf(en0))}</textarea></label>
-        ${showFb ? `<div class="sk-sec"><div class="sec-t">顾问</div><div class="fb-box" data-fb-date="${esc(date)}"></div></div>` : ''}`;
+        <label class="field"><span>备注（选填）</span><textarea id="sk-note" rows="2" placeholder="今天有什么特别的？" data-date="${esc(date)}" data-n0="${esc(noteOf(en0))}">${esc(noteOf(en0))}</textarea></label>
+        ${showFb ? `<div class="sk-sec"><div class="sec-t">顾问</div><div class="fb-box" data-fb-date="${esc(date)}"></div></div>` : ''}
+        ${hasLog(en0) || en0.done || (en0.products || []).length ? `<div class="sk-sec sk-del"><button type="button" class="btn-link sm quiet" id="sk-del">删掉这一天的记录（连同这台设备上的照片）</button></div>` : ''}`;
+    const p0 = en0.phase || '';
     let closed = false;
     const finish = ov => {
         if (closed) return; closed = true;
         const store = app.store;
         const nt = ov.querySelector('#sk-note'), ph = ov.querySelector('#sk-phase');
         const en = entryOf(app.world(), date);
-        if (nt && nt.value.trim() !== noteOf(en)) setNote(store, date, nt.value.trim());
-        if (ph && ph.value.trim() !== ((en && en.phase) || '')) { const r = jrnlEntry(store, date, true); r.en.phase = ph.value.trim().slice(0, 60); saveJrnl(store, r.list); }
+        // 只认她本人在这个 sheet 里改过的:和打开时的初值比,不和「现在的存档」比
+        //   (sheet 开着时顾问的 note_add、另一台设备同步来的备注 / HRT 阶段,不能在关 sheet 时被旧文盖回去)
+        if (nt) {
+            const n0 = nt.dataset.n0 || '', v = nt.value.trim(), cur = noteOf(en);
+            if (v !== n0) {
+                // 她改了,存档也被别处改了:她在原文后面追加的那段接到存档后面;不是追加的,以她看着改的为准
+                const merged = cur !== n0 && v.indexOf(n0) === 0 ? (cur + (cur && v.slice(n0.length).replace(/^[；;，,\s]+/, '') ? '；' : '') + v.slice(n0.length).replace(/^[；;，,\s]+/, '')) : v;
+                if (merged !== cur) setNote(store, date, merged);
+            }
+        }
+        if (ph && ph.value.trim() !== p0) { const r = jrnlEntry(store, date, true); r.en.phase = ph.value.trim().slice(0, 60); saveJrnl(store, r.list); }
         app.renderAll();
         if (date === t) {
             const en2 = entryOf(app.world(), date);
@@ -250,13 +282,17 @@ export function openSkinSheet(app, opts) {
                 ${analyze ? `<button type="button" class="btn" data-sk="capture">${ico('camera')}拍照分析</button>`
                     : `<label class="btn file-btn">${ico('camera')}加一张照片<input type="file" accept="image/*" id="sk-file" aria-label="加一张照片"></label>`}</div>
                 ${en.photoAssess && en.photoAssess.usable !== false ? `<p class="note">照片分析：${esc(en.photoAssess.overall || '')}</p>` : ''}
-                <p class="meta">照片只存在这台设备上</p></div>`;
+                <p class="meta">照片只存在这台设备上 <button type="button" class="btn-link sm quiet" data-sk="delphoto" id="sk-delphoto" hidden>删掉照片</button></p></div>`;
+        } else {
+            // 以前的某一天:这台设备上有那天的照片才显示(能单独删掉照片,下次分析也就不会再拿它当「上一次」发出去)
+            h += `<div class="sk-sec sk-photo" id="sk-photo-past" hidden><div class="sk-photo-row"><img class="sk-thumb" id="sk-thumb" alt="这天的照片" hidden></div>
+                <p class="meta">照片只存在这台设备上 <button type="button" class="btn-link sm quiet" data-sk="delphoto" id="sk-delphoto" hidden>删掉照片</button></p></div>`;
         }
         const fid = document.activeElement && document.activeElement.id;
         top.innerHTML = h;
         if (fid) { const el = document.getElementById(fid); if (el) try { el.focus({ preventScroll: true }); } catch (e) { } }
         const img = top.querySelector('#sk-thumb');
-        if (img) loadDayPhoto(app, date).then(u => { if (u && img.isConnected) { img.src = u; img.hidden = false; } });
+        if (img) loadDayPhoto(app, date).then(u => { if (u && img.isConnected) { img.src = u; img.hidden = false; ['#sk-delphoto', '#sk-photo-past'].forEach(q => { const el = top.querySelector(q); if (el) el.hidden = false; }); } });
         const box = ov.querySelector(`[data-fb-date="${date}"]`); if (box) box.innerHTML = feedbackHtml(app, date);
     };
     const after = () => { app.renderAll(); paint(); };
@@ -276,6 +312,11 @@ export function openSkinSheet(app, opts) {
             setSpots(store, date, sp, t); after();
         }
         else if (a === 'zonedone') { ui.fmSel[key] = ''; paint(); }
+        else if (a === 'delphoto') sysConfirm('删掉这一天存在这台设备上的照片？分析结果和记录留着。', async () => {
+            const ok = await app.photos.remove(date);
+            toast(ok ? '照片删掉了' : '照片没删掉：这台设备的本机照片存储用不了');
+            app.renderAll(); paint();
+        }, { ok: '删掉', danger: true });
         else if (a === 'capture') openCapture(app, { date, onChange: paint, onEdit: h2 => { closeSheet('capture-sheet'); Object.assign(hint, h2 || {}); ui.fmOpen[key] = true; paint(); } });
     });
     bindFace(top, 'sk', zone => { ui.fmSel[key] = ui.fmSel[key] === zone ? '' : zone; paint(); });
@@ -285,6 +326,15 @@ export function openSkinSheet(app, opts) {
             if (f) addSimplePhoto(app, date, f).then(ok => { if (ok) { toast('照片存好了，只在这台设备上'); paint(); } });
         }
     });
+    const del = ov.querySelector('#sk-del');
+    if (del) del.addEventListener('click', () => sysConfirm('删掉 ' + mdOf(date) + ' 这一天的记录？这台设备上那天的照片也一起删，删了就找不回来。', async () => {
+        closed = true;   // 不再走「关 sheet 时保存备注 / 要反馈」
+        deleteEntry(app.store, date);
+        let ok = true; try { ok = await app.photos.remove(date); } catch (e) { ok = false; }
+        closeSheet('skin-sheet');
+        toast(ok ? '这一天的记录删掉了' : '记录删掉了；照片没删掉（这台设备的本机照片存储用不了）');
+        app.renderAll();
+    }, { ok: '删掉', danger: true }));
     paint();
     return ov;
 }
@@ -314,7 +364,7 @@ export function render(app) {
         h += `<div class="rec-day"><div class="rec-day-main">${tg ? `<div class="tags">${tg}</div>` : ''}${sp ? `<p class="note">${esc(sp)}</p>` : ''}${nt ? `<p class="lede">${esc(nt)}</p>` : ''}
             ${en.photoAssess && en.photoAssess.usable !== false ? `<p class="note">照片分析：${esc(en.photoAssess.overall || '')}</p>` : ''}</div>
             <img class="rec-thumb" id="rec-thumb" alt="今天的照片" hidden></div>`;
-    } else h += `<div class="rec-day"><div class="rec-day-main"><p class="note">今天还没记。</p></div><img class="rec-thumb" id="rec-thumb" alt="今天的照片" hidden></div>`;
+    } else h += `<div class="rec-day"><div class="rec-day-main"><p class="note">${P.minimalMode ? '想记的时候，在上面写一句或拍一张就行。' : '今天还没记。'}</p></div><img class="rec-thumb" id="rec-thumb" alt="今天的照片" hidden></div>`;   // 极简从不催:不标「没记」
     h += `<div class="fb-box" data-fb-date="${esc(t)}">${feedbackHtml(app, t)}</div></section>`;
     // ③ 近 14 天(刷酸 / 洗澡 / 刮胡标记)
     const aT = acidTags(W), shaving = !!P.shaving;
@@ -326,7 +376,8 @@ export function render(app) {
     const MK = [['acid', '酸', '「酸」是刷酸夜'], ['shower', '澡', '「澡」是洗澡'], ['shave', '刮', '「刮」是刮胡']].filter(([k]) => days.some(x => x[k]));
     h += `<section class="sec" id="rec-14"><div class="sec-h"><span class="sec-t">近 14 天</span><span class="legend"><span><i class="dot ok"></i>好些</span><span><i class="dot hollow"></i>差不多</span><span><i class="dot caution"></i>差些</span></span></div>
         <div class="d14" role="list">${days.map(x => {
-            const aria = dayLabel(x.d, t) + '：' + (x.tr ? tagLabel(TREND_TAGS[x.tr]) : hasLog(x.e) ? '记了' : '没记') + (x.acid ? '，刷了酸' : '') + (x.shower ? '，洗澡' : '') + (x.shave ? '，刮胡' : '');
+            const st = x.tr ? tagLabel(TREND_TAGS[x.tr]) : hasLog(x.e) ? '记了' : (P.minimalMode ? '' : '没记');   // 极简不说「没记」
+            const aria = dayLabel(x.d, t) + (st ? '：' + st : '') + [x.acid ? '刷了酸' : '', x.shower ? '洗澡' : '', x.shave ? '刮胡' : ''].filter(Boolean).map((v, i) => (i || st ? '，' : '：') + v).join('');
             return `<div class="d14-c${x.d === t ? ' today' : ''}" role="listitem" aria-label="${esc(aria)}"><i class="dot ${x.tr ? TREND_TONE[x.tr] : hasLog(x.e) ? 'faint' : 'none'}"></i>
                 <span class="d14-n">${Number(x.d.slice(8, 10))}</span>${MK.map(([k, m]) => `<span class="d14-m">${x[k] ? m : '&nbsp;'}</span>`).join('')}</div>`;
         }).join('')}</div>
@@ -353,8 +404,8 @@ export function render(app) {
     const cnt = (from, to, tag) => (W.journal || []).filter(e => e && e.date >= from && e.date <= to && (e.status || []).indexOf(tag) >= 0).length;
     const wk0 = addDays(t, -6), wk1a = addDays(t, -13), wk1b = addDays(t, -7);
     const rows = ['变差', '好转'].concat(SYMPTOM_TAGS).map(tag => ({ tag, a: cnt(wk0, t, tag), b: cnt(wk1a, wk1b, tag) })).filter(r => r.a || r.b);
-    h += `<section class="sec" id="rec-trend"><div class="sec-h"><span class="sec-t">走势 · 前 7 天 → 这 7 天</span></div>`;
-    h += rows.length ? `<ul class="trend-rows">${rows.map(r => `<li><span class="lede">${esc(tagLabel(r.tag))}</span><span class="meta">${r.b} 天</span><span class="trend-arr" aria-hidden="true">→</span><span class="meta">${r.a} 天</span><span class="note">${r.a < r.b ? '少了' : r.a > r.b ? '多了' : '一样'}</span></li>`).join('')}</ul>`
+    h += `<section class="sec" id="rec-trend"><div class="sec-h"><span class="sec-t">走势 · 前 7 天 / 这 7 天</span></div>`;
+    h += rows.length ? `<ul class="trend-rows">${rows.map(r => `<li><span class="lede">${esc(tagLabel(r.tag))}</span><span class="meta">${r.b} 天</span><span class="trend-arr" aria-hidden="true">${ico('arrow', 'sm')}</span><span class="meta">${r.a} 天</span><span class="note">${r.a < r.b ? '少了' : r.a > r.b ? '多了' : '一样'}</span></li>`).join('')}</ul>`
         : `<p class="note">记了几天之后，这里会显示每样情况是多了还是少了。</p>`;
     h += '</section>';
     // ⑥ HRT(只在本人开了 HRT 时)

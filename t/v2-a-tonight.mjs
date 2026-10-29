@@ -82,12 +82,17 @@ await run('v2-a-tonight', [
             await click(p, '#tn-plan [data-miss]', 200);
             const r = await p.eval(`return {en:${TODAY_EN},b:document.querySelector('#tn-plan [data-miss]').textContent}`);
             S.ok((r.en.skipped || []).includes(nm) && r.b === '撤回', '点「今晚没做」:写进当天 skipped(第二天不会被推定成用了)', r);
+            const ts1 = await p.eval(`return ${ENV}.sk_tnsteps1`);
+            S.ok(ts1 && ts1.date && (ts1.skipped || []).includes(nm), 'sk_tnsteps1 也带上 skipped(v1 的三字段,v1 设备读得到)', ts1);
             await click(p, '#tn-plan [data-miss]', 200);
             S.ok(!((await p.eval(`return ${TODAY_EN}`)).skipped || []).length, '再点「撤回」:skipped 清掉');
+            const ts2 = await p.eval(`return ${ENV}.sk_tnsteps1`);
+            S.ok(ts2 && !(ts2.skipped || []).length, '撤回后 sk_tnsteps1.skipped 也清掉(否则 v1 会把「没做」写回去)', ts2);
         } else S.ok(true, '(这颗种子今晚没排活性:没有「今晚没做」按钮)');
         await click(p, '#tn-logskin', 300);
         const sh = await p.eval(`const ov=document.getElementById('skin-sheet');return {t:ov&&ov.querySelector('.sheet-t').textContent,lead:(ov.querySelector('.sk-lead')||{}).textContent,fm:document.getElementById('sk-fm-t').getAttribute('aria-expanded'),fb:!!ov.querySelector('[data-fb-date]')}`);
         S.ok(sh.t === '记一下皮肤' && /不记也没关系/.test(sh.lead) && sh.fm === 'false', '「记一下皮肤」:不催,脸部地图默认收起', sh);
+        S.ok(!/顾问会看一眼/.test(sh.lead), '没登录(顾问用不了):不承诺「记完顾问会看一眼」', sh.lead);
         S.ok(!sh.fb, '没登录:不出顾问反馈区', sh);
         await p.eval(`document.querySelector('#skin-sheet .sheet-x').click();return 1`);
         S.ok(await p.eval(`return !document.getElementById('tab-record').hidden && getComputedStyle(document.getElementById('tab-record')).display!=='none'`), '极简:记录 tab 默认显示');
@@ -95,23 +100,51 @@ await run('v2-a-tonight', [
     }],
     ['就医红线:任何模式都有卡,亮时不排酸,眼霜照用', async ({ S, open }) => {
         for (const who of ['full', 'minimal']) {
-            const p = await open({ seed: who, seedArg: `{status:i=>i>=-6?['泛红']:[]}` });
+            // 极简这份:十天前点过「看过了」,之后又数够了天数 → 红线再亮
+            const p = await open({ seed: who, seedArg: who === 'minimal' ? `{status:i=>i>=-6?['泛红']:[],profile:{medical:{state:'seen',at:__d(-10),seenAt:__d(-10)}}}` : `{status:i=>i>=-6?['泛红']:[]}` });
             const v = await view(p);
             S.ok(v.med && v.cards[0] === 'note-medical' && v.medBtns.length === 3, `${who}:就医卡在最上面,三个按钮(已约了 / 看过了 / 先不)`, v);
+            if (who === 'minimal') S.ok(v.medBtns.every(x => /:false$/.test(x)), '红线再次亮起:上一轮的「看过了」不显示成已按下', v.medBtns);
             S.ok(!v.steps.includes(ACID) && v.steps.includes(EYE) && /就医/.test(v.lead), `${who}:不排酸、眼霜照用、为什么写明`, v);
             const red = await p.eval(PROBE + `;return __probe('#tonight').red + (document.querySelector('#tab-tonight')?1:0)`);
             S.ok(red <= 3, `${who}:红色只在就医卡(+ tab 点)`, red);
             if (who === 'full') {
                 await click(p, '#tn-med [data-med=booked]', 250);
+                S.ok(await p.eval(`return !!document.querySelector('#med-booked input[type=date]')`), '点「已约了」:先问约了哪天(选填)');
+                await p.eval(`document.getElementById('med-date').value=__d(3);[...document.querySelectorAll('#med-booked .sheet-actions .btn')].find(b=>b.textContent==='记下').click();return 1`); await sleep(250);
                 const b = await view(p);
-                S.ok(b.medBtns.includes('已约了:true') && /已约了/.test(b.allText), '点「已约了」:按钮按下、文字换成「看过之后点看过了」', b.medBtns);
-                await click(p, '#tn-med [data-med=seen]', 300);
+                S.ok(b.medBtns.includes('已约了:true') && /已约了/.test(b.allText) && (await p.eval(`return (${ENV}.sk_profile1.medical||{}).date===__d(3)`)), '记下:按钮按下、文字换成「看过之后点看过了」,日期记进档案', b.medBtns);
+                // 「看过了」:先弹 sheet,取消 → 红线还亮
+                await click(p, '#tn-med [data-med=seen]', 250);
+                const sh = await p.eval(`const ov=document.getElementById('med-seen');return ov?{t:ov.querySelector('.sheet-t').textContent,ta:!!ov.querySelector('#med-note'),btn:[...ov.querySelectorAll('.sheet-actions .btn')].map(x=>x.textContent)}:null`);
+                S.ok(sh && sh.t === '看过医生了' && sh.ta && sh.btn.join() === '取消,记下，解除提醒', '点「看过了」:先弹「看过医生了」(选填医生怎么说 / 取消 / 记下，解除提醒),不是点一下就解除', sh);
+                await p.eval(`[...document.querySelectorAll('#med-seen .sheet-actions .btn')].find(b=>b.textContent==='取消').click();return 1`); await sleep(250);
+                S.ok((await view(p)).med, '取消:红线照旧亮着');
+                await click(p, '#tn-med [data-med=seen]', 250);
+                await p.eval(`document.getElementById('med-note').value='口周皮炎，停所有酸，用药膏';[...document.querySelectorAll('#med-seen .sheet-actions .btn')].find(b=>b.textContent==='记下，解除提醒').click();return 1`); await sleep(300);
                 const c = await view(p);
-                S.ok(!c.med, '点「看过了」:红线解除(从今天起重新计数)', c.cards);
+                const ctx = await p.eval(`const {buildSkincareContext}=await import('/js/ai/context.js');const {createStore}=await import('/js/store.js');const {buildWorld}=await import('/js/model/world.js');
+                    const d=${ENV};const W=buildWorld({lg:k=>d[k]===undefined?null:JSON.parse(JSON.stringify(d[k])),ls:()=>true},{today:__d(0),noAbsorb:true});return (buildSkincareContext(W,{}).medical||{})`);
+                S.ok(!c.med && ctx.note === '口周皮炎，停所有酸，用药膏' && ctx.state === 'seen', '记下:红线解除,医生的话进顾问快照(medical.note)', { med: c.med, ctx });
+                S.ok(await p.eval(`return !!document.querySelector('#tn-med-undo [data-act=med-undo]')`), '解除后今晚页留一行「撤销」');
+                await click(p, '#tn-med-undo [data-act=med-undo]', 300);
+                const u = await view(p);
+                S.ok(u.med && (await p.eval(`return (${ENV}.sk_profile1.medical||{}).state`)) === 'booked', '点撤销:恢复成改之前(已约了),红线又亮', u.medBtns);
             }
             S.ok(!p.errors.length, `${who}:0 console error`, p.errors);
             p.done(); await sleep(200);
         }
+    }],
+    ['极简 + 开了刮胡:今晚页只问「今晚刮胡吗」(洗澡不问)', async ({ S, open }) => {
+        const p = await open({ seed: 'minimal', seedArg: `{profile:{shaving:true}}` });
+        const r = await p.eval(`return {shave:!!document.getElementById('tn-q-shave'),shower:!!document.getElementById('tn-q-shower')}`);
+        S.ok(r.shave && !r.shower, '极简 + 刮胡:有「今晚刮胡吗」,没有「今晚洗澡吗」', r);
+        await click(p, '#tn-shave-y', 300);
+        const v = await view(p);
+        S.ok(v.h1 === '今晚 · 刮胡夜' && !v.steps.includes(ACID), '点「刮」:刮胡夜,酸不上', v.steps);
+        const set = await p.eval(`document.getElementById('btn-settings').click();await new Promise(r=>setTimeout(r,200));return (document.querySelector('#set-habit .note')||{}).textContent||''`);
+        S.ok(!/今晚在今晚页改/.test(set) && /未来 7 晚/.test(set) && /今晚刮胡在今晚页点/.test(set), '设置里的说明按极简 + 刮胡写(不指向不存在的开关)', set);
+        S.ok(!p.errors.length, '0 console error', p.errors);
     }],
     ['安全提示(没有保湿)任何模式都在', async ({ S, open }) => {
         for (const who of ['minimal', 'full']) {
@@ -212,9 +245,34 @@ await run('v2-a-tonight', [
         S.ok(await log(p, '/api/tonight') === n, '今晚做完了:再点开关也不重调顾问', n);
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
+    ['换账号:上一个人的草稿、今晚的「重做」不带进下一个人的账号', async ({ S, open }) => {
+        const p = await open({ seed: 'full', mode: 'on', login: true, aif: `{tonight:${JSON.stringify(TONIGHT_FULL)}}` });
+        // A:记录页、顾问页各打一半字;今晚页撤销一条顾问改的今晚(今晚页留「已撤销 · 重做」)
+        await tab(p, 'record');
+        await p.eval(`const q=document.getElementById('rec-q');q.value='A 的私事：下巴两颗红痘';q.dispatchEvent(new Event('input'));return 1`);
+        await tab(p, 'advisor', 400);
+        await p.eval(`document.querySelectorAll('#sheet-root .sheet-ov').forEach(o=>o.remove());__AIF.chat=[['delta',{t:'可以。'}],['action',{id:'act-sw',message:'跳过一步',changes:[{op:'skip',product:${JSON.stringify(EYE)},why:'今晚想简单点'}],dropped:[]}],['done',{text:'可以，今晚跳过眼霜。',model:'claude-test',effort:'medium',cost:0.01}]];
+            const t=document.getElementById('adv-text');t.value='今晚能少一步吗';t.dispatchEvent(new Event('input'));document.getElementById('adv-send').click();
+            for(let i=0;i<40&&!document.querySelector('#adv-log .rev');i++)await new Promise(r=>setTimeout(r,100));
+            const t2=document.getElementById('adv-text');if(t2){t2.value='A 的草稿';t2.dispatchEvent(new Event('input'));}return 1`);
+        await tab(p, 'tonight', 400);
+        await click(p, '#tn-rev [data-act=undo]', 300);
+        const a = await p.eval(`return (document.getElementById('tn-rev')||{}).textContent||''`);
+        S.ok(/已撤销/.test(a), '(前提)A 的今晚页:已撤销 · 重做', a);
+        // 换成 B
+        await p.eval(`fakeCloud.auth(null);await new Promise(r=>setTimeout(r,200));fakeCloud.auth({uid:'u-B',email:'b@example.com',displayName:'Bee',getIdToken:async()=>'t-b'});await new Promise(r=>setTimeout(r,900));
+            document.querySelectorAll('#sheet-root .sheet-ov').forEach(o=>o.remove());return 1`);
+        await tab(p, 'tonight', 300);
+        const r = await p.eval(`const out={rev:(document.getElementById('tn-rev')||{}).textContent||''};
+            document.getElementById('tab-record').click();await new Promise(r=>setTimeout(r,250));out.rec=(document.getElementById('rec-q')||{value:''}).value;out.parse=!!document.getElementById('rec-parse');
+            document.getElementById('tab-advisor').click();await new Promise(r=>setTimeout(r,350));document.querySelectorAll('#sheet-root .sheet-ov').forEach(o=>o.remove());
+            out.adv=(document.getElementById('adv-text')||{value:''}).value;out.pending=!!document.getElementById('adv-pending');return out`);
+        S.ok(!r.rev && !r.rec && !r.parse && !r.adv && !r.pending, 'B:记录页、顾问页的输入框都是空的,今晚页没有 A 的「重做」', r);
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
     ['页面在后台:不自动调顾问;切回来再调', async ({ S, open }) => {
         const p = await open({ seed: 'full', seedArg: `{products:i=>[]}`, mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)}}` });
-        await p.eval(`window.__HID=true;Object.defineProperty(document,'hidden',{configurable:true,get:()=>!!window.__HID});return 1`);
+        await p.eval(`window.__HID=true;Object.defineProperty(document,'hidden',{configurable:true,get:()=>!!window.__HID});localStorage.setItem('sk_aiprivacy1',JSON.stringify({uid:'u-test',at:1}));return 1`);
         await p.waitFor('!!(window.fakeCloud && fakeCloud.auth)', 5000);
         await p.eval(`fakeCloud.auth({uid:'u-test',email:'t@example.com',displayName:'Tester Name',getIdToken:async()=>'fake-id-token'});return 1`);
         try { await p.waitFor(`!!document.querySelector('#claim .btn-primary')`, 3000); await p.eval(`document.querySelector('#claim .btn-primary').click();return 1`); } catch (e) { }

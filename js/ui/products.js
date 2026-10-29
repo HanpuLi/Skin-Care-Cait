@@ -20,7 +20,7 @@ import { restedNow, includedNow, introNightsLeft, regimenRules } from '../engine
 import { safetyGate, gateBlocks } from '../engine/gate.js';
 import { isExcluded } from '../engine/util.js';
 import { mdOf } from '../clock.js';
-import { askAdvisor, probeOnce } from './advisor.js';
+import { askAdvisor, probeOnce, dataNoticeSeen } from './advisor.js';
 
 export const id = 'products';
 export const title = '产品';
@@ -43,10 +43,18 @@ export function defaultScheduleFor(role) {
     return Object.assign(base, { type: 'base', maxPerWeek: 0, time: ['eye', 'moist', 'serum', 'cleanse'].indexOf(role) >= 0 ? ['am', 'pm'] : ['pm'] });
 }
 // 存档里的货架原样(没存过的老账号 = 内置种子;新账号 = 空)。注意别拿 loadPD() 的结果写回:它滤掉了用完的,买回来时就找不到定义了
+// 【和 v1 loadPD 同一条规则】种子货架(老账号)缺的内置产品从 DEFAULT_PD 补回来(不按「用完了」过滤,留着定义给「买回来」):
+//   v1 每次改货架写的是滤掉了用完的那份,v1 时代用完过的内置产品不在 sk_proddefs1 里;不补的话买回来后在 v2 改不了、拿不掉。
+//   第一次写入时就把补回来的持久化了。
 function rawDefs(store) {
     const saved = store.lg(K.prodDefs);
-    if (saved) return saved;
-    return shelfSeeded(store) ? normalizeStatuses(JSON.parse(JSON.stringify(DEFAULT_PD))) : [];
+    const seeded = shelfSeeded(store);
+    if (saved) {
+        if (!seeded) return saved;
+        const miss = DEFAULT_PD.filter(d => d.builtin && !saved.some(x => x && x.id === d.id));
+        return miss.length ? saved.concat(normalizeStatuses(JSON.parse(JSON.stringify(miss)))) : saved;
+    }
+    return seeded ? normalizeStatuses(JSON.parse(JSON.stringify(DEFAULT_PD))) : [];
 }
 const PLAN_KEYS = ['role', 'traits', 'schedule'];
 function after(store, why, shop, today) { syncRegimen(store, why, true, today); shopLocalChange(shop); }
@@ -234,6 +242,7 @@ export function shopRec(app) {
 export function shopLocal(why) {
     const app = R.app;
     if (R.hold || !app || !app.ai || !app.ai.ready()) return;
+    if (!dataNoticeSeen(app)) return;   // 还没看过「顾问会看到什么」:不在后台自动外发(她到产品页点「让顾问判断」照样能用)
     if (why && R.whyQ.indexOf(why) < 0) R.whyQ.push(String(why).slice(0, 80));
     if (R.running) { R.again = true; paintShop(); return; }
     const uid = shopUid();
@@ -579,7 +588,12 @@ function runOut(app, pid) {
 function dropSheet(app, pid) {
     const W = app.world(), p = (W.products || []).find(x => x.id === pid); if (!p) return;
     const why = ['不适合我', '太刺激', '送人了', '只是暂时不想用'];
-    const go = w => { closeSheet('drop-sheet'); localDropProduct(app.store, pid, w, app.today()); app.renderAll(); toast('「' + p.name + '」收进了「不要了的」'); };
+    const go = w => {
+        closeSheet('drop-sheet');
+        const r = localDropProduct(app.store, pid, w, app.today());
+        app.renderAll();
+        toast(r ? '「' + p.name + '」收进了「不要了的」' : '「' + p.name + '」没拿掉：货架记录里找不到它，刷新一下再试');
+    };
     openSheet({ id: 'drop-sheet', title: '「' + p.name + '」不要了？', html: `<p class="note">它不会再排进流程，收在产品页最下面「不要了的」，随时能恢复。为什么？（选填）</p>
         <div class="chips pr-why">${why.map(w => `<button type="button" class="chip" data-why="${esc(w)}">${esc(w)}</button>`).join('')}</div>`,
         actions: [{ label: '取消' }, { label: '直接拿掉', primary: true, keep: true, fn: () => go('') }],

@@ -103,6 +103,8 @@ export async function fresh(origin, o = {}) {
     }
     await p.eval(`window.__AIF=Object.assign({mode:'${o.mode || 'down'}'},${o.aif || '{}'});return 1`);
     if (o.login) {
+        // 默认当她已经看过「顾问会看到什么」(自动外发要先看过;o.notice === false 测没看过的情形)
+        if (o.notice !== false) await p.eval(`localStorage.setItem('sk_aiprivacy1',JSON.stringify({uid:'u-test',at:1}));return 1`);
         await p.waitFor('!!(window.fakeCloud && fakeCloud.auth)', 5000);
         await p.eval(`fakeCloud.auth({uid:'u-test',email:'t@example.com',displayName:'Tester Name',getIdToken:async()=>'fake-id-token'});return 1`);
         // 这台设备登录前有记录 → 认领 sheet:点「是我的」

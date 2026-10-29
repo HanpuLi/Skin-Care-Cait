@@ -11,10 +11,15 @@ import { esc, ico } from './sheets.js';
 export const GUIDE = [
     { id: 'use', head: '怎么用', body: [
         { list: [
-            '「今晚」：照着做。先答一下今晚洗不洗澡、刮不刮胡，步骤会跟着变。',
-            '「顾问」：现在这套方案为什么这么排、刷酸节奏、未来 7 晚（哪晚洗澡、刮胡在这里点），也能直接问顾问。顾问改了什么都直接生效，今晚页和对话里都能撤销。',
+            '「今晚」：照着做，每一步带一句为什么。',
+            '「顾问」：现在这套方案为什么这么排、刷酸节奏、未来 7 晚（每晚的安排在这里点），也能直接问顾问。顾问改了什么都直接生效，今晚页和对话里都能撤销。',
             '「记录」：随时记一笔皮肤（一句话或一张照片），往下翻是以前的记录和脸上哪里反复。',
             '「产品」：家里有什么，快用完了、用完了，要不要买新的。'] },
+        // 按模式 + 刮不刮胡说今晚页问什么(极简不问洗澡,只有开了刮胡的才问「今晚刮胡吗」;不刮胡的人不提刮胡)
+        { minimal: false, shave: true, text: '今晚页先答一下今晚洗不洗澡、刮不刮胡，步骤会跟着变。' },
+        { minimal: false, shave: false, text: '今晚页先答一下今晚洗不洗澡，步骤会跟着变。' },
+        { minimal: true, shave: true, text: '洗澡按每周习惯排，要改在「顾问」页的未来 7 晚里点；今晚临时刮胡，在今晚页点「今晚刮胡吗」。' },
+        { minimal: true, shave: false, text: '洗澡按每周习惯排，要改在「顾问」页的未来 7 晚里点。' },
         { minimal: true, text: '只看今晚的用法：护肤品不用打卡，排上的默认都算用了；哪一步没做，点一下「今晚没做」。皮肤想记就点「记一下皮肤」，不记也不会催。' },
         { minimal: false, text: '记录并看变化的用法：每晚点一下做了哪几步，做完顺手记一下皮肤，「记录」页能看到走势。' },
         '皮肤有任何变化（长了什么、发红、刺痛、脱皮），记一笔或者问顾问，方案会跟着调。'] },
@@ -61,7 +66,7 @@ export const GUIDE = [
 export function guideFor(profile) {
     const P = profile || {}, minimal = !!P.minimalMode;
     return GUIDE.filter(g => !(g.feat === 'shave' && !P.shaving) && !(g.feat === 'hrt' && !P.hrt))
-        .map(g => Object.assign({}, g, { body: g.body.filter(b => !(b && typeof b === 'object' && 'minimal' in b && b.minimal !== minimal)).map(b => (b && typeof b === 'object' && 'text' in b) ? b.text : b) }));
+        .map(g => Object.assign({}, g, { body: g.body.filter(b => !(b && typeof b === 'object' && (('minimal' in b && b.minimal !== minimal) || ('shave' in b && b.shave !== !!P.shaving)))).map(b => (b && typeof b === 'object' && 'text' in b) ? b.text : b) }));
 }
 export function guideAskText(g) { return '这条「' + g.head + '」对我现在意味着什么？'; }
 

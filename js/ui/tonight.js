@@ -18,10 +18,10 @@
 //   极简模式下顾问版的活性和排班(sk_planday1)对齐:排班之外的不上(第二天按排班推定,多上一次酸会漏记);
 //   排班里有、顾问却没排的放回来,顾问说了「今晚可以不用」就写在这一步上,她点「今晚没做」才算没做(不在渲染时替她写记录)。
 import { K, LOCAL_KEYS } from '../store.js';
-import { dowOf } from '../clock.js';
-import { jrnlEntry, saveJrnl, toggleSkipped } from '../model/journal.js';
+import { dowOf, addDays, mdOf } from '../clock.js';
+import { jrnlEntry, saveJrnl, toggleSkipped, writeTnSteps } from '../model/journal.js';
 import { toggleTn } from '../model/week.js';
-import { setMedical } from '../model/profile.js';
+import { setMedical, restoreMedical } from '../model/profile.js';
 import { ROLE_LABEL, ROLE_ORDER, cleanseStrength } from '../model/products.js';
 import { tonight as offlineTonight, computePlan, acidHistory } from '../engine/schedule.js';
 import { safetyGate } from '../engine/gate.js';
@@ -30,9 +30,9 @@ import { prodByName } from '../engine/util.js';
 import { acidTiming, tonightOverride, repairUse } from '../engine/rules.js';
 import { tonightPlan, gateTonightPlan, TONIGHT_TXT, applyTonight, undoTonightChange } from '../ai/apply.js';
 import { buildSkincareContext } from '../ai/context.js';
-import { esc, ico, toast } from './sheets.js';
+import { esc, ico, toast, openSheet } from './sheets.js';
 import { openSkinSheet, feedbackHtml, hasLog } from './record.js';
-import { lastTonightRec, revAct } from './advisor.js';
+import { lastTonightRec, revAct, dataNoticeSeen, openDataNotice } from './advisor.js';
 
 export const id = 'tonight';
 export const title = '今晚';
@@ -40,7 +40,13 @@ const WEEK = ['周日', '周一', '周二', '周三', '周四', '周五', '周�
 const ACTIVE = ['acid', 'mask', 'retinol'];
 const ACT_N = { acid: '酸', retinol: '维 A', mask: '面膜' };
 const DEBOUNCE = 1500;
-const st = { more: false, busy: false, pending: '', timer: null, tried: {}, lastProbe: 0, redo: null, fx: null };
+const st = { more: false, busy: false, pending: '', timer: null, tried: {}, lastProbe: 0, redo: null, fx: null, medUndo: null };
+// 换账号:模块里的半截状态(「已撤销 · 重做」、刚点的开关说明、就医的撤销)都属于上一个人,清掉(app.js 的 clearLocalExtras 调)
+export function resetForUser() {
+    clearTimeout(st.timer);
+    Object.assign(st, { more: false, pending: '', timer: null, tried: {}, lastProbe: 0, redo: null, fx: null, medUndo: null });
+}
+const ownerOf = app => (app.store && app.store.state && app.store.state.owner) || '';
 
 // ══ 顾问写今晚:缓存 / 什么时候调 ════════════════════════════════════════════════════════
 function uidOf(app) { const u = app.sync && app.sync.state && app.sync.state.user; return u ? u.uid : ''; }
@@ -106,6 +112,7 @@ export function localChange(app, why) {
     clearTimeout(st.timer);
     st.timer = setTimeout(() => {
         const ai = app.ai; if (!ai || ai.access() !== 'on') return;
+        if (!dataNoticeSeen(app)) return;   // 还没看过「顾问会看到什么」:不自动外发
         const W = app.world();
         if (doneToday(W)) return;   // 今晚已经做完了:再排一遍没用,不花这个钱
         const s = aiStatus(app, W, offlineTonight(W));
@@ -119,6 +126,7 @@ export function localChange(app, why) {
 export function onAiReady(app) { maybeAuto(app); }
 function maybeAuto(app) {
     const ai = app.ai; if (!ai || ai.access() !== 'on') return;
+    if (!dataNoticeSeen(app)) return;   // 还没看过「顾问会看到什么」:今晚照离线规则排,页面上给「先看一下」
     if (typeof document !== 'undefined' && document.hidden) return;   // 在后台(比如同步落地时重画)不自动调,等她看得见
     const W = app.world(), uid = uidOf(app), key = uid + '|' + W.today;
     const c = readCache(app);
@@ -285,13 +293,13 @@ function tickStep(app, name) {
     const store = app.store, t = app.today(), W = app.world();
     const s = stepState(W);
     if (s.done.has(name)) s.done.delete(name); else { s.done.add(name); s.skipped.delete(name); }
-    store.ls(K.tnsteps, { date: t, done: [...s.done] });
     const { list, en } = jrnlEntry(store, t, true);
     if (s.done.size) en.stepsDone = [...s.done]; else delete en.stepsDone;
     if (s.skipped.size) en.skipped = [...s.skipped]; else delete en.skipped;
     const p = prodByName(W, name), tag = p && p.journalTag;
     if (tag) { en.products = en.products.filter(x => x !== tag); if (s.done.has(name)) en.products.push(tag); }
     saveJrnl(store, list);
+    writeTnSteps(store, t, [...s.done]);   // v1 的三字段 {date, done, skipped},skipped 和当天日志一致
 }
 
 // ══ 渲染 ══════════════════════════════════════════════════════════════════════════════
@@ -322,7 +330,7 @@ function model(app) {
     const skips = plan.skips.map(x => isAi ? x : Object.assign({}, x, splitWhy(x.product)));
     const kinds = steps.map(s => s.kind);
     const type = !hasShelf ? '还没排' : off.shave ? '刮胡夜' : kinds.indexOf('acid') >= 0 ? '刷酸夜' : kinds.indexOf('mask') >= 0 ? '面膜夜' : kinds.indexOf('retinol') >= 0 ? '维 A 夜' : '修护夜';
-    const blockedAct = (plan.blocked || []).some(b => { const p = prodByName(W, b.product); return p && (ACTIVE.indexOf((p.schedule || {}).type) >= 0 || p.role === 'acid'); });
+    const blockedAct = (plan.blocked || []).some(b => { if (b.act) return true; const p = prodByName(W, b.product); return p && (ACTIVE.indexOf((p.schedule || {}).type) >= 0 || p.role === 'acid'); });
     const nxt = nextAcidNight(W);
     let lead;
     if (!hasShelf) lead = '家里有什么还没告诉 App，今晚先用温水洗脸。';
@@ -345,7 +353,9 @@ function model(app) {
     steps.filter(s => s.low).forEach(s => cards.push({ tone: 'info', text: '「' + s.name + '」快用完了，去「产品」看看要不要买。' }));
     (plan.dropped || []).forEach(n => cards.push({ tone: 'info', text: '顾问提到的「' + n + '」不在货架上，没排。' }));
     if (type === '刷酸夜' && cards.every(c => !/防晒/.test(c.text || ''))) cards.push({ tone: 'info', text: '明早防晒别忘：刷酸后第二天对光更敏感。' });
-    return { W, P, t, minimal, hasShelf, off, g, ai, ov, plan, isAi, fellBack, steps, skips, type, lead, cards };
+    let noticeSeen = true; try { noticeSeen = dataNoticeSeen(app); } catch (e) { }
+    const sdkMiss = !!(app.sync && app.sync.state && app.sync.state.sdkMissing && ownerOf(app));
+    return { W, P, t, minimal, hasShelf, off, g, ai, ov, plan, isAi, fellBack, steps, skips, type, lead, cards, noticeSeen, sdkMiss };
 }
 
 function srcLine(m) {
@@ -360,20 +370,24 @@ function srcLine(m) {
     }
     if (a.busy) txt = '顾问在排今晚，排好了会换上；先看离线排法。';
     else if (m.fellBack) txt = '顾问排的步骤都没过安全闸，用的是离线排法。';
-    else if (a.state === 'out') txt = '没登录，用的是离线排法。';
+    else if (a.state === 'out') txt = m.sdkMiss ? '离线（登录服务没加载出来），用的是离线排法。' : '没登录，用的是离线排法。';
     else if (a.state === 'none' || a.state === 'mismatch') txt = '顾问没开通，用的是离线排法。';
     else if (a.state === 'quota') txt = a.err + '今晚用的是离线排法。';
     else if (a.state === 'down') { txt = '顾问连不上，用的是离线排法。'; btn = '再试一次'; }
     else if (a.state === 'err') { txt = '顾问这次没排成（' + a.err + '），用的是离线排法。'; btn = '让顾问重排'; }
     else if (a.state === 'stale') { txt = '情况变了，先用离线排法。'; btn = '让顾问重排'; }
+    else if (a.state === 'pending' && !m.noticeSeen) return `<p class="note tn-src" id="tn-src">顾问会看你的记录来排今晚；先看一下它会看到什么，现在用的是离线排法。 <button type="button" class="btn-link sm" data-act="notice">先看一下</button></p>`;
     else if (a.state === 'pending') { txt = '用的是离线排法。'; btn = '让顾问排今晚'; }
     return `<p class="note tn-src" id="tn-src">${esc(txt)}${btn ? ` <button type="button" class="btn-link sm" data-act="ask">${btn}</button>` : ''}</p>`;
 }
 function medicalCard(m) {
-    const red = m.g.red || {}, fu = red.followUp;
+    const red = m.g.red || {};
+    // 红线亮着时「看过了」(上一轮的)当没有回应:不然按钮显示成已按下,像是在说「这次已经看过了」
+    const fu = red.followUp === 'seen' ? '' : red.followUp;
+    const med = (m.P && m.P.medical) || {};
     const by = red.by === 'both' ? '泛红和冒痘' : red.by === 'acne' ? '冒痘' : '泛红';
     const days = red.by === 'acne' ? red.acneDays : red.by === 'both' ? red.days : red.redDays;
-    const text = fu === 'booked' ? '已约了。看过之后点「看过了」，酸才会恢复；在这之前全停，眼霜照用。'
+    const text = fu === 'booked' ? '已约了' + (med.date ? ' ' + mdOf(med.date) : '') + '。看过之后点「看过了」，酸才会恢复；在这之前全停，眼霜照用。'
         : fu === 'later' ? '先不也行，之后还会提醒。点「看过了」之前，所有酸照样停，眼霜照用。'
             : m.g.medicalText + '看过之前所有酸都停，包括温和酸；眼霜照用。';
     const btns = [['booked', '已约了'], ['seen', '看过了'], ['later', '先不']];
@@ -387,18 +401,20 @@ function cardHtml(c) {
 }
 function revHtml(m, app) {
     const ov = m.ov;
+    let lr = null;
+    try { lr = app ? lastTonightRec(app) : null; } catch (e) { lr = null; }
+    // 今晚页自己的「重做」只认:同一个账号、同一天、而且之后没有更新的改动(有了新的,旧的重做作废,和对话那条对得上)
+    if (st.redo && (ov || st.redo.date !== m.t || st.redo.owner !== ownerOf(app) || (lr && (+new Date(lr.rec.at) || 0) > st.redo.at))) st.redo = null;
     if (ov) {
         const txt = ov.ops.map(c => (TONIGHT_TXT[c.op] ? TONIGHT_TXT[c.op](c) : c.op) + (c.why ? '：' + c.why : '')).join('；');
         return `<div class="revbar" id="tn-rev"><div class="rev-main"><span class="who">顾问${ov.at ? ' · ' + esc(hm(ov.at)) : ''} · 改了今晚</span><span class="what">${esc(txt)}</span></div>
             <button type="button" class="btn-link" data-act="undo">撤销</button></div>`;
     }
-    if (st.redo && st.redo.date === m.t) {
+    if (st.redo) {
         return `<div class="revbar" id="tn-rev"><div class="rev-main"><span class="who">顾问 · 改了今晚</span><span class="what">已撤销，今晚恢复成上一版。</span></div>
             <button type="button" class="btn-link" data-act="redo">重做</button></div>`;
     }
     // 在对话里撤的:今晚页也给「已撤销 · 重做」,点了走顾问页同一个 recAct(两边状态一定对得上)
-    let lr = null;
-    try { lr = app ? lastTonightRec(app) : null; } catch (e) { lr = null; }
     if (lr && lr.state === 'undone') {
         return `<div class="revbar" id="tn-rev"><div class="rev-main"><span class="who">顾问 · 改了今晚</span><span class="what">已撤销，今晚恢复成上一版。</span></div>
             <button type="button" class="btn-link" data-act="redo-chat" data-key="${esc(lr.key)}">重做</button></div>`;
@@ -411,8 +427,13 @@ export function render(app) {
     const { W, P, t, minimal, hasShelf, off, g, steps, skips, cards } = m;
     let h = `<h1 class="page-title" id="tonight-h"><span class="pre">今晚 · </span>${esc(m.type)}</h1><p class="tn-lead" id="tn-lead">${esc(m.lead)}</p>`;
     h += revHtml(m, app);
-    // ② 今晚的情况(完整模式;极简模式不问,按每周习惯)
-    if (hasShelf && !minimal) {
+    // 刚点了「看过了」:留一行撤销(手机上误点就把所有酸放开了,卡片一灭就再没入口改回去)
+    const mu = st.medUndo;
+    if (mu && (mu.date !== t || mu.owner !== ownerOf(app) || !(P.medical && P.medical.state === 'seen' && P.medical.seenAt === t))) st.medUndo = null;
+    if (st.medUndo) h += `<div class="revbar" id="tn-med-undo"><div class="rev-main"><span class="who">就医提醒</span><span class="what">记下了「看过医生了」，提醒已解除。</span></div>
+        <button type="button" class="btn-link" data-act="med-undo">撤销</button></div>`;
+    // ② 今晚的情况(完整模式;极简模式不问洗澡,按每周习惯 —— 但开了刮胡的还要问「今晚刮胡吗」:刮胡夜不上酸是安全规则,临时刮了得能说)
+    if (hasShelf && (!minimal || P.shaving)) {
         const acidTonight = m.type === '刷酸夜';
         const q = (k, label, yes, no, on) => {
             const fx = st.fx && st.fx.date === t && st.fx.k === k ? st.fx.text : defaultFx(k, on, acidTonight, g);
@@ -421,7 +442,7 @@ export function render(app) {
                 <p class="note sit-fx${st.fx && st.fx.date === t && st.fx.k === k ? ' changed' : ''}" id="tn-fx-${k}" aria-live="polite">${esc(fx)}</p></div>`;
         };
         h += `<section class="tn-sit" id="tn-sit" aria-label="今晚的情况"><div class="sec-h"><span class="sec-t">今晚的情况</span><span class="note faint">按每周习惯先填好了</span></div>`
-            + q('shower', '今晚洗澡吗？', '洗', '不洗', !!off.shower) + (P.shaving ? q('shave', '今晚刮胡吗？', '刮', '不刮', !!off.shave) : '') + '</section>';
+            + (minimal ? '' : q('shower', '今晚洗澡吗？', '洗', '不洗', !!off.shower)) + (P.shaving ? q('shave', '今晚刮胡吗？', '刮', '不刮', !!off.shave) : '') + '</section>';
     }
     // ③ 最多一张提醒卡 + 「还有 N 条」
     if (cards.length) {
@@ -469,18 +490,19 @@ export function render(app) {
     h += '</section>';
     // 完成今晚 / 记一下皮肤
     const en = entryOf(W, t);
+    const aiOn = !!(app.ai && app.ai.access() === 'on' && !(app.ai.state && app.ai.state.down));   // 顾问用不了就别承诺「会回你 / 会看到」
     if (minimal) {
         h += `<div class="tn-finish" id="tn-finish"><button type="button" class="btn btn-block" data-act="skin" id="tn-logskin">${hasLog(en) ? '今天的皮肤 · 再看看' : '记一下皮肤'}</button>
             <div class="fb-box" data-fb-date="${esc(t)}">${feedbackHtml(app, t)}</div></div>`;
     } else if (en && en.done) {
         const logged = hasLog(en);
         h += `<div class="tn-finish done" id="tn-finish"><span class="meta tn-done-at">做完了${en.doneAt ? ' · ' + esc(hm(en.doneAt)) : ''}</span>
-            ${logged ? '' : '<p class="note">皮肤今天怎么样？一句话或一张照片就够，顾问看完会回你。</p>'}
+            ${logged ? '' : `<p class="note">皮肤今天怎么样？一句话或一张照片就够${aiOn ? '，顾问看完会回你' : ''}。</p>`}
             <div class="btn-row"><button type="button" class="btn" data-act="done-sheet">${logged ? '皮肤和反馈' : '记一笔'}</button><button type="button" class="btn-link sm quiet" data-act="unfinish">撤回</button></div>
             <div class="fb-box" data-fb-date="${esc(t)}">${feedbackHtml(app, t)}</div></div>`;
     } else {
         h += `<div class="tn-finish" id="tn-finish"><button type="button" class="btn btn-primary btn-block" data-act="finish" id="tn-finish-b">完成今晚</button>
-            <p class="note faint tn-finish-n">没点的步骤记成「没做」，顾问会看到。</p><button type="button" class="btn-link sm quiet" data-act="skin">只记皮肤</button></div>`;
+            <p class="note faint tn-finish-n">没点的步骤记成「没做」${aiOn ? '，顾问会看到' : ''}。</p><button type="button" class="btn-link sm quiet" data-act="skin">只记皮肤</button></div>`;
     }
     return h;
 }
@@ -498,7 +520,7 @@ export function mount(root, app) {
         if (!tg || !root.contains(tg)) return;
         const store = app.store, t = app.today();
         if (tg.dataset.step !== undefined) { if (!(app.world().profile || {}).minimalMode) { tickStep(app, tg.dataset.step); app.renderAll(); } return; }
-        if (tg.dataset.miss !== undefined) { toggleSkipped(store, t, tg.dataset.miss); app.renderAll(); return; }
+        if (tg.dataset.miss !== undefined) { toggleSkipped(store, t, tg.dataset.miss, t); app.renderAll(); return; }
         if (tg.dataset.sit) {
             const k = tg.dataset.sit, v = tg.dataset.v === '1';
             const W0 = app.world(), off0 = offlineTonight(W0);
@@ -511,26 +533,26 @@ export function mount(root, app) {
             localChange(app, k === 'shave' ? '今晚刮胡改了' : '今晚洗澡改了');
             return;
         }
-        if (tg.dataset.med) {
-            const k = tg.dataset.med;
-            setMedical(store, k, {}, t);
-            if (k === 'seen') toast('记下了：从今天起重新计数，酸按方案慢慢恢复');
-            app.renderAll();
-            return;
-        }
+        if (tg.dataset.med) { medicalAct(app, tg.dataset.med); return; }
         const a = tg.dataset.act;
         if (a === 'more') { st.more = !st.more; app.renderScreen('tonight'); }
-        else if (a === 'ask') fetchTonight(app, 'manual');
+        else if (a === 'ask') { if (dataNoticeSeen(app)) fetchTonight(app, 'manual'); else openDataNotice(app, () => fetchTonight(app, 'manual')); }
+        else if (a === 'notice') openDataNotice(app, () => { repaint(app); maybeAuto(app); });
+        else if (a === 'med-undo') {
+            const u = st.medUndo; st.medUndo = null;
+            if (u && u.owner === ownerOf(app)) { restoreMedical(store, u.prev); toast('撤销了，就医提醒照旧'); }
+            app.renderAll();
+        }
         else if (a === 'undo') {
             const rec = app.world().tnai;
             if (!rec) return;
             const err = undoTonightChange(store, rec.id, t);
             if (err) { toast(err); return; }
-            st.redo = { date: t, rec: JSON.parse(JSON.stringify(rec)) };
+            st.redo = { date: t, rec: JSON.parse(JSON.stringify(rec)), owner: ownerOf(app), at: Date.now() };
             app.renderAll();
         } else if (a === 'redo') {
-            const r = st.redo && st.redo.rec; st.redo = null;
-            if (r && r.date === t) {
+            const r0 = st.redo, r = r0 && r0.rec; st.redo = null;
+            if (r && r.date === t && r0.owner === ownerOf(app)) {
                 const res = applyTonight(store, { id: r.id, changes: (r.ops || []).map(o => ({ op: o.op, product: o.product, to: o.to, level: o.level, why: o.why })) }, t);
                 if (res && res.state === 'failed') toast('这次重做没生效：' + (res.result || []).filter(Boolean).join('；'));
             }
@@ -542,11 +564,42 @@ export function mount(root, app) {
             const back = new Set(en.doneSkipped || []);
             if (en.skipped) { en.skipped = en.skipped.filter(n => !back.has(n)); if (!en.skipped.length) delete en.skipped; }
             delete en.done; delete en.doneAt; delete en.doneSkipped;
-            saveJrnl(store, list); app.renderAll();
+            saveJrnl(store, list); writeTnSteps(store, t); app.renderAll();
         } else if (a === 'done-sheet') openSkinSheet(app, { date: t, mode: 'done', summary: doneSummary(app) });
         else if (a === 'skin') openSkinSheet(app, { date: t, mode: 'skin' });
         else if (a === 'products') app.show('products');
     });
+}
+// 就医红线的三个按钮:「看过了」先弹 sheet(选填医生怎么说,确认才解除,解除后留一行撤销);「已约了」可以带日期;「先不」一周后再提醒
+function medicalAct(app, k) {
+    const store = app.store, t = app.today(), owner = ownerOf(app);
+    const prev = (app.world().profile || {}).medical || null;
+    const snap = prev ? JSON.parse(JSON.stringify(prev)) : null;
+    if (k === 'seen') {
+        openSheet({ id: 'med-seen', title: '看过医生了', html: `<p class="note">点「记下」之后从今天起重新计数，酸按方案慢慢恢复。</p>
+            <label class="field"><span>医生怎么说？（选填，一句话就行；顾问会看到）</span><textarea id="med-note" rows="3" maxlength="200" placeholder="比如：口周皮炎，先停所有酸，用了某药膏"></textarea></label>`,
+            actions: [{ label: '取消' }, { label: '记下，解除提醒', primary: true, fn: ov => {
+                if (ownerOf(app) !== owner) return;
+                const note = String((ov.querySelector('#med-note') || {}).value || '').trim().slice(0, 200);
+                setMedical(store, 'seen', note ? { note } : {}, app.today());
+                st.medUndo = { date: app.today(), owner, prev: snap };
+                toast('记下了：从今天起重新计数，酸按方案慢慢恢复');
+                app.renderAll();
+            } }] });
+        return;
+    }
+    if (k === 'booked') {
+        openSheet({ id: 'med-booked', title: '约了哪天？', html: `<p class="note">选填。看过之前今晚页只排清洁、保湿、修护，眼霜照用。</p>
+            <label class="field"><span>日期</span><input type="date" id="med-date" min="${esc(t)}" value="${esc(prev && prev.state === 'booked' ? (prev.date || '') : '')}"></label>`,
+            actions: [{ label: '取消' }, { label: '记下', primary: true, fn: ov => {
+                if (ownerOf(app) !== owner) return;
+                const d = String((ov.querySelector('#med-date') || {}).value || '');
+                setMedical(store, 'booked', /^\d{4}-\d{2}-\d{2}$/.test(d) ? { date: d } : {}, app.today());
+                app.renderAll();
+            } }] });
+        return;
+    }
+    if (k === 'later') { setMedical(store, 'later', { until: addDays(t, 7) }, t); app.renderAll(); }
 }
 function doneSummary(app) {
     const m = model(app), s = stepState(m.W);
@@ -565,6 +618,7 @@ function finishTonight(app) {
     if (added.length) en.doneSkipped = added; else delete en.doneSkipped;
     en.done = true; en.doneAt = new Date(store.now()).toISOString();
     saveJrnl(store, list);
+    writeTnSteps(store, t);
     app.renderAll();
     openSkinSheet(app, { date: t, mode: 'done', summary });
 }

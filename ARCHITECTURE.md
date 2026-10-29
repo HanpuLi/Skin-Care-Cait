@@ -17,7 +17,8 @@ css/tokens.css        paper-and-ink design tokens, light and dark
 css/base.css          reset, layout, typography, tab bar, toast
 css/components.css    buttons, chips, segmented controls, fields, switches, sheets, folds
 css/screens/*.css     per-screen styles
-sw.js                 offline cache; its file list must match js/ and css/ exactly (checked in QA)
+sw.js                 offline cache, cache-first for one version at a time; its file list must match js/ and css/ exactly,
+                      and CACHE_NAME must be bumped whenever index.html, js/ or css/ change (both checked in engine-unit)
 ```
 
 ## Layers and rules
@@ -37,7 +38,15 @@ sw.js                 offline cache; its file list must match js/ and css/ exact
 
 5. **Advisor changes apply directly and can be undone.** `ai/apply.js` validates each change against the gate, applies what passes, explains what was blocked, and stores enough to undo. Routine changes become a new routine version (`model/regimen.js`); undo is itself a version. The local-change notice (`shopLocalChange`) is fired only from these local entry points (apply / undo / restore and the `local*` shelf changes), never from sync, startup maintenance or automatic routine regeneration. QA checks this statically and by counting calls. It has two listeners, registered in `js/app.js`: the "should I buy something" runner (`ui/products.js` `ensureShopRunner`) and tonight's re-plan (`ui/tonight.js` `localChange`). Both debounce and skip the call when their signature has not changed.
 
-6. **Screens render from `W`.** A screen module gets `app` (`store`, `sync`, `ai`, `photos`, `today`, `world()`, `show`, `renderAll`, `signIn`, `signOut`). It builds its HTML in `render(app)` and binds events in `mount(root, app)`. It writes through model functions, then calls `app.renderAll()`. No inline event handlers and no globals on `window`.
+6. **Startup failures stay visible.** `index.html` has a small classic-script watchdog: if the module graph never starts (a file failed to load or link), it shows "this version did not load completely" with a reload button after 8 seconds (1.5 seconds after a load error). `startWithLock` marks `<html data-boot="locking">` as soon as the modules run, and an exception inside `boot()` is caught there (the lock stays held and a "startup error, reload" sheet is shown) instead of escaping into the Web Lock callback. A screen whose `render`/`mount` throws shows a per-screen error card; the other screens keep working.
+
+7. **Account switches reset screen state.** Each screen module may export `resetForUser()`; `js/app.js` calls them from the sync hook `clearLocalExtras` together with the advisor's local cache. Advisor requests remember `store.state.owner` before they start and drop the result if the account changed while waiting.
+
+8. **Screens render from `W`.** A screen module gets `app` (`store`, `sync`, `ai`, `photos`, `today`, `world()`, `show`, `renderAll`, `signIn`, `signOut`). It builds its HTML in `render(app)` and binds events in `mount(root, app)`. It writes through model functions, then calls `app.renderAll()`. No inline event handlers and no globals on `window`.
+
+## Automatic advisor requests
+
+Nothing is sent to the advisor automatically (tonight's plan, feedback after logging, the first routine after setup, the weekly review, the "should I buy something" runner) until this account has seen the "what the advisor sees" notice on this device (`sk_aiprivacy1`, `ui/advisor.js` `dataNoticeSeen` / `openDataNotice`). Until then tonight uses the offline schedule and offers a "take a look first" link. Requests have time limits (`ai/client.js`); a streamed answer that ends without its `done` event is marked partial and is not stored as a complete answer.
 
 ## Tonight written by the advisor
 
@@ -53,7 +62,9 @@ Other device-only keys added in v2: `sk_aiprivacy1` (`{uid, at}`: the data notic
 
 ## Shell
 
-The design target is a real phone screen (390 × 844). The page header (date and seal) is `position: sticky` at the top, the content scrolls under it with the document's own scrolling, and the tab bar is fixed at the bottom. There is no separate overflow container, so iOS keeps its native behaviours (tap the status bar to scroll up, Safari's toolbar collapsing, the keyboard pushing inputs into view).
+The design target is a real phone screen (390 × 844). The page header (date and seal) is `position: sticky` at the top, the content scrolls under it with the document's own scrolling, and the tab bar is fixed at the bottom. There is no separate overflow container, so iOS keeps its native behaviours (tap the status bar to scroll up, Safari's toolbar collapsing, the keyboard pushing inputs into view). Because the four tabs share the document scroll, `show(id)` remembers each tab's scroll position and restores it (a tab not visited yet starts at the top).
+
+The Firebase SDK is not loaded by `index.html`; `js/app.js` inserts the three compat scripts after the first screen is drawn (the service worker caches them). If they cannot load, the app keeps working on local data and says that the sign-in service could not load, rather than "not signed in".
 
 ## Data flow
 

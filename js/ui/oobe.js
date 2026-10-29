@@ -12,6 +12,7 @@ import { jrnlEntry, saveJrnl } from '../model/journal.js';
 import { syncRegimen } from '../model/regimen.js';
 import { applyPlan } from '../ai/apply.js';
 import { buildSkincareContext } from '../ai/context.js';
+import { dataNoticeSeen, openDataNotice } from './advisor.js';
 import { openAddSheet, readLabelFromFile, holdShop } from './products.js';
 import { MINIMAL_DESC, FULL_DESC, skinChipsHtml, bindSkinChips } from './settings.js';
 
@@ -140,11 +141,17 @@ function bind(ov, app) {
         else if (a.indexOf('state-') === 0) {
             const v = a.slice(6);
             updateProfile(app.store, p => { p.startState = v; });
-            // 「现在发红刺痛」是安全输入:直接记进今天(安全闸当晚就生效);看医生的写进档案给顾问看
-            const { list, en } = jrnlEntry(app.store, t, true);
-            en.status = en.status.filter(x => x !== '泛红' && x !== '敏感');
-            if (v === 'irritated') en.status.push('泛红', '敏感');
-            saveJrnl(app.store, list);
+            // 「现在发红刺痛」是安全输入:第一次引导直接记进今天(安全闸当晚就生效);看医生的写进档案给顾问看。
+            //   只撤引导自己加的那几个标签(今天她自己记的泛红是就医红线数的硬事实,不能被一个「没有」抹掉);
+            //   「重新做引导」只改档案里的起点,不碰当天日志(她今天的记录在记录页改)。
+            if (!O.redo) {
+                const { list, en } = jrnlEntry(app.store, t, true);
+                const mine = O.startTags || [];
+                en.status = en.status.filter(x => mine.indexOf(x) < 0);
+                O.startTags = [];
+                if (v === 'irritated') ['泛红', '敏感'].forEach(x => { if (en.status.indexOf(x) < 0) { en.status.push(x); O.startTags.push(x); } });
+                saveJrnl(app.store, list);
+            }
             app.renderAll(); paint(app);
         }
     }));
@@ -158,17 +165,26 @@ export async function finishOobe(app) {
     closeSheet('oobe'); O = null;
     const t = app.today();
     updateProfile(app.store, p => { p.onboarded = true; delete p.oobe; if (!redo) p.oobeAt = t; p.tour3 = true; p.tourIA = true; p.tourV2 = true; });
-    syncRegimen(app.store, '第一版：按家里现有的东西和你说的皮肤情况', true, t);
+    // 重新做引导:不出「第一版」(货架、皮肤都没变就不该凭空多一版,也别把顾问方案那条「撤销」挤成 superseded);
+    //   真有变化(模式改了这类)由启动维护按签名自己重出
+    if (!redo) syncRegimen(app.store, '第一版：按家里现有的东西和你说的皮肤情况', true, t);
     app.renderAll();
     app.show('tonight');
     if (redo || !app.ai.ready() || !(app.world().products || []).some(p => !p.hidden)) { holdShop(false); return; }
-    try {
-        const r = await app.ai.api.plan(buildSkincareContext(app.world(), {}), '新用户第一版：用「建立耐受」的思路，前两周只做清洁、保湿、防晒，之后温和酸每周 1 次起步，看反应再加。');
-        const reg = applyPlan(app.store, (r && r.data) || {}, { model: r && r.model, cost: r && r.cost }, app.today());
-        toast('顾问出了第一版方案 v' + reg.v + '，在「顾问」页能看、能撤销');
-        app.renderAll();
-    } catch (e) { /* 顾问没排成:离线第一版照用,不打扰 */ }
-    holdShop(false);   // 引导里加的货架、第一版方案都不自动判断「要不要买」;她到产品页点「让顾问判断」
+    const owner = (app.store.state && app.store.state.owner) || '';
+    const ask = async () => {
+        try {
+            const r = await app.ai.api.plan(buildSkincareContext(app.world(), {}), '新用户第一版：用「建立耐受」的思路，前两周只做清洁、保湿、防晒，之后温和酸每周 1 次起步，看反应再加。');
+            if (((app.store.state && app.store.state.owner) || '') !== owner) return;   // 换了账号:丢掉
+            const reg = applyPlan(app.store, (r && r.data) || {}, { model: r && r.model, cost: r && r.cost }, app.today());
+            toast('顾问出了第一版方案 v' + reg.v + '，在「顾问」页能看、能撤销');
+            app.renderAll();
+        } catch (e) { /* 顾问没排成:离线第一版照用,不打扰 */ }
+        holdShop(false);   // 引导里加的货架、第一版方案都不自动判断「要不要买」;她到产品页点「让顾问判断」
+    };
+    // 第一次请顾问之前先让她看到「顾问会看到什么」(点「知道了」再发)
+    if (dataNoticeSeen(app)) await ask();
+    else { holdShop(false); openDataNotice(app, () => { ask(); }); }
 }
 
 // ── 改版说明(v2)──
@@ -209,7 +225,8 @@ export function maybeOnboard(app) {
 let _watch = null;
 const _settled = {};
 export function onBoot(app) {
-    setTimeout(() => { if (!curUser(app)) maybeOnboard(app); }, 1800);
+    // 从 Firebase SDK 有了结果(加载到 / 没加载到)之后再等 1.8 秒(SDK 改成第一屏之后才加载)
+    Promise.resolve(app.firebaseReady).then(() => setTimeout(() => { if (!curUser(app)) maybeOnboard(app); }, 1800), () => { });
     if (!_watch) _watch = setInterval(() => {
         const u = curUser(app), st = app.sync && app.sync.state;
         if (u && !_settled[u.uid] && st && st.hydrated) settle(app);
