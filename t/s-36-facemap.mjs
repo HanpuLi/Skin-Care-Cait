@@ -56,7 +56,9 @@ export default async function ({ origin, S, open }) {
         await p.reload(900);
         const r5 = await p.eval(`const en=(lg(K.jrnl)||[]).find(x=>x.date===today());const b=document.querySelector('#tn-skin .fm-entry button');
             const ctx=buildSkincareContext();return {spots:en.spots,btn:b.textContent,fm:!!document.querySelector('#tn-skin .fm'),ctx0:ctx.recentLogs[0],ctxOther:ctx.recentLogs.slice(1).every(x=>Array.isArray(x.spots)&&!x.spots.length)}`);
-        S.ok(JSON.stringify(r5.spots) === JSON.stringify([{ zone: '下巴', type: '脓头' }]) && /已标 1 处/.test(r5.btn) && !r5.fm, '刷新后还在(走信封);入口默认收起,按钮写「已标 1 处」', r5);
+        S.ok(JSON.stringify(r5.spots) === JSON.stringify([{ zone: '下巴', type: '脓头' }]) && /已标 1 处/.test(r5.btn) && r5.fm, '刷新后还在(走信封);完整模式当天标过 → 脸自动展开,按钮写「已标 1 处」', r5);
+        const r5b = await p.eval(`document.querySelector('#tn-skin .fm-entry button').click();${wait(30)}return {fm:!!document.querySelector('#tn-skin .fm'),exp:document.querySelector('#tn-skin .fm-entry button').getAttribute('aria-expanded')}`);
+        S.ok(!r5b.fm && r5b.exp === 'false', '自动展开的也能手动收起', r5b);
         S.ok(JSON.stringify(r5.ctx0.spots) === JSON.stringify([{ zone: '下巴', type: '脓头' }]) && r5.ctxOther, '顾问快照 recentLogs 每天带 spots(没标就是空数组)', r5);
         // 某一天的 sheet(补记)也能标
         const r6 = await p.eval(`openDaySheet(__d(-2));${wait(80)}const none=!document.getElementById('day-sheet').querySelector('.fm-entry');toggleSym(__d(-2),'闭口');${wait(50)}
@@ -126,7 +128,7 @@ export default async function ({ origin, S, open }) {
     for (const scheme of ['light', 'dark']) {
         const p = await boot(`full({today:true,jrnl:${J({ 0: { status: ['爆痘', '泛红'], spots: [['口周', '泛红'], ['下巴', '红痘']] }, '-2': { status: ['爆痘'], spots: [['下巴', '红痘']] } })}})`, { page: { scheme } });
         const d = await p.eval(`return today()`);
-        const r = await p.eval(`${PROBE};document.querySelector('#tn-skin .fm-entry button').click();${wait(30)}document.getElementById('tn-fz-chin-${d}').click();${wait(30)}
+        const r = await p.eval(`${PROBE};const auto=!!document.querySelector('#tn-skin .fm');if(!auto)document.querySelector('#tn-skin .fm-entry button').click();${wait(30)}document.getElementById('tn-fz-chin-${d}').click();${wait(30)}
             const a=__probe('#tn-skin');show('skin');${wait(100)}document.getElementById('heat-fz-chin-').click();${wait(30)}const b=__probe('#face-heat-sec');show('tonight');${wait(50)}
             const parse=c=>{const m=String(c).match(/rgba?\\(([^)]+)\\)/);return m?m[1].split(/[ ,/]+/).filter(Boolean).map(Number):[0,0,0]};
             const lum=c=>{const f=v=>{v/=255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)};return .2126*f(c[0])+.7152*f(c[1])+.0722*f(c[2])};

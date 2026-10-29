@@ -1058,16 +1058,21 @@ function aiFeedbackNote() {
 // ══ 要不要买新的:顾问判断(Cait 10/29 拍板)══════════════════════════════════════════
 // 后端 POST /api/shop {context, trigger} → {data:{verdict, summary, items[], skip[]}}。真跑一次约 70 秒、$0.26,
 // 所以**只在后台跑**,不进 _aiSerial 那条队(后端给它单独的忙碌位,不挡对话);界面上一直有东西看(上次的结果或离线清单)。
-// 什么时候跑:货架签名(在架产品 + 快用完的 + 方案版本)变了 → 防抖 _aiShopDelay 后跑一次;签名没变不跑;产品页有「重新判断」。
+// 【要紧】什么时候自动跑(10/29 定案):**只在本机操作之后** —— index.html 的用户入口(标 / 取消快用完、用完了、补货、添加、
+//   不要了、恢复、本机采纳 / 撤销 / 回到某一版方案)显式调 aiShopLocal(原因),防抖 _aiShopDelay 后跑一次。
+//   云端同步带来的签名变化、syncRegimen 自动重出、第一次打开(本机没结果)一律**不自动调**:签名对不上只标「货架变了，结果可能过时」,
+//   没结果就是离线清单 +「让顾问判断」。别改回「签名变了就调」—— 那样每台设备各花一次钱(结果按设备存)。
 // 结果按账号存本机 sk_ai_shop1({uid, sig, at, trigger, data, parts}),不进 CLOUD_KEYS;换账号 aiClearLocal 会清,读的时候也核 uid。
 // 顾问用不了 / 出错 → 产品页退回 index.html 的离线 regimenNeeds / SHOP_ADVICE / SHOP_PICKS(那套一行没删)。
 let _aiShopDelay = 5000;           // 防抖(毫秒)
-let _aiShopT = null, _aiShopTSig = '';   // 排着的那一次
+let _aiShopT = null;               // 排着的那一次
+let _aiShopWhyQ = [];              // 防抖窗口里攒下的本机操作原因
+let _aiShopAgain = false;          // 跑着的时候又有本机操作 → 跑完再排一次
 let _aiShopRun = null;             // 正在跑的 {uid, sig}
-let _aiShopErr = null;             // 最近一次失败 {uid, sig, msg}:同一个签名失败过就不自动重试(手动「重新判断」可以)
+let _aiShopErr = null;             // 最近一次失败 {uid, sig, msg}(只用来显示)
 const AI_SHOP_URG = [['now', '现在就缺'], ['before_out', '快用完前备上'], ['optional', '可买可不买']];
-function _aiShopReset() { clearTimeout(_aiShopT); _aiShopT = null; _aiShopTSig = ''; _aiShopRun = null; _aiShopErr = null; }
-// 货架签名的组成(名字留着,下次好写「为什么重判」)
+function _aiShopReset() { clearTimeout(_aiShopT); _aiShopT = null; _aiShopWhyQ = []; _aiShopAgain = false; _aiShopRun = null; _aiShopErr = null; }
+// 货架签名的组成(存进结果,方便回看那次判断时货架是什么样)
 function _aiShopParts() {
     const shelf = {};
     shelfProducts().forEach(p => { shelf[p.id] = p.name; });
@@ -1079,38 +1084,28 @@ function aiShopSig() {
     return shelfSignature() + '|low:' + LOW.filter(id => PD.some(p => p.id === id)).sort().join(',') + '|v' + (reg ? (reg.v || 0) : 0);
 }
 function _aiShopRec() { const r = _aiMine(AIK.shop); return (r && r.data && typeof r.data === 'object') ? r : null; }
-// 这次为什么重判(写进 trigger 给顾问看):比上次存的组成
-function _aiShopWhy(prev, cur) {
-    if (!prev || !prev.parts) return '第一次判断';
-    const P = prev.parts, bits = [];
-    const nm = id => (PD.find(p => p.id === id) || DEFAULT_PD.find(p => p.id === id) || {}).name || (P.shelf || {})[id] || id;
-    cur.low.forEach(id => { if ((P.low || []).indexOf(id) < 0) bits.push('标了「' + nm(id) + '」快用完了'); });
-    Object.keys(P.shelf || {}).forEach(id => {
-        if (cur.shelf[id]) return;
-        bits.push((typeof isGone === 'function' && isGone(id) ? '「' + P.shelf[id] + '」用完了' : '「' + P.shelf[id] + '」从货架上拿掉了'));
-    });
-    Object.keys(cur.shelf).forEach(id => { if (!(P.shelf || {})[id]) bits.push('多了「' + cur.shelf[id] + '」'); });
-    (P.low || []).forEach(id => { if (cur.low.indexOf(id) < 0 && cur.shelf[id]) bits.push('「' + nm(id) + '」又够用了'); });
-    if (cur.v !== P.v) bits.push('方案换成了 v' + cur.v);
-    return bits.length ? bits.slice(0, 4).join('；') : '货架有变化';
-}
-// 货架变了就排一次(防抖);签名没变、正在跑同一个签名、同一个签名刚失败过,都不排
-function aiShopCheck() {
-    if (!aiReady()) { clearTimeout(_aiShopT); _aiShopT = null; _aiShopTSig = ''; return; }
-    const uid = _aiUid(), sig = aiShopSig(), rec = _aiShopRec();
-    if (rec && rec.sig === sig) { clearTimeout(_aiShopT); _aiShopT = null; _aiShopTSig = ''; return; }
-    if (_aiShopRun) return;   // 跑完会再核一次签名
-    if (_aiShopErr && _aiShopErr.uid === uid && _aiShopErr.sig === sig) return;
-    if (_aiShopT && _aiShopTSig === sig) return;
+// 本机操作入口(index.html 调):记下原因,防抖后跑一次。没开通 / 连不上就什么都不做(产品页本来就是离线版)
+function aiShopLocal(why) {
+    if (!aiReady()) return;
+    if (why && _aiShopWhyQ.indexOf(why) < 0) _aiShopWhyQ.push(String(why).slice(0, 80));
+    if (_aiShopRun) { _aiShopAgain = true; return; }
+    const uid = _aiUid();
     clearTimeout(_aiShopT);
-    _aiShopTSig = sig;
-    _aiShopT = setTimeout(() => { _aiShopT = null; _aiShopTSig = ''; if (aiReady() && _aiUid() === uid && aiShopSig() === sig) aiShopRun(); else aiShopCheck(); }, _aiShopDelay);
+    _aiShopT = setTimeout(() => {
+        _aiShopT = null;
+        const q = _aiShopWhyQ; _aiShopWhyQ = [];
+        if (!aiReady() || _aiUid() !== uid) return;
+        const rec = _aiShopRec();
+        if (rec && rec.sig === aiShopSig()) return;   // 改了又改回来:货架和上次判断时一样,不花这笔钱
+        aiShopRun(q.slice(0, 4).join('；') || '货架有变化');
+    }, _aiShopDelay);
+    _aiShopPaint();
 }
-function aiShopRedo() { clearTimeout(_aiShopT); _aiShopT = null; _aiShopTSig = ''; return aiShopRun('她点了「重新判断」'); }
+function aiShopRedo() { clearTimeout(_aiShopT); _aiShopT = null; _aiShopWhyQ = []; return aiShopRun(_aiShopRec() ? '她点了「重新判断」' : '她点了「让顾问判断」'); }
 async function aiShopRun(why) {
     if (!aiReady() || _aiShopRun) return;
     const uid = _aiUid(), sig = aiShopSig(), parts = _aiShopParts();
-    const trigger = why || _aiShopWhy(_aiShopRec(), parts);
+    const trigger = why || '货架有变化';
     _aiShopRun = { uid, sig }; _aiShopErr = null;
     _aiShopPaint();
     try {
@@ -1127,7 +1122,7 @@ async function aiShopRun(why) {
     }
     _aiShopRun = null;
     _aiShopPaint();
-    if (_aiUid() === uid) aiShopCheck();   // 跑的时候货架又变了 → 再排一次
+    if (_aiShopAgain) { _aiShopAgain = false; if (_aiUid() === uid) aiShopLocal(''); else _aiShopWhyQ = []; }   // 跑的时候她又动了货架 → 再排一次
 }
 // 后端已经 clean_shop 过;这里只保证形状,url 只认 https
 function _aiShopNorm(d) {
@@ -1157,7 +1152,7 @@ function aiShopView() {
         // 没有可用的顾问结果:离线版照常,上面只挂一行状态
         const line = busy ? '顾问在查型号，大约一分钟。下面先按离线规则看。'
             : err ? '顾问这次没查成（' + err.msg + '），下面先按离线规则看。' : '';
-        return { html: '', status: line, busy, redo: ready, fallback: true };
+        return { html: '', status: line, busy, redo: ready, redoLabel: '让顾问判断', fallback: true };
     }
     const d = rec.data;
     const st = busy ? '顾问在查…（上次的结果先留着）' : !fresh ? '货架变了，结果可能过时' : '';
@@ -1178,7 +1173,7 @@ function aiShopView() {
     });
     if (d.skip.length) h += `<details class="fold shop-skip"><summary><span class="fold-sum"><span class="lede">这些不用买：${_aiEsc(cjkSpace(d.skip.map(x => x.name).join('、')))}</span></span></summary>
         <ul class="fold-body list note">${d.skip.map(x => `<li>${_aiEsc(cjkSpace(x.name))}${x.why ? '：' + _aiEsc(cjkSpace(x.why)) : ''}</li>`).join('')}</ul></details>`;
-    return { html: h, status: '', busy, redo: ready, fallback: false };
+    return { html: h, status: '', busy, redo: ready, redoLabel: '重新判断', fallback: false };
 }
 // 复制清单:有顾问版就复制顾问版;返回 null = 用离线那份
 function aiShopCopyText() {

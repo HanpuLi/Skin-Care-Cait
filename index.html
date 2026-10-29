@@ -893,7 +893,8 @@
             const spots = cleanSpots(en.spots);
             if (!(st || []).some(t => FM_TRIGGER.indexOf(t) >= 0) && !spots.length) return '';
             const key = ns + '|' + date, d = esc(date);
-            const open = !!_fmOpen[key];   // 默认收起(极简模式也是);她点开才展开
+            // 默认收起,她点开才展开;完整模式下这天已经标过 → 自动展开(10/29 定案);极简模式一律收起
+            const open = _fmOpen[key] !== undefined ? !!_fmOpen[key] : (!PROFILE.minimalMode && spots.length > 0);
             const by = _spotsByZone(spots), zones = Object.keys(by);
             let h = `<div class="fm-entry"><button type="button" class="btn-link sm quiet" aria-expanded="${open}" aria-controls="${ns}-fm-${d}" onclick="toggleFaceMap('${ns}','${d}')">标在脸上（可选）${zones.length ? ' · 已标 ' + zones.length + ' 处' : ''}</button>`;
             if (!open) return h + '</div>';
@@ -911,7 +912,12 @@
             if (zones.length) h += `<ul class="list note fm-sum">${zones.map(z => `<li>${esc(z)}：${esc(by[z].join('、'))}</li>`).join('')}</ul>`;
             return h + '</div></div>';
         }
-        function toggleFaceMap(ns, date) { const key = ns + '|' + date; _fmOpen[key] = !_fmOpen[key]; if (!_fmOpen[key]) _fmSel[key] = ''; _fmRedraw(ns, date); }
+        function toggleFaceMap(ns, date) {
+            const key = ns + '|' + date, btn = document.querySelector(`[aria-controls="${ns}-fm-${date}"]`);
+            _fmOpen[key] = !(btn && btn.getAttribute('aria-expanded') === 'true');
+            if (!_fmOpen[key]) _fmSel[key] = '';
+            _fmRedraw(ns, date);
+        }
         function fmTap(ns, date, zone) {
             if (FACE_ZONE_NAMES.indexOf(zone) < 0) return;
             if (ns === 'heat') { _fmHeatSel = _fmHeatSel === zone ? '' : zone; _fmRedraw(ns, date); return; }
@@ -2248,6 +2254,7 @@
                 delete POPEN[id]; ls(K.popen, POPEN);
                 invalidatePlanCache();
                 const reg = syncRegimen('用完了：' + def.name, true);
+                shopLocalChange('「' + def.name + '」用完了');
                 renderAll();
                 const life = rec.weeks !== null ? `开封 ${rec.weeks} 周，` : '';
                 sysAlert(`记下了：「${def.name}」用完了（${life}一共用过 ${rec.uses} 次）。\n\n${hint}` + (reg ? `\n\n方案更新到 v${reg.v}：\n${regimenSummary(reg)}` : ''), '用完了');
@@ -2263,6 +2270,7 @@
             if (!POPEN[id]) { POPEN[id] = today(); ls(K.popen, POPEN); }
             invalidatePlanCache();
             const reg = syncRegimen('补货：' + (def ? def.name : id), true);
+            shopLocalChange('「' + (def ? def.name : id) + '」买回来了');
             renderAll();
             sysAlert(`「${def ? def.name : id}」放回产品清单了（开封日记为今天）。` + (reg ? `\n\n方案更新到 v${reg.v}：\n${regimenSummary(reg)}` : ''), '买回来了');
         }
@@ -2280,6 +2288,8 @@
             const i = LOW.indexOf(id);
             if (i >= 0) LOW.splice(i, 1); else LOW.push(id);
             ls(K.low, LOW);
+            const lp = PD.find(x => x.id === id);
+            shopLocalChange(lp ? (i >= 0 ? '「' + lp.name + '」又够用了' : '标了「' + lp.name + '」快用完了') : '快用完的有变化');
             renderProds(); renderTn(); renderAm();
         }
         // 「它没了的话,会多出哪几个缺口」——用 _simExclude 做假设推演,不落盘。
@@ -2365,17 +2375,19 @@
             }
         }
         // 「要不要买新的」:有顾问的判断就显示顾问版(ai.js 的 aiShopView),否则 / 顾问出错就是下面这套离线清单(regimenNeeds → SHOP_ADVICE / SHOP_PICKS)。
-        // 顺手让顾问核一下货架签名(变了才在后台重判,不卡界面)。ai.js 没加载到时这里照样出离线清单。
+        // 这里只画,不触发判断:自动判断只由本机操作入口 shopLocalChange() 排(云端同步 / 自动重出方案 / 第一次打开都不自动调,10/29 定案)。
+        // ai.js 没加载到时这里照样出离线清单。
         function renderShop() {
             const box = document.getElementById('shop-ai'), off = document.getElementById('shop-off'), redo = document.getElementById('shop-redo');
             let v = null;
             if (typeof aiShopView === 'function') { try { v = aiShopView(); } catch (e) { console.warn('shop view', e); v = null; } }
-            if (redo) { redo.hidden = !(v && v.redo); redo.disabled = !!(v && v.busy); redo.textContent = v && v.busy ? '在查…' : '重新判断'; }
+            if (redo) { redo.hidden = !(v && v.redo); redo.disabled = !!(v && v.busy); redo.textContent = v && v.busy ? '在查…' : ((v && v.redoLabel) || '重新判断'); }
             if (box) box.innerHTML = v ? (v.fallback ? (v.status ? `<p class="note shop-st" role="status">${esc(v.status)}</p>` : '') : v.html) : '';
             if (off) off.hidden = !!(v && !v.fallback);
             if (!v || v.fallback) renderShopOffline();
-            if (typeof aiShopCheck === 'function') { try { aiShopCheck(); } catch (e) { console.warn('shop check', e); } }
         }
+        // 本机操作 → 让顾问在后台重判「要不要买新的」(防抖;ai.js 没加载 / 没开通就什么都不做)
+        function shopLocalChange(why) { if (typeof aiShopLocal === 'function') { try { aiShopLocal(why); } catch (e) { console.warn('shop local', e); } } }
         function renderShopOffline() {
             const shop = shopItems();
             const sp = document.getElementById('shop-pending');
@@ -2426,6 +2438,7 @@
             if ((PROFILE.excluded || []).includes(id)) { PROFILE.excluded = PROFILE.excluded.filter(x => x !== id); saveProfile(); }
             ls(K.prodDefs, PD); invalidatePlanCache();
             syncRegimen('不要了：' + p.name, true);
+            shopLocalChange('「' + p.name + '」不要了' + (why ? '（' + why + '）' : ''));
             renderAll(); toast('「' + p.name + '」收进了「不要了的」');
         }
         function restoreProduct(id) {
@@ -2435,6 +2448,7 @@
             if (!isSchedActive(p, PS[id] || p.statuses[0])) { PS[id] = normalStatusOf(p); ls(K.prods, PS); }
             ls(K.prodDefs, PD); invalidatePlanCache();
             syncRegimen('恢复：' + p.name, true);
+            shopLocalChange('「' + p.name + '」又拿回来用了');
             renderAll();
         }
         function deleteProd(id) { dropProduct(id); }
@@ -2552,7 +2566,7 @@
             }
             if (opened) { POPEN[pid] = opened; ls(K.popen, POPEN); }
             ls(K.prodDefs, PD); closeProdModal(); invalidatePlanCache();
-            if (!editingProdId) syncRegimen('多了：' + name, true);
+            if (!editingProdId) { syncRegimen('多了：' + name, true); shopLocalChange('添加了「' + name + '」'); }
             renderAll();
             if (typeof oobeRefresh === 'function') oobeRefresh();
         }
@@ -3770,6 +3784,7 @@
             const hist = regimenHistory();
             const last = hist[hist.length - 1];
             if (!last || last.id !== id) return '后面已经有新的一版了，这一版撤不了；要改回去直接跟顾问说';
+            shopLocalChange('撤销了方案 v' + last.v);
             const prev = (last.prevId && hist.find(h => h.id === last.prevId)) || (hist.length > 1 ? hist[hist.length - 2] : null);
             if (!prev) {
                 hist.pop(); ls(K.regimen, hist); invalidatePlanCache();
@@ -3791,6 +3806,7 @@
             if (reg.source !== 'ai') reg.sig = REGIMEN_ENGINE + '||' + skinSignature() + '||' + shelfSignature();
             ls(K.regimen, trimRegimenHist(hist.concat([reg])));
             invalidatePlanCache();
+            shopLocalChange('方案换回了 v' + src.v);   // 只有本机操作会走到这里(撤销 / 重做 / 回到某一版)
             return reg;
         }
         // 变了什么 —— 说人话的理由,方便回看"这版为什么会变"
@@ -3849,6 +3865,7 @@
             reg.skin.phase = currentPhase();
             hist[hist.length - 1] = reg;
             ls(K.regimen, hist);
+            shopLocalChange('顾问把方案换成了 v' + reg.v);   // 顾问方案只在本机落成(对话 / 出方案 / 复盘),同步来的不走这里
             return reg;
         }
         // 撤销一版顾问方案 = 回到上一版。只有「当前这一版」能撤(后面又出了新版的,撤它会把后面的也搅乱)。
