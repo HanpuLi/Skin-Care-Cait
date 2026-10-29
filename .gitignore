@@ -16,3 +16,6 @@ AGENTS.md
 
 node_modules/
 *-debug.log
+
+# t/v1-parity.mjs 运行时的临时副本
+.v1-parity.html

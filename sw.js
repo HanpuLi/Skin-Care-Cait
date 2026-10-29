@@ -1,18 +1,57 @@
 // 护肤计划 PWA 的离线缓存。
-// · 安装时预缓存:页面、ai.js、manifest、主屏图标、三份自托管字体(中文宋体子集约 1.3MB,一次装好以后离线也是宋体)
+// · 安装时预缓存:页面、js/ 和 css/ 下所有模块(v2)、manifest、主屏图标、三份自托管字体(中文宋体子集约 1.3MB,一次装好以后离线也是宋体)
 //   核心文件缺一个就不装(老版本继续用);字体单独装,某一份没下完不连累整体,运行时再补。
 // · 同源请求:网络优先,拿到就更新缓存;断网回退到当前版本的缓存。
 // · Google 字体域(子集外的生僻字兜底):stale-while-revalidate,先给缓存、后台更新。
-const CACHE_NAME = 'skincare-app-v27';
+const CACHE_NAME = 'skincare-app-v28';
 const CORE = [
   './',
   './index.html',
-  './ai.js',
   './护肤计划.html',
   './manifest.json',
   './icon-180.png',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  // v2:模块和样式(和仓库里 js/、css/ 的文件一一对应;t/engine-unit.mjs 核对,多一个少一个都报错)
+  './css/base.css',
+  './css/components.css',
+  './css/screens/advisor.css',
+  './css/screens/products.css',
+  './css/screens/record.css',
+  './css/screens/tonight.css',
+  './css/tokens.css',
+  './js/ai/apply.js',
+  './js/ai/client.js',
+  './js/ai/context.js',
+  './js/app.js',
+  './js/clock.js',
+  './js/engine/assess.js',
+  './js/engine/gate.js',
+  './js/engine/ladder.js',
+  './js/engine/needs.js',
+  './js/engine/redline.js',
+  './js/engine/regimen.js',
+  './js/engine/rules.js',
+  './js/engine/schedule.js',
+  './js/engine/score.js',
+  './js/engine/util.js',
+  './js/firebase-config.js',
+  './js/model/journal.js',
+  './js/model/photos.js',
+  './js/model/products.js',
+  './js/model/profile.js',
+  './js/model/regimen.js',
+  './js/model/week.js',
+  './js/model/world.js',
+  './js/store.js',
+  './js/sync.js',
+  './js/ui/advisor.js',
+  './js/ui/facemap.js',
+  './js/ui/products.js',
+  './js/ui/record.js',
+  './js/ui/settings.js',
+  './js/ui/sheets.js',
+  './js/ui/tonight.js'
 ];
 const FONTS = [
   './fonts/noto-serif-sc-400-skin.woff2',

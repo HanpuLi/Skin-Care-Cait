@@ -2,7 +2,7 @@ name: QA 体检
 
 on:
   push:
-    branches: [main]
+    branches: [main, v2]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -26,12 +26,16 @@ jobs:
         with:
           node-version: "22"
 
-      - name: 语法检查（内联脚本逐个编译）
+      - name: 语法检查（js/ 下每个 ES module 逐个 node --check；index.html 的内联脚本逐个编译）
         run: |
+          set -e
+          n=0
+          for f in $(find js -name '*.js' | sort) sw.js; do node --check "$f"; n=$((n+1)); done
+          echo "模块 $n 个语法 ok"
           node -e '
           const fs = require("fs");
           const h = fs.readFileSync("index.html", "utf8");
-          const re = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g;
+          const re = /<script(?![^>]*\bsrc=)(?![^>]*type="module")[^>]*>([\s\S]*?)<\/script>/g;
           let m, n = 0, e = 0;
           while ((m = re.exec(h))) {
             n++;
@@ -42,46 +46,65 @@ jobs:
           process.exit(e > 0 ? 1 : 0);
           '
 
-      - name: 同步信封逻辑回归（不需要浏览器：在 vm 里跑 index.html 的真函数 + 假 Firestore）
+      - name: 同步信封逻辑回归（不需要浏览器：直接 import js/store.js + js/sync.js，假 localStorage + 假 Firestore）
         run: npm run test:sync
+
+      - name: 引擎 / 安全闸 / 顾问层回归（不需要浏览器：直接 import js/engine、js/model、js/ai）
+        run: npm run test:engine
 
       - name: 关键功能存在性（防止误删）
         run: |
           node -e '
           const fs = require("fs");
-          const h = fs.readFileSync("index.html", "utf8");
-          const need = [
-            "function buildNightSteps", "function renderTn", "function renderAm",
-            "function assessSkin", "const AXES", "function renderAssessment",
-            "const PHASES", "function currentPhase",
-            "function safetyGate", "function gateBlocks", "function acidLadder", "function traitsOf",
-            "function medicalRedLine", "function renderSafetyAlert", "function absorbPrescribedHistory",
-            "function regimenRules", "function commitAiRegimen", "function undoRegimen", "function renderChangeBar",
-            "function startOOBE", "function oobeFinish", "function openSheet", "function stripEmoji",
-            "const CLOUD_KEYS", "function clearLocalUserData", "function assignRoles",
-            "_applyingCloud", "hasPendingWrites", "function flushPendingPush",
-            "function hasPendingSync", "function pauseSyncConflict", "function legacySyncDecision", "function showSyncRecovery",
-            "runTransaction", "id=\"skincare-app-source\"", "navigator.locks.request"
-          ];
-          const miss = need.filter(s => !h.includes(s));
-          if (miss.length) { console.error("缺失关键代码: " + miss.join(", ")); process.exit(1); }
-          console.log("关键功能齐全，共 " + need.length + " 项");
+          const need = {
+            "index.html": ["<script type=\"module\" src=\"js/app.js\">", "id=\"tab-tonight\"", "id=\"tab-advisor\"", "id=\"tab-record\"", "id=\"tab-products\""],
+            "js/app.js": ["startWithLock(", "absorbPrescribedHistory", "planNow("],
+            "js/store.js": ["export const CLOUD_KEYS", "export function createStore", "applyingCloud", "SYNC_RECOVERY_MAX"],
+            "js/sync.js": ["hasPendingWrites", "runTransaction", "locks.request(LOCK_NAME", "function flushPendingPush", "hasPendingSync:",
+                           "function legacySyncDecision", "function showSyncRecovery", "function showSyncConflict"],
+            "js/engine/gate.js": ["export function safetyGate", "export function gateBlocks", "MEDICAL_STOPS_ALL_ACID = true"],
+            "js/engine/redline.js": ["export function medicalRedLine"],
+            "js/engine/ladder.js": ["export function acidLadder"],
+            "js/engine/schedule.js": ["export function computePlan", "export function buildNightSteps", "export function acidHistory"],
+            "js/engine/needs.js": ["export function regimenGaps", "export function shopItems"],
+            "js/engine/regimen.js": ["export const REGIMEN_ENGINE = \"e4\"", "export function skinSignature"],
+            "js/model/journal.js": ["export function absorbPrescribedHistory", "export function cleanPhotoAssess"],
+            "js/model/regimen.js": ["export function commitAiRegimen", "export function undoRegimen"],
+            "js/ai/context.js": ["export function buildSkincareContext"],
+            "js/ai/apply.js": ["export function applyTonight", "export function applyRegimen", "export function gateTonightPlan", "export function shopLocalChange"],
+            "js/ai/client.js": ["export function stripEmoji", "export function createAiClient"]
+          };
+          const miss = [];
+          for (const [f, list] of Object.entries(need)) {
+            const src = fs.readFileSync(f, "utf8").replace(/\x27/g, "\"");
+            for (const s of list) if (!src.includes(s)) miss.push(f + ": " + s);
+          }
+          if (miss.length) { console.error("缺失关键代码: " + miss.join(" | ")); process.exit(1); }
+          console.log("关键功能齐全，共 " + Object.values(need).flat().length + " 项");
           '
 
       - name: 配套文件与公开边界检查
         run: |
           node -e '
-          const fs = require("fs");
+          const fs = require("fs"), path = require("path");
           const manifest = JSON.parse(fs.readFileSync("manifest.json", "utf8"));
           JSON.parse(fs.readFileSync("firebase.json", "utf8"));
           if (manifest.start_url !== "./index.html") throw new Error("manifest.start_url 必须指向 ./index.html");
           const sw = fs.readFileSync("sw.js", "utf8");
           if (!sw.includes("skincare-app-v")) throw new Error("sw.js 缓存版本缺失");
           if (!fs.readFileSync("护肤计划.html", "utf8").includes("location.replace(")) throw new Error("旧 URL 重定向缺失");
-          for (const f of ["README.md", "PRIVACY.md", "SECURITY.md"]) {
+          for (const f of ["README.md", "PRIVACY.md", "SECURITY.md", "ARCHITECTURE.md"]) {
             if (!fs.existsSync(f)) throw new Error("缺少公开边界文档: " + f);
           }
-          if (!sw.includes("./ai.js")) throw new Error("sw.js 没缓存 ai.js");
+          // sw 预缓存清单 = js/ 和 css/ 下的全部文件,一个不多一个不少;旧单文件(legacy/、ai.js)不进
+          const walk = d => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
+          const files = ["js", "css"].flatMap(walk).filter(f => /\.(js|css)$/.test(f)).map(f => "./" + f.split(path.sep).join("/")).sort();
+          const listed = (sw.match(/["\x27]\.\/(?:js|css)\/[^"\x27]+["\x27]/g) || []).map(x => x.slice(1, -1)).sort();
+          const missing = files.filter(f => !listed.includes(f)), extra = listed.filter(f => !files.includes(f));
+          if (missing.length || extra.length) throw new Error("sw.js 缓存清单和文件表不一致: 缺 " + missing.join(",") + " 多 " + extra.join(","));
+          if (!sw.includes("./js/app.js")) throw new Error("sw.js 没缓存 js/app.js");
+          if (/legacy\/|\.\/ai\.js/.test(sw)) throw new Error("sw.js 不该缓存旧单文件");
+          if (fs.existsSync("ai.js")) throw new Error("根目录不该再有 ai.js(已搬进 legacy/)");
           // 自托管字体:三套都要在预缓存清单里、文件真的在(离线也是宋体)
           for (const f of ["fonts/noto-serif-sc-400-skin.woff2", "fonts/eb-garamond-latin-400.woff2", "fonts/courier-prime-latin-400.woff2"]) {
             if (!sw.includes("./" + f)) throw new Error("sw.js 没预缓存 " + f);
@@ -90,19 +113,16 @@ jobs:
           if (!fs.existsSync("fonts/LICENSES.txt")) throw new Error("缺 fonts/LICENSES.txt(OFL)");
           for (const i of manifest.icons) if (!fs.existsSync(i.src)) throw new Error("manifest 图标缺文件 " + i.src);
           // 全程不用 emoji(Cait 2026-10-29):App 源码里一个都不留
-          for (const f of ["index.html", "ai.js", "sw.js", "manifest.json"]) {
+          for (const f of ["index.html", "sw.js", "manifest.json", ...files.map(x => x.slice(2))]) {
             const hit = fs.readFileSync(f, "utf8").match(/\p{Extended_Pictographic}/u);
             if (hit) throw new Error(f + " 里有 emoji: " + hit[0]);
           }
-          const ai = fs.readFileSync("ai.js", "utf8");
-          new Function(ai);
-          const hooks = ["function renderCoach", "function aiRenderTonight", "function aiRegimenActionsHtml", "function aiOnAuth", "function aiClearLocal", "function aiAfterCheckin", "function buildSkincareContext"];
-          const missAi = hooks.filter(s => !ai.includes(s));
-          if (missAi.length) throw new Error("ai.js 缺: " + missAi.join(", "));
-          if (/test:[A-Za-z0-9_-]{8,}/.test(ai)) throw new Error("ai.js 里不能写死测试 token");
-          console.log("manifest/firebase/sw/redirect/public-docs/fonts/ai.js ok");
+          for (const f of files.filter(x => x.endsWith(".js")).map(x => x.slice(2))) {
+            if (/test:[A-Za-z0-9_-]{8,}/.test(fs.readFileSync(f, "utf8"))) throw new Error(f + " 里不能写死测试 token");
+          }
+          console.log("manifest/firebase/sw/redirect/public-docs/fonts/js ok(" + files.length + " 个文件)");
           '
-          test -z "$(git ls-files AGENTS.md CLAUDE.md LIVING_TODO.md '家中护肤品清单.md' '审计报告_*.json')"
+          test -z "$(git ls-files AGENTS.md CLAUDE.md LIVING_TODO.md README-private.md '家中护肤品清单.md' '审计报告_*.json' 'Cici档案' '个人档案')"
 
   firestore-rules:
     runs-on: ubuntu-latest

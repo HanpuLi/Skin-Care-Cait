@@ -1,3 +1,7 @@
+// 【v2 分支】下面这些 s-*.mjs 是针对 v1 单文件(现在在 legacy/)写的整页测试,v2 的 index.html 只是外壳,它们大多会挂;
+// 迁移计划见 ARCHITECTURE.md「Tests」。v2 现在的验收:npm run test:sync / test:engine / test:rules + node t/v2-boot.mjs。
+// s-80-sync 不开浏览器,已经跟着 t/sync-unit.mjs 换成 import v2 模块,照常能跑。
+//
 // 跑全部无头测试:  node t/run.mjs            (全部,约 3 到 5 分钟,美学那组最慢)
 //                   node t/run.mjs gate ai    (只跑名字里含这些词的场景文件 t/s-*.mjs)
 //                   DESIGN_PART=states node t/run.mjs design   (美学只跑特殊状态那一段;=screens 只跑各 tab)

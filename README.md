@@ -6,13 +6,13 @@ Live app: https://hanpuli.github.io/Skin-Care-Cait/
 
 ## Architecture
 
-- **Static PWA:** `index.html`, `manifest.json`, `sw.js` and `icon.svg`.
+- **Static PWA:** `index.html` (shell), native ES modules under `js/`, styles under `css/`, `manifest.json`, `sw.js` and `icon.svg`. No build step. Module layout and data flow: [ARCHITECTURE.md](ARCHITECTURE.md).
 - **Offline cache:** the service worker keeps the current application shell available after a successful load.
 - **Local data:** skincare inventory, routine and assessment state are stored client-side for offline use.
 - **Optional cloud sync:** Firebase Authentication and Firestore.
 - **Access boundary:** `firestore.rules` permits an authenticated user to read or write only `/users/{their uid}`; unmatched paths are denied.
 
-The Firebase browser configuration embedded in `index.html` is client configuration, not an administrative credential. Data access is enforced by Firebase Authentication plus Firestore Security Rules. See [SECURITY.md](SECURITY.md) and [PRIVACY.md](PRIVACY.md).
+The Firebase browser configuration in `js/firebase-config.js` is client configuration, not an administrative credential. Data access is enforced by Firebase Authentication plus Firestore Security Rules. See [SECURITY.md](SECURITY.md) and [PRIVACY.md](PRIVACY.md).
 
 ## Local development
 
@@ -27,8 +27,9 @@ Run the same source checks as QA with:
 
 ```sh
 npm run test:sync          # sync-envelope logic, no browser needed
-node t/run.mjs             # full headless suite (needs a local Google Chrome)
-# .github/workflows/qa.yml also checks inline script syntax and public file boundaries
+npm run test:engine        # safety gate, schedule, routine and advisor rules, no browser needed
+node t/v2-boot.mjs         # headless shell check (needs a local Google Chrome)
+# .github/workflows/qa.yml also checks module syntax, the offline cache list and public file boundaries
 ```
 
 Firestore access-control rules have emulator-backed tests:

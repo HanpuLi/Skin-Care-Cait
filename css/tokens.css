@@ -1,0 +1,33 @@
+/* ══ 纸墨护理手册 · token(AUDIT-aesthetic §3,2026-10-29)══════════════════════════════════════════
+   睡前、半暗、手是湿的:一屏只有一件主事;层级靠字号和墨色,不靠色块和粗体;红只做点;没有阴影、没有循环动画、没有 emoji。
+   字号只有 6 档(12 / 14 / 16 / 18 / 22 / 28),句子 ≥14,输入框 16;间距只取 4 的倍数;圆角只有 0 / 4 / 8 / 14。
+   浅 / 深两套:<html data-theme> 由 index.html <head> 里那段小脚本在首帧前定好(跟随系统 / 纸 / 夜 / 晚上自动)。深色是主场景之一。 */
+@font-face{font-family:"Skin Serif SC";font-weight:400;font-style:normal;font-display:swap;
+  src:url("../fonts/noto-serif-sc-400-skin.woff2") format("woff2");
+  unicode-range:U+3000-303F,U+3400-4DBF,U+4E00-9FFF,U+F900-FAFF,U+FF00-FFEF,U+00B7,U+2014,U+2018-2019,U+201C-201D,U+2026}
+@font-face{font-family:"Skin Garamond";font-weight:400;font-style:normal;font-display:swap;size-adjust:108%;
+  src:url("../fonts/eb-garamond-latin-400.woff2") format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+2000-206F,U+20AC,U+2122,U+2212}
+@font-face{font-family:"Skin Mono";font-weight:400;font-style:normal;font-display:swap;
+  src:url("../fonts/courier-prime-latin-400.woff2") format("woff2");
+  unicode-range:U+0000-00FF,U+2000-206F}
+:root{color-scheme:light;
+  --serif:"Skin Serif SC","Skin Garamond","Noto Serif SC","Songti SC","STSong",serif;
+  --mono:"Skin Mono","Skin Serif SC",ui-monospace,Menlo,monospace;
+  --paper:#f4f1ea;--sheet:#faf8f3;--tint:#ebe6dc;
+  --line:#d6d0c4;--line-ctl:#8c8579;
+  --ink-strong:#1f1d1a;--ink:#1f1d1a;--muted:#5b574f;--faint:#6b655c;
+  --medical:#8a2f1d;--caution:#7a5418;--ok:#4a6339;--rev:#46566e;
+  --scrim:rgba(31,29,26,.38);
+  --lh-meta:18px;--lh-note:24px;--lh-body:28px;--lh-item:26px;--lh-head:30px;--lh-title:36px;--ls-body:0;
+  --sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:24px;--sp-6:32px;--sp-7:48px;
+  --r-ctl:4px;--r-card:8px;--r-sheet:14px;
+  --safe-top:env(safe-area-inset-top,0px);--safe-bot:env(safe-area-inset-bottom,0px);
+  --gutter:20px;--tabbar-h:56px}
+:root[data-theme="dark"]{color-scheme:dark;
+  --paper:#161412;--sheet:#1d1b18;--tint:#242120;
+  --line:#332f2a;--line-ctl:#726b61;
+  --ink-strong:#e6e0d4;--ink:#d6cfc2;--muted:#a69f93;--faint:#8f897f;
+  --medical:#c97a62;--caution:#cfa25f;--ok:#9db07a;--rev:#93a7c2;
+  --scrim:rgba(0,0,0,.55);
+  --lh-meta:20px;--lh-note:26px;--lh-body:30px;--lh-item:28px;--lh-head:32px;--lh-title:38px;--ls-body:.01em}

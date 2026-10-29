@@ -1,0 +1,76 @@
+/* ══ 组件:按钮、chip、分段、表单、开关、sheet、折叠(从 v1 原样搬来;P2 在这里加新组件)═══════════════ */
+/* ── 按钮 / 控件 ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-2);min-height:44px;padding:0 var(--sp-4);border-radius:var(--r-ctl);
+  font:16px/22px var(--serif);color:var(--ink);background:transparent;box-shadow:inset 0 0 0 1px var(--line-ctl);text-align:center;transition:background-color .15s,box-shadow .15s,color .15s}
+.btn-primary{min-height:48px;background:var(--ink);color:var(--paper);box-shadow:none}
+:root[data-theme="dark"] .btn-primary{background:var(--tint);color:var(--ink-strong);box-shadow:inset 0 0 0 1px var(--ink-strong)}
+.btn-danger{color:var(--medical);box-shadow:inset 0 0 0 1px var(--medical)}
+.btn:active{background:var(--tint)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn-block{display:flex;width:100%}
+.btn-link{display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-1);min-height:44px;min-width:44px;padding:0;color:var(--ink);font:16px/22px var(--serif);
+  text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:1px;text-decoration-color:var(--line-ctl)}
+.btn-link.quiet{color:var(--muted)}
+.btn-link.sm{font-size:14px}
+.btn-link:disabled{opacity:.4}
+.btn-row{display:flex;flex-wrap:wrap;gap:var(--sp-2);align-items:center}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-2);margin-top:var(--sp-5)}
+.acts.three{grid-template-columns:repeat(3,1fr)}
+.acts>:only-child{grid-column:1/-1}
+.file-btn{position:relative;overflow:hidden;cursor:pointer}
+.file-btn input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:16px}
+.chips{display:flex;flex-wrap:wrap;gap:var(--sp-2)}
+.chip{display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-2);min-height:44px;min-width:44px;padding:0 var(--sp-3);border-radius:var(--r-ctl);font:16px/22px var(--serif);color:var(--ink);
+  box-shadow:inset 0 0 0 1px var(--line-ctl);transition:background-color .15s,box-shadow .15s}
+.chip[aria-pressed="true"],.chip[aria-checked="true"]{background:var(--tint);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:var(--sp-2)}
+.seg>button{min-height:48px;border-radius:var(--r-ctl);box-shadow:inset 0 0 0 1px var(--line-ctl);display:flex;align-items:center;justify-content:center;gap:var(--sp-2);
+  font:16px/22px var(--serif);color:var(--ink);transition:background-color .15s,box-shadow .15s}
+.seg>button[aria-pressed="true"],.seg>button[aria-checked="true"]{background:var(--tint);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.seg>button .dot{margin:0}
+.field{display:block;margin-top:var(--sp-4)}
+.field>span{display:block;font:14px/22px var(--serif);color:var(--muted)}
+.field-row{display:grid;grid-template-columns:1fr 6em;align-items:end;column-gap:var(--sp-3)}
+/* 开关:全 App 只要这一种;整行 44 高可点 */
+.sw-row{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);min-height:48px;cursor:pointer}
+.sw-row>span{font:16px/22px var(--serif)}
+.sw{position:relative;flex:none;width:44px;height:26px}
+.sw input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer}
+.sw i{position:absolute;inset:0;border-radius:13px;box-shadow:inset 0 0 0 1px var(--line-ctl);transition:background-color .15s}
+.sw i::after{content:"";position:absolute;left:4px;top:4px;width:18px;height:18px;border-radius:50%;background:var(--muted);transition:transform .15s,background-color .15s}
+.sw input:checked+i{background:var(--ink);box-shadow:none}
+.sw input:checked+i::after{transform:translateX(18px);background:var(--paper)}
+.sw input:focus-visible+i{outline:2px solid var(--ink);outline-offset:2px}
+/* ── Sheet:全 App 唯一的对话框 ── */
+.sheet-ov{position:fixed;inset:0;z-index:300;background:var(--scrim);display:flex;align-items:flex-end;justify-content:center}
+.sheet{position:relative;width:100%;max-width:560px;max-height:88dvh;overflow:auto;background:var(--sheet);border-radius:var(--r-sheet) var(--r-sheet) 0 0;
+  padding:var(--sp-2) var(--gutter) calc(var(--gutter) + var(--safe-bot));animation:sheet-in .25s cubic-bezier(.2,.8,.2,1)}
+.sheet::before{content:"";display:block;width:36px;height:4px;border-radius:2px;background:var(--line-ctl);margin:0 auto var(--sp-4)}
+.sheet.full{max-height:100dvh;height:100dvh;border-radius:0;padding-top:calc(var(--safe-top) + var(--sp-4))}
+.sheet.full::before{display:none}
+@keyframes sheet-in{from{transform:translateY(24px)}to{transform:none}}
+@media(min-width:600px){.sheet-ov{align-items:center}.sheet{border-radius:var(--r-sheet);width:420px}.sheet.full{height:auto;max-height:92dvh;border-radius:var(--r-sheet)}}
+.sheet-h{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--sp-2)}
+.sheet-t{font:22px/var(--lh-head) var(--serif);color:var(--ink-strong);padding-top:var(--sp-2)}
+.sheet-x{flex:none;width:44px;height:44px;display:grid;place-items:center;margin:0 -12px 0 0;color:var(--muted)}
+.sheet-b{margin-top:var(--sp-2)}
+.sheet-b.text{white-space:pre-wrap}
+.sheet-b>p+p{margin-top:var(--sp-2)}
+.sheet-actions{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-2);margin-top:var(--sp-5)}
+.sheet-actions>:only-child{grid-column:1/-1}
+.sheet-actions.stack,.acts.stack-acts{grid-template-columns:1fr}
+.sheet-ov.under{z-index:250}
+.sheet-sec{border-top:1px solid var(--line);padding:var(--sp-4) 0;margin-top:var(--sp-2)}
+.sheet-sec:first-child{border-top:0;margin-top:0}
+.sheet-sec .sec-t{margin-bottom:var(--sp-2)}
+.sheet-sec>.sw-row:first-child{margin-top:calc(-1 * var(--sp-2))}
+.skips>summary,.fold>summary{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);min-height:48px;padding:var(--sp-2) 0;cursor:pointer;list-style:none;color:var(--muted);font:14px/22px var(--serif)}
+.skips>summary::-webkit-details-marker,.fold>summary::-webkit-details-marker{display:none}
+.skips>summary::after,.fold>summary::after{content:"›";color:var(--faint);transition:transform .15s;flex:none}
+.skips[open]>summary::after,.fold[open]>summary::after{transform:rotate(90deg)}
+.fold{border-top:1px solid var(--line)}
+.fold>summary{color:var(--ink)}
+.fold-sum{flex:1;min-width:0}
+.fold-sum .sec-t{display:block}
+.fold-sum .lede{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fold-body{padding-bottom:var(--sp-4)}

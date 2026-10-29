@@ -6,13 +6,9 @@ import { after, before, test } from 'node:test';
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import { doc, getDoc, runTransaction, setDoc } from 'firebase/firestore';
 
-// 和 index.html 里的 _stableStr 同一份(改了那边记得改这里)
-function _stableStr(v) {
-  if (v === null || typeof v !== 'object') return JSON.stringify(v);
-  if (Array.isArray(v)) return '[' + v.map(_stableStr).join(',') + ']';
-  return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + _stableStr(v[k])).join(',') + '}';
-}
-const clone = v => JSON.parse(JSON.stringify(v));   // 同 cloneSync
+// 用 App 自己的 _stableStr / cloneSync(js/store.js),不再抄一份
+import { _stableStr, cloneSync } from '../js/store.js';
+const clone = cloneSync;
 
 // 照 CLOUD_KEYS 里真实数据的形状造的,外加各种数值/空容器/中文/键序的边角
 const payload = {
