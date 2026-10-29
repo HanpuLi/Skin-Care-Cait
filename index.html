@@ -2401,9 +2401,9 @@
         // 最近一次刷酸后 48 小时内(当天 / 次日 / 第三天)记到刺激 —— 这次酸很可能就是诱因
         // 某支产品现在能不能上脸:null = 可以;否则返回原因(界面上原样告诉她为什么没生效)
         // ── 两条口径写成常量,一行就能改(Cait 2026-10-29 已拍板)──
-        // 就医红线亮着:所有酸都停(包括杏仁酸 / 乳酸这类温和酸),今晚只排清洁 + 保湿 + 修护;点「看过了」才解除
+        // 就医红线亮着:所有酸都停(包括杏仁酸 / 乳酸这类温和酸),今晚只排清洁 + 保湿 + 修护 + 眼霜;点「看过了」才解除
         const MEDICAL_STOPS_ALL_ACID = true;
-        const MEDICAL_BASICS = ['precleanse', 'cleanse', 'moist', 'repair', 'spf'];   // 就医红线亮着时今晚只留这几类
+        const MEDICAL_BASICS = ['precleanse', 'cleanse', 'moist', 'repair', 'spf', 'eye'];   // 就医红线亮着时今晚只留这几类(眼霜照用:Cait 10/29,眼周不在口周皮炎范围)
         // 极简模式的记录:'optional' = 默认全做 + 例外点一下 + 皮肤状态想记就记、从不催;'none' = 完全不显示记录入口
         const MINIMAL_LOGGING = 'optional';
         let _gateMemo = { key: null, val: null };
@@ -2483,7 +2483,7 @@
             if (g.banOil && p.role === 'oil') return 'HRT 波动期：面油先停';
             if (g.acidCapMax === 0 && (p.role === 'acid' || type === 'acid'))
                 return g.medical ? '就医提醒亮着：所有酸先停' : g.firstNight ? '第一晚：先不上活性' : g.worsening ? '记了「差些」：酸先停' : '刷酸后两天内记到刺激：酸先停';
-            // Cait 10/29:就医红线亮着,今晚只排清洁、保湿、修护 —— 精华、面油、眼霜、舒缓面膜也先不上(含香精、精油的最容易在口周皮炎上添乱)
+            // Cait 10/29:就医红线亮着,今晚只排清洁、保湿、修护(眼霜照用)—— 精华、面油、舒缓面膜也先不上(含香精、精油的最容易在口周皮炎上添乱)
             if (g.medical && MEDICAL_BASICS.indexOf(p.role) < 0) return '就医提醒亮着：今晚只做清洁、保湿、修护';
             return null;
         }

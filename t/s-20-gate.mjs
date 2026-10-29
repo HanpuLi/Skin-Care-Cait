@@ -37,9 +37,10 @@ export default async function ({ origin, S, open }) {
         S.ok(/所有酸先停/.test(r.pc || '') && /所有酸先停/.test(r.vo || ''), `${who}:温和酸(杏仁酸 / 乳酸)也停`, { pc: r.pc, vo: r.vo });
         S.ok(r.card && r.visible && r.role === 'alert', `${who}:红线卡显示在今晚页(role=alert)`, r);
         S.ok(JSON.stringify(r.btns) === JSON.stringify(['已约了', '看过了', '先不']), `${who}:三个按钮:已约了 / 看过了 / 先不`, r.btns);
-        const bad = r.steps.filter(s => s.role && ['precleanse', 'cleanse', 'moist', 'repair'].indexOf(s.role) < 0);
-        S.ok(!bad.length && r.steps.every(s => s.kind === 'base'), `${who}:今晚只排清洁 + 保湿 + 修护`, r.steps);
-        S.ok(r.skips.some(x => /今晚只做清洁、保湿、修护/.test(x)), `${who}:精华 / 眼霜进了「今晚不用」并写明原因`, r.skips);
+        const bad = r.steps.filter(s => s.role && ['precleanse', 'cleanse', 'moist', 'repair', 'eye'].indexOf(s.role) < 0);
+        S.ok(!bad.length && r.steps.every(s => s.kind === 'base'), `${who}:今晚只排清洁 + 保湿 + 修护 + 眼霜`, r.steps);
+        S.ok(r.skips.some(x => /今晚只做清洁、保湿、修护/.test(x)), `${who}:精华进了「今晚不用」并写明原因`, r.skips);
+        S.ok(!r.skips.some(x => /眼/.test(x) && /今晚只做清洁/.test(x)), `${who}:眼霜照用,不进「今晚不用」(Cait 10/29)`, r.skips);
         S.ok(r.future.every(t => ['acid', 'mask', 'retinol'].indexOf(t) < 0), `${who}:未来几晚的离线排班也没有酸 / 面膜 / 维 A`, r.future);
         // 顾问的方案和今晚的小改都过这道闸
         const ai = await p.eval(`const g=safetyGate();const pc=PD.find(x=>x.id==='pc');
