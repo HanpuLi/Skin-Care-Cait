@@ -42,6 +42,9 @@ jobs:
           process.exit(e > 0 ? 1 : 0);
           '
 
+      - name: 同步信封逻辑回归（不需要浏览器：在 vm 里跑 index.html 的真函数 + 假 Firestore）
+        run: npm run test:sync
+
       - name: 关键功能存在性（防止误删）
         run: |
           node -e '
@@ -56,7 +59,9 @@ jobs:
             "function regimenRules", "function commitAiRegimen", "function undoRegimen", "function renderChangeBar",
             "function startOOBE", "function oobeFinish", "function openSheet", "function stripEmoji",
             "const CLOUD_KEYS", "function clearLocalUserData", "function assignRoles",
-            "_applyingCloud", "hasPendingWrites", "function flushPendingPush"
+            "_applyingCloud", "hasPendingWrites", "function flushPendingPush",
+            "function hasPendingSync", "function pauseSyncConflict", "function legacySyncDecision", "function showSyncRecovery",
+            "runTransaction", "id=\"skincare-app-source\"", "navigator.locks.request"
           ];
           const miss = need.filter(s => !h.includes(s));
           if (miss.length) { console.error("缺失关键代码: " + miss.join(", ")); process.exit(1); }

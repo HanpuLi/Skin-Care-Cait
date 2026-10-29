@@ -17,7 +17,11 @@ export default async function ({ origin, S, open }) {
     S.ok(aiLocal.length >= 5 && aiLocal.every(k => keys.indexOf(k) < 0), '顾问的本机键(对话、开通状态、数据说明…)不进云', aiLocal);
     S.ok(/_applyingCloud/.test(html) && /hasPendingWrites/.test(html) && /cloudAt\s*<=\s*lastPush/.test(html) && /_stableStr/.test(html) && /function flushPendingPush/.test(html),
         '同步守卫都在(_applyingCloud / hasPendingWrites / cloudAt<=lastPush / _stableStr / flushPendingPush)');
-    S.ok(/function ls\(k, v\)[\s\S]{0,400}schedulePush/.test(html), 'ls() 写入都会排一次推送');
+    S.ok(/function ls\(k, v, origin = 'user'\)[\s\S]{0,1600}if \(durable\) schedulePush\(\)/.test(html), 'ls() 的用户写入都会排一次推送(信封版:durable 才推)');
+    S.ok(/function hasPendingSync/.test(html) && /runTransaction/.test(html) && /includeMetadataChanges: true/.test(html) && /function pauseSyncConflict/.test(html) && /function legacySyncDecision/.test(html),
+        '信封同步的守卫都在(rev/ack、事务比对、只认服务器快照、冲突暂停、升级判断)');
+    S.ok(/<script type="text\/plain" id="skincare-app-source">/.test(html) && /navigator\.locks\.request\('skincare-account-storage'/.test(html) && !/<script src="ai\.js">/.test(html),
+        'App 脚本拿到窗口锁才运行,ai.js 排在它后面加载');
     // 公开仓库边界:不写死 token / 测试后门;私密文件没进来
     const tracked = fs.readdirSync(ROOT);
     S.ok(!['CLAUDE.md', 'README-private.md', 'LIVING_TODO.md', '家中护肤品清单.md', 'Cici档案'].some(f => tracked.indexOf(f) >= 0), '仓库目录里没有私密文件', tracked);
@@ -57,13 +61,13 @@ export default async function ({ origin, S, open }) {
         exportJSON();await new Promise(r=>setTimeout(r,300));URL.createObjectURL=o;HTMLAnchorElement.prototype.click=ck;const txt=blob?await blob.text():'';window.__bk=txt;const j=txt?JSON.parse(txt):{};
         return {keys:Object.keys(j),n:(j.sk_jrnl1||[]).length}`);
     S.ok(['sk_jrnl1', 'sk_proddefs1', 'sk_profile1', 'sk_regimen1', '_meta'].every(k => ex.keys.indexOf(k) >= 0) && ex.n >= 3, '导出 JSON:日志、产品、档案、方案都在', ex);
-    await p.eval(`localStorage.setItem('sk_jrnl1','[]');const f=new File([window.__bk],'b.json',{type:'application/json'});importJSON({files:[f]});return 1`);
+    await p.eval(`ls(K.jrnl,[]);const f=new File([window.__bk],'b.json',{type:'application/json'});importJSON({files:[f]});return 1`);
     await new Promise(r => setTimeout(r, 1500));
     await p.waitFor('document.readyState==="complete" && typeof renderTn==="function"', 8000);
     const im = await p.eval(`return {n:(lg(K.jrnl)||[]).length,note:((lg(K.jrnl)||[]).find(x=>x.date===__d(-3))||{}).note}`);
     S.ok(im.n >= 3 && im.note === '旧版记录', '导入 JSON:日志回来了', im);
     // CSV:有记录时能导出;没有记录时是 App 自己的提示,不是浏览器原生弹窗
-    const csv = await p.eval(`localStorage.setItem('sk_jrnl1','[]');exportCSV();await new Promise(r=>setTimeout(r,80));const s=[...document.querySelectorAll('#sheet-root .sheet-ov')].map(x=>x.innerText).join();document.querySelectorAll('#sheet-root .sheet-ov').forEach(x=>x.remove());return s`);
+    const csv = await p.eval(`ls(K.jrnl,[]);exportCSV();await new Promise(r=>setTimeout(r,80));const s=[...document.querySelectorAll('#sheet-root .sheet-ov')].map(x=>x.innerText).join();document.querySelectorAll('#sheet-root .sheet-ov').forEach(x=>x.remove());return s`);
     S.ok(/还没有记录/.test(csv) && !p.dialogs.length, '没记录时导出 CSV:App 自己的提示,没有原生弹窗', { csv, dialogs: p.dialogs });
     S.ok(!p.errors.length, '冒烟 0 报错', p.errors);
 }

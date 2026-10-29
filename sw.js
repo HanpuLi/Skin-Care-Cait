@@ -3,7 +3,7 @@
 //   核心文件缺一个就不装(老版本继续用);字体单独装,某一份没下完不连累整体,运行时再补。
 // · 同源请求:网络优先,拿到就更新缓存;断网回退到当前版本的缓存。
 // · Google 字体域(子集外的生僻字兜底):stale-while-revalidate,先给缓存、后台更新。
-const CACHE_NAME = 'skincare-app-v24';
+const CACHE_NAME = 'skincare-app-v25';
 const CORE = [
   './',
   './index.html',

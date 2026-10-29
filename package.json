@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:sync": "node t/sync-unit.mjs",
     "test:rules": "npx --yes firebase-tools@15.30.2 emulators:exec --only firestore --project demo-skin-care-cait \"node --test tests/firestore-rules.test.mjs\""
   },
   "devDependencies": {

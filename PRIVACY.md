@@ -6,6 +6,8 @@ This document describes data flows visible in the current client source. It is n
 
 The application is designed to remain useful offline. Routine, inventory and assessment state can be stored in browser storage on the device. Clearing browser/site data may remove those local copies.
 
+Each signed-in account's records are kept in a separate local store on the device. Switching accounts does not show one account's records to the other, but both stores remain in that browser's storage until site data is cleared. When a sync conflict or an upgrade occurs, the application saves up to four recovery copies per account in the same browser storage; they are not uploaded.
+
 ## Optional Firebase sync
 
 When a user signs in, the application can synchronise account data to Firestore under `/users/{uid}`. Firestore Security Rules require an authenticated request and require the authenticated UID to match the document UID.

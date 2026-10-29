@@ -13,6 +13,8 @@
 //   s-50-design    纸墨护理手册验收:0 emoji、字号、对比度、触控、输入框、红色配额、夜间亮度、无 style=
 //   s-60-offline   SW 预缓存字体和 App,断网重开今晚页 + 宋体照常;子集覆盖界面用字;OFL 许可在
 //   s-70-smoke     CLOUD_KEYS 与同步守卫(静态)、导出导入、用完了 / 买回来了、PAO、某天记录、HRT、旧日志兼容
+//   s-80-sync      同步信封的逻辑(不开浏览器,在 vm 里跑 index.html 里的真函数 + 假 Firestore;CI 里 npm run test:sync 跑同一组)
+//   s-85-sync-page 整页:假 Firebase 登录、离线改动 + 刷新、两个窗口抢锁、旧数据升级弹窗、恢复副本
 import fs from 'node:fs';
 import path from 'node:path';
 import { serve, browser, page, suite, sleep } from './harness.mjs';

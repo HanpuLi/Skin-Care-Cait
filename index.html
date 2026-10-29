@@ -443,7 +443,7 @@
     <div class="sheet-ov" id="settings-sheet" hidden onclick="if(event.target===this)closeSettings()">
         <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="settings-t">
             <div class="sheet-h"><h2 class="sheet-t" id="settings-t">设置</h2><button class="sheet-x" onclick="closeSettings()" aria-label="关闭"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
-            <div class="sheet-sec"><div class="sec-t">账号与同步</div><div id="auth-btn"></div><p class="note" id="sync-line"></p></div>
+            <div class="sheet-sec"><div class="sec-t">账号与同步</div><div id="auth-btn"></div><p class="note" id="sync-line"></p><button class="btn btn-primary" id="sync-choose" hidden onclick="showSyncConflict()">选一份记录</button></div>
             <div class="sheet-sec"><div class="sec-t">使用方式</div>
                 <div class="seg" role="radiogroup" aria-label="使用方式">
                     <button id="set-mode-min" role="radio" onclick="setMode2(true)">只看今晚</button>
@@ -476,7 +476,7 @@
                 <label class="field"><span>修护霜用法</span><select id="set-repairuse" onchange="onProfileEdit()"><option value="">交给方案</option><option value="full">全脸薄涂</option><option value="spot">只点涂</option></select></label>
                 <label class="field"><span>没连上顾问时的刷酸档位</span><select id="set-acidlevel" onchange="onProfileEdit()"><option value="">自动</option><option value="1">每周 1 次</option><option value="2">每周 2 次</option><option value="3">每周 3 次</option></select></label>
             </details>
-            <div class="sheet-sec"><div class="sec-t">数据</div><div class="btn-row"><button class="btn" onclick="exportJSON()">导出备份</button><label class="btn file-btn">恢复备份<input type="file" accept=".json" onchange="importJSON(this)"></label></div></div>
+            <div class="sheet-sec"><div class="sec-t">数据</div><div class="btn-row"><button class="btn" onclick="exportJSON()">导出备份</button><label class="btn file-btn">恢复备份<input type="file" accept=".json" onchange="importJSON(this)"></label><button class="btn" onclick="showSyncRecovery()">恢复副本</button></div></div>
             <div class="sheet-sec"><button class="btn-link quiet" onclick="closeSettings();startOOBE({redo:true})">重新做引导</button></div>
         </div>
     </div>
@@ -491,7 +491,8 @@
     </div>
     <!-- 通用 sheet(确认 / 提示 / 某一天 / 完成今晚 / 引导 …)由 openSheet() 填 -->
     <div id="sheet-root"></div>
-    <script>
+    <!-- App 本体。不直接运行:由最下面的启动脚本拿到窗口锁之后再运行(同一设备只开一个窗口) -->
+    <script type="text/plain" id="skincare-app-source">
         // 【要紧】云端数据正在落到本机的这一小段时间里,本机的**自动写盘**(货架迁移、方案版本、状态清洗)
         //    绝不能反弹回云端。否则闭环是:云端盖本地 → renderAll() 重跑 applyShelfMigrations/
         //    syncRegimen/sanitizePS → ls() 触发 schedulePush → 云端 _updatedAt 变新 →
@@ -499,30 +500,146 @@
         //    2026-08-29 实发:REGIMEN_ENGINE 升到 'e2' 让每台设备一打开必写一次方案版本,
         //    把这个一直潜伏的回声放大成了"每次打开都发作"。
         //    这里只是不推送;值仍然落盘,下一次真实操作会被整份推送一并带上。
+        //    (信封模型下:回声期间的写盘照样落进信封,但 rev 不涨 —— 不算「本机改动」,也就不会被推回去)
         let _applyingCloud = false;
-        // ══ Storage ══════════════════════════════════════════════════
-        function lg(k) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null } catch { return null } }
-        function ls(k, v) {
-            try {
-                localStorage.setItem(k, JSON.stringify(v));
-                if (_applyingCloud) return;   // 云端回声,别推回去
-                schedulePush();
-            } catch(e) {
-                if (e.name === 'QuotaExceededError' || e.code === 22) {
-                    // Try trimming old journal entries
-                    try {
-                        const jrnl = JSON.parse(localStorage.getItem(K.jrnl) || '[]');
-                        if (jrnl.length > 180) {
-                            localStorage.setItem(K.jrnl, JSON.stringify(jrnl.slice(0, 180)));
-                            localStorage.setItem(k, JSON.stringify(v));
-                            schedulePush();
-                            return;
-                        }
-                    } catch {}
-                    const toast = document.getElementById('sync-toast-el');
-                    if (toast) { toast.textContent = '这台设备的存储满了：先导出备份，再清掉旧数据'; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 5000); }
-                }
+        // ══ Storage:按账号的同步信封(2026-10-29 移植 Codex 10/14 的 59f770c,按新代码重写)══════════
+        // 本机记录的正本 = localStorage['sk_sync_v1:<uid>'] 这一个信封:
+        //   data   19 个云键的值        rev  本机改动计数        ack  云端已确认到第几次
+        //   base   上次确认的云端内容指纹(syncHash)            sent 推出去还没确认的几次指纹(超时后才落地的那次也认得是自己写的)
+        //   legacy 旧版升级来 / 登录前攒下的数据,还没跟云端对过(对过之前不上传)
+        // rev > ack = 有没传上去的改动:关页、断网、超时都留在信封里,下次打开接着传,云端绝不能盖它。
+        // 旧的 sk_* 键只是镜像(回退到旧版本时还能读到),读写一律以信封为准。
+        // ls(k, v, origin):
+        //   'user'    用户操作 —— rev+1、排推送;云端回声期间(_applyingCloud)例外,只落盘
+        //   'derived' 自动推出来、过了今天就推不出来的事实(极简模式的跨天推定)—— 回声期间也 rev+1
+        //   'system'  每次加载都会重算的(货架迁移、方案重出、状态清洗、新的一天)—— 只落盘,跟着下一次真实改动一起上传
+        // 只在本机的(顾问对话 sk_ai*、深浅色 sk_theme、sk_uid、恢复副本)不进信封,按设备存。
+        const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_amsteps1','sk_proddefs1','sk_profile1','sk_preset1','sk_planday1','sk_mig1','sk_empty1','sk_gone1','sk_low1','sk_regimen1','sk_tnai1','sk_ai1'];
+        const UIDK = 'sk_uid';   // 本机当前归属的账号(不同步);换账号 = 换一个信封
+        const SYNC_PREFIX = 'sk_sync_v1:', SYNC_RECOVERY = 'sk_sync_recovery:', SYNC_RECOVERY_MAX = 4;
+        let _db = null, _user = null, _pushTimer = null, _pushing = false, _pushDirty = false, _pushBackoff = 0;
+        let _syncSession = 0, _hydrated = false, _syncConflict = null, _syncStorageBlocked = false;
+        let _syncFadeTimer = null, _syncState = 'ok';
+        const _syncRaw = {}, _keyGen = {};   // lg() 的解析缓存 / 每个键改过几次(给别处做缓存键)
+        // 递归按键名排序的序列化——只用于云/本地数据的等价比较(Firestore 回来的 map 键序和本地不同,比原串会永远"脏"→无限互推)
+        function _stableStr(v) {
+            if (v === null || typeof v !== 'object') return JSON.stringify(v);
+            if (Array.isArray(v)) return '[' + v.map(_stableStr).join(',') + ']';
+            return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + _stableStr(v[k])).join(',') + '}';
+        }
+        // 内容指纹:建在 _stableStr 上(键序无关),只用来判断「两份是不是同一份」
+        function syncHash(v) {
+            const s = _stableStr(v === undefined ? null : v);
+            let h1 = 0xdeadbeef ^ s.length, h2 = 0x41c6ce57 ^ s.length;
+            for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); }
+            h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+            h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+            return s.length.toString(36) + '.' + (h2 >>> 0).toString(36) + '.' + (h1 >>> 0).toString(36);
+        }
+        function syncKey(uid) { return SYNC_PREFIX + encodeURIComponent(uid || ''); }
+        function recoveryPrefix(uid) { return SYNC_RECOVERY + encodeURIComponent(uid || '') + ':'; }
+        function cloneSync(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
+        function readSyncMirrors() {
+            const data = {};
+            CLOUD_KEYS.forEach(k => { const raw = localStorage.getItem(k); if (raw !== null) { try { data[k] = JSON.parse(raw); } catch { } } });
+            // 更早的旧键(sc_*)也一并收进来
+            Object.entries({ sk_jrnl1: 'sc_jrnl2', sk_prods1: 'sc_prods1', sk_cd1: 'sc_cd1' }).forEach(([key, old]) => {
+                if (!(key in data)) { const raw = localStorage.getItem(old); if (raw !== null) { try { data[key] = JSON.parse(raw); } catch { } } }
+            });
+            return data;
+        }
+        function syncStorageError() {
+            _syncStorageBlocked = true;
+            const el = document.getElementById('sync-toast-el');
+            if (el) { el.textContent = '这台设备存不进去了，刚才的改动没保存。先导出备份、腾点空间再试。'; el.classList.add('show'); }
+        }
+        // 恢复副本:按账号存在本机,同一份内容只存一次,每个账号最多留 SYNC_RECOVERY_MAX 份(旧的先删)
+        function backupSyncData(uid, data, reason) {
+            const prefix = recoveryPrefix(uid), hash = syncHash(data || {});
+            const mine = [];
+            for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(prefix)) mine.push(k); }
+            const same = mine.find(k => k.endsWith(':' + hash));
+            if (same) return same;
+            mine.sort((a, b) => Number(a.slice(prefix.length).split(':')[0]) - Number(b.slice(prefix.length).split(':')[0]));
+            const key = prefix + Date.now() + ':' + hash;
+            const rec = JSON.stringify({ uid: uid || '', reason, savedAt: new Date().toISOString(), data: data || {} });
+            for (;;) {
+                try { localStorage.setItem(key, rec); break; }
+                catch (e) { if (!mine.length) throw e; localStorage.removeItem(mine.shift()); }   // 满了:先挤掉最旧的副本再试
             }
+            while (mine.length >= SYNC_RECOVERY_MAX) localStorage.removeItem(mine.shift());
+            return key;
+        }
+        function validEnvelope(doc, uid) {
+            return doc && doc.version === 1 && doc.uid === uid && doc.data && typeof doc.data === 'object' && !Array.isArray(doc.data)
+                && Number.isSafeInteger(doc.rev) && Number.isSafeInteger(doc.ack) && doc.ack >= 0 && doc.ack <= doc.rev;
+        }
+        // 打开某个账号的信封;没有就新建。initial = 新建时的内容(启动时是旧版镜像,换账号时是认领过来的数据)
+        // opts.lastPush:旧版的 sk_lastpush(升级判断用);opts.adopted:'claimed'(她说是自己的)/ 'weak'(登录前随手点的设置)
+        function openSyncEnvelope(uid, initial, opts) {
+            opts = opts || {};
+            let raw = null;
+            try { raw = localStorage.getItem(syncKey(uid)); } catch (e) { }
+            if (raw !== null) {
+                try { const doc = JSON.parse(raw); if (validEnvelope(doc, uid)) return doc; } catch (e) { }
+                // 信封坏了:原样另存一份(不当作可以覆盖的许可),再按旧版数据重建,让云端那边去判断
+                try { localStorage.setItem(recoveryPrefix(uid) + Date.now() + ':corrupt', JSON.stringify({ uid, reason: 'corrupt-envelope', savedAt: new Date().toISOString(), data: null, raw })); } catch (e) { }
+            }
+            const init = typeof initial === 'function' ? initial() : (initial || {});
+            const has = Object.keys(init).length > 0;
+            const doc = { version: 1, uid, rev: 0, ack: 0, base: null, sent: [], legacy: has, data: cloneSync(init) };
+            if (has) { doc.legacyLastPush = Number(opts.lastPush || 0); if (opts.adopted) doc.adopted = opts.adopted; }
+            try {
+                if (has) doc.recoveryKey = backupSyncData(uid, init, opts.adopted ? 'before-login' : 'before-sync-upgrade');
+                localStorage.setItem(syncKey(uid), JSON.stringify(doc));
+            } catch (e) { syncStorageError(); }
+            return doc;
+        }
+        // 镜像写失败不丢东西:正本在信封里,lg() 和下次启动都读信封
+        function mirrorSyncData(data, keys) {
+            try { (keys || CLOUD_KEYS).forEach(k => { if (k in data) localStorage.setItem(k, JSON.stringify(data[k])); else localStorage.removeItem(k); }); }
+            catch (e) { console.warn('本机镜像没写上，信封里的记录不受影响'); }
+        }
+        // 一次写入 = 数据和 rev 一起落进信封,成功了才算数;之后才更新镜像
+        function commitSyncEnvelope(next, changedKeys) {
+            try { localStorage.setItem(syncKey(next.uid), JSON.stringify(next)); }
+            catch (e) { syncStorageError(); throw e; }
+            const keys = changedKeys || CLOUD_KEYS;
+            _syncDoc = next; _syncStorageBlocked = false;
+            keys.forEach(k => { delete _syncRaw[k]; _keyGen[k] = (_keyGen[k] || 0) + 1; });
+            if (keys.length) mirrorSyncData(next.data, keys);
+        }
+        function hasPendingSync() { return _syncDoc.rev > _syncDoc.ack; }
+        function syncKeyGen(k) { return _keyGen[k] || 0; }
+        let _syncOwner = '';
+        try { _syncOwner = localStorage.getItem(UIDK) || ''; } catch (e) { }
+        let _syncDoc = { version: 1, uid: _syncOwner, rev: 0, ack: 0, base: null, sent: [], legacy: false, data: {} };
+        try { _syncDoc = openSyncEnvelope(_syncOwner, readSyncMirrors, { lastPush: _syncOwner ? +localStorage.getItem('sk_lastpush') || 0 : 0 }); }
+        catch (e) { syncStorageError(); }
+        // ══ Storage ══════════════════════════════════════════════════
+        function lg(k) {
+            if (CLOUD_KEYS.indexOf(k) >= 0) {
+                if (!(k in _syncDoc.data) || _syncDoc.data[k] === null) return null;
+                if (!(k in _syncRaw)) _syncRaw[k] = JSON.stringify(_syncDoc.data[k]);
+                return JSON.parse(_syncRaw[k]);
+            }
+            try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; }
+        }
+        function ls(k, v, origin = 'user') {
+            if (CLOUD_KEYS.indexOf(k) < 0) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
+            if (_syncStorageBlocked && origin !== 'user') return false;
+            const nv = cloneSync(v);
+            if (nv === undefined ? !(k in _syncDoc.data) : (k in _syncDoc.data && _stableStr(_syncDoc.data[k]) === _stableStr(nv))) return true;   // 没变就不算一次改动
+            const durable = origin === 'derived' || (origin === 'user' && !_applyingCloud);   // 云端回声,别推回去
+            const data = Object.assign({}, _syncDoc.data);
+            if (nv === undefined) delete data[k]; else data[k] = nv;
+            try { commitSyncEnvelope(Object.assign({}, _syncDoc, { data, rev: _syncDoc.rev + (durable ? 1 : 0) }), [k]); }
+            catch (e) {
+                if (origin === 'user') throw e;   // 用户操作:别让调用方接着显示「存好了」
+                return false;
+            }
+            if (durable) schedulePush();
+            return true;
         }
         function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
         // ══ 图标:一套细线 SVG(viewBox 24 · 1.5 线宽 · currentColor);全 App 不用 emoji ══════════════
@@ -1175,9 +1292,9 @@
         // One-time migration from old keys
         (function migrate() {
             const old = { wk: 'sc_wk3', jrnl: 'sc_jrnl2', cd: 'sc_cd1', prods: 'sc_prods1', tn: 'sc_tn1' };
-            if (!lg(K.jrnl) && lg(old.jrnl)) { ls(K.jrnl, lg(old.jrnl)); }
-            if (!lg(K.prods) && lg(old.prods)) { ls(K.prods, lg(old.prods)); }
-            if (!lg(K.cd) && lg(old.cd)) { ls(K.cd, lg(old.cd)); }
+            if (!lg(K.jrnl) && lg(old.jrnl)) { ls(K.jrnl, lg(old.jrnl), 'system'); }
+            if (!lg(K.prods) && lg(old.prods)) { ls(K.prods, lg(old.prods), 'system'); }
+            if (!lg(K.cd) && lg(old.cd)) { ls(K.cd, lg(old.cd), 'system'); }
         })();
         // ── 用户档案：每人独立的「刮胡 / HRT / 肤质 / 阶段」──────────────
         // 【注意】只有"本机原主的历史数据"才继承旧设定(刮胡开等)，且**一台设备只认一次**。
@@ -1191,9 +1308,9 @@
             const inherit = firstTimeOnThisDevice && hasData;   // 只认第一次
             try {
                 localStorage.setItem(OWNER, '1');
-                localStorage.setItem(K.profile, JSON.stringify(inherit
+                ls(K.profile, inherit
                     ? { shaving: true,  hrt: false, skinType: '混油皮 · 屏障修护', name: '', onboarded: true, phase: 'maintenance', phaseStart: '2026-01-01' }
-                    : { shaving: false, hrt: false, skinType: '', name: '', onboarded: false, phase: 'repair', phaseStart: '' }));
+                    : { shaving: false, hrt: false, skinType: '', name: '', onboarded: false, phase: 'repair', phaseStart: '' }, 'system');
             } catch {}
         })();
 
@@ -1448,7 +1565,7 @@
                         const em = lg(K.empty) || {};
                         if (def && !((em[m.prod] || []).length)) {
                             (em[m.prod] = em[m.prod] || []).push({ date: m.date || today(), weeks: weeksOpen(m.prod), uses: prodUsageCount(def), name: def.name });
-                            ls(K.empty, em);
+                            ls(K.empty, em, 'system');
                         }
                         GONE.push(m.prod); goneChanged = true;
                         PD = PD.filter(p => p.id !== m.prod);
@@ -1459,7 +1576,7 @@
                     const op = lg(K.popen) || {};
                     if (!op[m.prod] && PD.find(x => x.id === m.prod)) {
                         op[m.prod] = m.date || today();
-                        ls(K.popen, op);
+                        ls(K.popen, op, 'system');
                         if (POPEN) POPEN[m.prod] = op[m.prod];
                     }
                 } else if (m.type === 'all-normal') {
@@ -1473,9 +1590,9 @@
                 }
                 done.push(m.id); marked = true;
             });
-            if (goneChanged) ls(K.gone, GONE);
-            if (changed) ls(K.prods, PS);
-            if (marked)  ls(K.mig, done);
+            if (goneChanged) ls(K.gone, GONE, 'system');
+            if (changed) ls(K.prods, PS, 'system');
+            if (marked)  ls(K.mig, done, 'system');
             return changed || goneChanged;
         }
         // 云端同步来的旧货架可能还带着已退役的 pending 状态 —— 落到界面上就是
@@ -1487,7 +1604,7 @@
                 if (!def) { if (isGone(id)) { delete PS[id]; changed = true; } return; }
                 if ((def.statuses || []).indexOf(PS[id]) < 0) { PS[id] = normalStatusOf(def); changed = true; }
             });
-            if (changed) ls(K.prods, PS);
+            if (changed) ls(K.prods, PS, 'system');
             return changed;
         }
         applyShelfMigrations();
@@ -1596,7 +1713,7 @@
 
         // ══ 用户档案（per-user 刮胡 / HRT / 肤质） ══════════════════
         let PROFILE = lg(K.profile) || { shaving: false, hrt: false, skinType: '', name: '', onboarded: false };
-        function saveProfile() { ls(K.profile, PROFILE); }
+        function saveProfile(origin) { return ls(K.profile, PROFILE, origin || 'user'); }
         // 模式裁剪:完整模式 4 个 tab(今晚 · 顾问 · 皮肤 · 产品),极简 3 个(皮肤页可在设置里打开)
         function applyProfileVisibility() {
             document.body.classList.toggle('hide-shave', !PROFILE.shaving);
@@ -1719,8 +1836,10 @@
             if (typeof oobeRefresh === 'function') oobeRefresh();
         }
         function syncLineText() {
+            if (_syncStorageBlocked) return '这台设备存不进去了：先导出备份、腾点空间。';
             if (!_user) return '没登录：数据只在这台设备上。';
-            const lp = +localStorage.getItem('sk_lastpush') || 0;
+            if (_syncConflict) return '同步先停着：这台设备和云端都改过，等你选一份。改动照样存在这台设备上。';
+            const lp = _syncDoc.pushedAt || +localStorage.getItem('sk_lastpush') || 0;
             if (_syncState === 'err') return '这会儿连不上，改动先存在本机，连上会自动传。';
             return lp ? '上次同步 ' + new Date(lp).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '已登录，正在同步。';
         }
@@ -2407,7 +2526,7 @@
         // 极简模式的记录:'optional' = 默认全做 + 例外点一下 + 皮肤状态想记就记、从不催;'none' = 完全不显示记录入口
         const MINIMAL_LOGGING = 'optional';
         let _gateMemo = { key: null, val: null };
-        function _gateKey() { return today() + '|' + (localStorage.getItem(K.jrnl) || '') + '|' + (PROFILE.hrt ? 1 : 0) + '|' + getExfoliantTags().join(',') + '|' + JSON.stringify(PROFILE.medical || null) + '|' + (PROFILE.oobeAt || ''); }
+        function _gateKey() { return today() + '|' + syncKeyGen(K.jrnl) + '|' + (PROFILE.hrt ? 1 : 0) + '|' + getExfoliantTags().join(',') + '|' + JSON.stringify(PROFILE.medical || null) + '|' + (PROFILE.oobeAt || ''); }
         function _statusDays(days, tags) { return jrnlLastNDays(days).filter(e => (e.status || []).some(s => tags.indexOf(s) >= 0)); }
         // 最近一次刷酸后 48 小时内(当天 / 次日 / 第三天)记到刺激 —— 这次酸很可能就是诱因
         function acidReactedRecently() {
@@ -2829,9 +2948,9 @@
             if (tn.date !== t) {
                 const st = getDayState(t);
                 tn = { shower: st.shower, shave: st.shave, date: t, manual: false };
-                ls(K.tn, tn);
+                ls(K.tn, tn, 'system');
                 // New day: clear step completion
-                ls(K.tnsteps, { date: t, done: [] });
+                ls(K.tnsteps, { date: t, done: [] }, 'system');
             }
             return tn;
         }
@@ -2987,7 +3106,7 @@
                 changed = true;
             });
             if (init) { PROFILE.firstSeenInit = today(); changed = true; }
-            if (changed) { PROFILE.firstSeen = fs; saveProfile(); }
+            if (changed) { PROFILE.firstSeen = fs; saveProfile('system'); }
             return fs;
         }
         // 返回「该角色只有这一件」的在用产品
@@ -3415,7 +3534,7 @@
             reg.reason = reason || (engChanged ? '方案更新了：出油、闭口不再拉低屏障；刷酸从每周 1 次温和酸起步，按真实反应一档档加'
                 : (base ? regimenDiffReason(base, reg) : '第一版：按家里现有的东西排'));
             if (sameDay) hist[hist.length - 1] = reg; else hist = hist.concat([reg]);
-            ls(K.regimen, trimRegimenHist(hist));
+            ls(K.regimen, trimRegimenHist(hist), force ? 'user' : 'system');   // 自动重出一版 = 'system'(每次加载都会重算,见 8/29 对推)
             return reg;
         }
         // 只留最近 12 版;挤出去的时候优先留顾问的版本(别让离线版本把顾问方案冲掉)
@@ -3771,8 +3890,8 @@
                 entry.auto = true;
                 if (!entry.note) entry.note = '（按当天计划推定）';
                 e.sort((a, b) => String(b.date).localeCompare(String(a.date)));
-                ls(K.jrnl, e.slice(0, 365));
-                return true;
+                // 'derived':推定出来的是事实(过了今天 planday 就被覆盖、推不出来了),云端回声期间也要算本机改动、推上去
+                return ls(K.jrnl, e.slice(0, 365), 'derived');
             } catch (err) { return false; }
         }
 
@@ -4079,7 +4198,7 @@
                         .map(it => { const p = PD.find(x => x.id === it.id); return { type: it.type, name: p ? p.name : it.label, tag: p ? (p.journalTag || p.name) : it.label }; });
                     const prev = lg(K.planday);
                     if (!prev || prev.date !== t || JSON.stringify(prev.items || []) !== JSON.stringify(acts))
-                        ls(K.planday, { date: t, items: acts });
+                        ls(K.planday, { date: t, items: acts }, 'system');
                 }
             } catch (e) {}
 
@@ -4138,7 +4257,8 @@
                 try {
                     const data = JSON.parse(e.target.result);
                     const photos = data._photos || null;
-                    Object.entries(data).forEach(([k, v]) => { if (k === '_meta' || k === '_photos') return; ls(k, v); });
+                    try { backupSyncData(_syncOwner, _syncDoc.data, 'before-restore'); } catch (e2) { }   // 导入前现在的记录先另存一份
+                    Object.entries(data).forEach(([k, v]) => { if (CLOUD_KEYS.indexOf(k) >= 0) ls(k, v); });   // 只认云键:备份文件写不进信封 / 身份这些本机键
                     if (photos) {
                         await new Promise(res => initPhotoDB(() => {
                             if (!_idb) return res();
@@ -4260,26 +4380,25 @@
         }
         // 切后台/关页面时立即冲刷待推送的改动：手机 PWA 一进后台 setTimeout 就冻结，
         // 2 秒防抖里攒着的"最后几下勾选"永远推不出去——这是"每天的记录都会消失"的另一半根因。
-        // (即使这里的异步写没来得及完成,重开时 setupRealtimeSync 的 <= 守卫也会把本机较新数据补推,双保险)
+        // 冲刷不算确认:没等到云端确认的改动留在信封里(rev > ack),重开后接着推。
         function flushPendingPush() {
-            if (!_db || !_user) return;
-            if (_pushTimer || _pushDirty) { clearTimeout(_pushTimer); _pushTimer = null; pushToCloud(); }
+            if (!_db || !_user || !_hydrated || _syncConflict || !hasPendingSync()) return;
+            clearTimeout(_pushTimer); _pushTimer = null; pushToCloud();
         }
         document.addEventListener('visibilitychange', () => { if (document.hidden) flushPendingPush(); else checkDayRollover(); });
         window.addEventListener('pagehide', flushPendingPush);
         window.addEventListener('focus', checkDayRollover);
         setInterval(checkDayRollover, 60000);
 
-        // ══ Firebase 云同步 ═══════════════════════════════════
-        const CLOUD_KEYS = ['sk_wk1','sk_jrnl1','sk_cd1','sk_prods1','sk_popen1','sk_tn1','sk_tnsteps1','sk_amsteps1','sk_proddefs1','sk_profile1','sk_preset1','sk_planday1','sk_mig1','sk_empty1','sk_gone1','sk_low1','sk_regimen1','sk_tnai1','sk_ai1'];
-        let _db = null, _user = null, _pushTimer = null, _pushing = false, _pushDirty = false;
-        // 递归按键名排序的序列化——只用于云/本地数据的等价比较
-        function _stableStr(v) {
-            if (v === null || typeof v !== 'object') return JSON.stringify(v);
-            if (Array.isArray(v)) return '[' + v.map(_stableStr).join(',') + ']';
-            return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + _stableStr(v[k])).join(',') + '}';
-        }
-
+        // ══ Firebase 云同步(信封版)═══════════════════════════════════
+        // 一句话:本机改动先落进信封(rev+1),云端确认了才算数(ack);云端只在「本机没有未确认改动」时盖本机;
+        // 两边都改了 → 暂停同步、两份都另存恢复副本、让她选一整份。上传走 Firestore 事务:云端还是上次确认的那份才写。
+        // 旧事故的守卫都还在,换了形式(对照表见 ~/skincare-coach/SYNC-REPORT.md):
+        //   8/15 旧云盖新本地:不再靠 cloudAt <= lastPush 猜 —— rev > ack 就绝不接受覆盖;
+        //        cloudAt <= lastPush 只在旧版数据升级的那一次用来判断谁新(legacySyncDecision)
+        //   8/15 键序:指纹 syncHash 建在 _stableStr 上 / 缺键补拉:applyCloudData 叠加云端有的键,升级判成「本机新」时先补上本机缺的
+        //   8/15 极简模式跨天推定:absorbPrescribedHistory 用 'derived' 写,云端的键盖进来之前先跑
+        //   8/15 关页冲刷:flushPendingPush / 8/29 无限对推:回声期间 rev 不涨、'system' 写盘不推、hasPendingWrites 的快照不理
         function initFirebase() {
             const cfg = typeof FIREBASE_CONFIG !== 'undefined' && FIREBASE_CONFIG;
             if (!cfg || !cfg.apiKey || cfg.apiKey.includes('将你')) { renderAuthBtn(); return; }
@@ -4291,7 +4410,6 @@
         }
 
         let _unsub = null;
-        const UIDK = 'sk_uid';   // 记住上一个登录的 uid（不同步、仅本机用来判断"是否换了人"）
         // ── 按账号自动匹配默认配置（与「健身计划」同一套思路：用邮箱认主账号，base64 只为不明文出现）──
         // 主账号 = 完整模式；其他账号 = 极简模式（精简界面，打卡与记录保留；日志页默认收起可自行打开）。
         // 只在该账号**第一次**登录时套用，之后手动改的设置一律不覆盖。
@@ -4301,13 +4419,15 @@
         }
         // 按账号自动定默认配置,现在只对主账号生效(完整模式 + 刮胡)。其他新账号不再按邮箱自动设成极简,
         // 而是在引导里自己选「你想怎么用」(AUDIT-ux P0-1)。老账号的档案在云端,登录后原样回来,不受影响。
+        // 在云端快照回来之后才跑(onCloudSnapshot):先跑会拿启动时的默认档案判断。写盘算 'system',不单独推。
         function autoMatchProfile(uid) {
             PROFILE = lg(K.profile) || PROFILE;   // 云端档案可能刚落到本机,先读它(别拿内存里的旧档案判断、再写回去盖掉)
             if (!uid || PROFILE.autoMatched === uid) return false;
             if (!isOwnerAccount()) return false;
+            const before = JSON.parse(JSON.stringify(PROFILE));
             Object.assign(PROFILE, { minimalMode: false, showJournal: true, shaving: true, hrt: false, seedShelf: true });
             PROFILE.autoMatched = uid;
-            saveProfile();
+            if (!saveProfile('system')) { PROFILE = before; return false; }
             applyProfileVisibility(); syncSettingsUI();
             return true;
         }
@@ -4324,55 +4444,74 @@
                 tx.onerror = () => { if (cb) cb(); };
             } catch (e) { if (cb) cb(); }
         }
-        // 换账号时清掉上一个人的本地数据（localStorage 云键 + 排班模版 + 照片），防止两人串号
-        function clearLocalUserData() {
-            CLOUD_KEYS.forEach(k => localStorage.removeItem(k));
-            if (typeof aiClearLocal === 'function') aiClearLocal();   // 顾问的本机缓存(对话 / 今日的话 / 开通状态)也是上一个人的
-            localStorage.removeItem(K.preset);
-            localStorage.removeItem('sk_lastpush');   // 推送时间戳属于上一个账号，留着会让新账号的云端被误判"不比本机新"
-            clearAllPhotos();
-            PROFILE = { shaving: false, hrt: false, skinType: '', name: '', onboarded: false, phase: 'repair', phaseStart: '' };
-            try { localStorage.setItem(K.profile, JSON.stringify(PROFILE)); localStorage.setItem('__profile_owner_seeded__', '1'); } catch {}
+        // 内存里的全局变量换成信封里的(换账号 / 云端落地 / 选了某一份之后)
+        function reloadFromStore() {
+            PROFILE = lg(K.profile) || { shaving: false, hrt: false, skinType: '', name: '', onboarded: false, phase: 'repair', phaseStart: '' };
+            GONE = lg(K.gone) || []; EMPTIES = lg(K.empty) || {}; LOW = lg(K.low) || [];   // 【注意】必须在 loadPD 之前
             PD = loadPD(); PS = lg(K.prods) || {}; POPEN = lg(K.popen) || {};
-            TN = initTN();   // 关键：内存里的「今晚洗澡/刮胡」也必须重置，否则上一个人的状态会串到新账号并被写回其排班
-            localStorage.removeItem(K.preset);   // 排班模版不进云端，属于上一个人的，一并清
+            TN = initTN();   // 内存里的「今晚洗澡/刮胡」也要换,否则上一个人的状态会串到新账号并被写回其排班
+            invalidatePlanCache();
             applyProfileVisibility(); syncSettingsUI();
         }
+        // 换账号:两个人的信封各自留在本机、互不相见;这里只清本机缓存里属于上一个人的东西
+        function clearLocalUserData() {
+            mirrorSyncData(_syncDoc.data);   // 镜像换成新账号的
+            if (typeof aiClearLocal === 'function') aiClearLocal();   // 顾问的本机缓存(对话 / 今日的话 / 开通状态)也是上一个人的
+            try { localStorage.removeItem('sk_lastpush'); } catch (e) { }
+            clearAllPhotos();
+            reloadFromStore();
+        }
+        // 「真有记录」= 日志里有状态 / 产品 / 备注(只是装了 App、点了几下设置不算)
+        function hasRealRecords(data) {
+            return ((data && data.sk_jrnl1) || []).some(e => e && ((e.status || []).length || (e.products || []).length || (e.note && String(e.note).trim())));
+        }
+        function askClaim(user) {
+            return new Promise(res => openSheet({ id: 'claim', title: '这些记录是你的吗？', noClose: true,
+                text: '这台设备上有登录前记下的护肤记录。\n\n是你的：归到「' + (user.email || '这个账号') + '」名下，接着用。\n不是你的：先放一边不动，载入你自己云端的数据。',
+                actions: [{ label: '不是我的', fn: () => res(false) }, { label: '是我的', primary: true, fn: () => res(true) }] }));
+        }
         async function handleAuthChange(user) {
-            _user = user; renderAuthBtn();
-            if (typeof aiOnAuth === 'function') { try { aiOnAuth(user); } catch (e) { console.warn('ai auth', e); } }
-            if (user) {
-                const prevUid = localStorage.getItem(UIDK);
-                if (prevUid && prevUid !== user.uid) {
-                    // 真·换了人：先清上一个人的本地数据，再从新账号云端拉取
-                    clearLocalUserData();
-                    renderAll();
-                    toast('换了账号，正在载入…');
-                } else if (!prevUid) {
-                    // 首次登录：本机可能存着**别人**在云同步之前攒下的数据(真实场景:Cici 在 Cait 机器上第一次登录)。
-                    // 旧版直接跳过清理 → 上一个人的日志/产品/档案被并进新账号。这里按云端文档判断归属。
-                    // 只在本机**真有记录**时才问(只是装了 App、点了几下设置不算),用自己的 sheet,不用原生 confirm(AUDIT-ux §3)
-                    const hasLocal = (lg(K.jrnl) || []).some(e => e && ((e.status || []).length || (e.products || []).length || e.note));
-                    if (hasLocal) {
-                        let cloudExists = false;
-                        try { const snap = await _db.collection('users').doc(user.uid).get(); cloudExists = snap.exists; } catch (e) {}
-                        const mine = cloudExists ? false : await new Promise(res => openSheet({ id: 'claim', title: '这些记录是你的吗？', noClose: true,
-                            text: '这台设备上有一些还没同步过的护肤记录。\n\n是你的：归到「' + (user.email || '这个账号') + '」名下，接着用。\n不是你的：清掉，载入你自己云端的数据。',
-                            actions: [{ label: '不是我的', fn: () => res(false) }, { label: '是我的', primary: true, fn: () => res(true) }] }));
-                        if (!mine) {
-                            clearLocalUserData();
-                            renderAll();
-                        }
-                    }
-                }
-                localStorage.setItem(UIDK, user.uid);
-                // autoMatchProfile 挪到云端快照回来之后再跑(setupRealtimeSync 里):在这里跑会先写一份本机档案、
-                // 排上推送,快照一到就走「本机有改动先上传」把云端的真档案盖掉(换新手机登录时)。
-                setupRealtimeSync();
-            } else {
-                // 登出保留本地缓存供离线使用；不清数据。换成别的账号登录时才清。
-                if (_unsub) { _unsub(); _unsub = null; }
+            const session = ++_syncSession;
+            if (_unsub) { _unsub(); _unsub = null; }
+            clearTimeout(_pushTimer); _pushTimer = null;
+            _pushing = false; _pushDirty = false; _pushBackoff = 0; _hydrated = false; _syncConflict = null;
+            closeSheet('sync-conflict'); closeSheet('claim');
+            _user = null;
+            if (!user) {   // 登出:本机记录照旧属于刚才那个账号的信封,离线改的下次登录接着传。换成别的账号登录时才换信封。
+                renderAuthBtn(); showSyncStatus('', 'ok');
+                if (typeof aiOnAuth === 'function') { try { aiOnAuth(null); } catch (e) { } }
+                return;
             }
+            try {
+                if (_syncOwner !== user.uid) {
+                    const switched = !!_syncOwner;
+                    let adopt = null, adopted = '';
+                    // 这台设备从没登录过、却攒了数据(真实场景:Cici 在 Cait 的电脑上第一次登录)。
+                    // 只在**真有记录**时才问;只是点过设置 / 走过引导的,悄悄带过去,云端已有这个账号的数据就以云端为准。
+                    if (!_syncOwner && Object.keys(_syncDoc.data).length) {
+                        if (hasRealRecords(_syncDoc.data)) {
+                            const mine = await askClaim(user);
+                            if (session !== _syncSession) return;   // 等她选的时候账号又变了
+                            if (mine) { adopt = cloneSync(_syncDoc.data); adopted = 'claimed'; }
+                        } else { adopt = cloneSync(_syncDoc.data); adopted = 'weak'; }
+                    }
+                    const next = openSyncEnvelope(user.uid, adopt || {}, { adopted });
+                    // 先把信封落盘、再记身份:哪一步失败,重启时都还能找到自己的那份;身份没写上就不切换
+                    localStorage.setItem(syncKey(user.uid), JSON.stringify(next));
+                    localStorage.setItem(UIDK, user.uid);
+                    const prevKey = syncKey(_syncOwner);
+                    _syncOwner = user.uid; _syncDoc = next; _syncStorageBlocked = false;
+                    CLOUD_KEYS.forEach(k => { delete _syncRaw[k]; _keyGen[k] = (_keyGen[k] || 0) + 1; });
+                    if (adopt) { try { localStorage.removeItem(prevKey); } catch (e) { } }   // 认领走了:数据已在新信封里(另有升级前副本)
+                    clearLocalUserData();
+                    applyCloudThenRender();
+                    if (switched) toast('换了账号，正在载入…');
+                } else localStorage.setItem(UIDK, user.uid);
+                _user = user;
+                renderAuthBtn();
+                if (typeof aiOnAuth === 'function') { try { aiOnAuth(user); } catch (e) { console.warn('ai auth', e); } }
+                setupRealtimeSync();
+            } catch (e) { syncStorageError(); renderAuthBtn(); }
         }
 
         function renderAll() {
@@ -4398,137 +4537,351 @@
             _applyingCloud = true;
             try { renderAll(); } finally { _applyingCloud = false; }
         }
+        function syncSessionMatches(uid, session) { return !!(_user && _user.uid === uid && _syncOwner === uid && _syncSession === session); }
+        function cloudSyncData(doc) {
+            const d = {};
+            CLOUD_KEYS.forEach(k => { if (doc && k in doc && doc[k] !== undefined) d[k] = cloneSync(doc[k]); });
+            return d;
+        }
+        function localSyncData() { return cloudSyncData(_syncDoc.data); }
+        function syncMeta(extra) {
+            const next = Object.assign({}, _syncDoc, { legacy: false }, extra || {});
+            delete next.adopted; delete next.legacyLastPush;
+            return next;
+        }
+        // 云端出现的是本机早先推出去、还没确认的某一版(比如超时后才落地的那次)→ 是自己写的,不算别人改过
+        function ownSentRev(hash) { const s = (_syncDoc.sent || []).find(x => x.hash === hash); return s ? s.rev : -1; }
+        function _subset(a, b) { const s = new Set((b || []).map(String)); return (a || []).every(x => s.has(String(x))); }
+        // 本机有、云端没有的「记录」:某天的日志(状态 / 产品 / 没做 / 备注有云端没有的)、自己加的产品、用完了
+        function localOnlyRecords(local, cloud) {
+            const out = [], cj = {};
+            (cloud.sk_jrnl1 || []).forEach(e => { if (e && e.date) cj[e.date] = e; });
+            (local.sk_jrnl1 || []).forEach(e => {
+                if (!e || !e.date) return;
+                const note = e.note && String(e.note).trim();
+                if (!((e.status || []).length || (e.products || []).length || (e.skipped || []).length || note)) return;
+                const c = cj[e.date];
+                const inside = c && _subset(e.status, c.status) && _subset(e.products, c.products) && _subset(e.skipped, c.skipped) && (!note || String(c.note || '').indexOf(note) >= 0);
+                if (!inside) out.push('jrnl:' + e.date);
+            });
+            const cIds = new Set((cloud.sk_proddefs1 || []).map(p => p && p.id));
+            (local.sk_proddefs1 || []).forEach(p => { if (p && p.id && !p.builtin && !cIds.has(p.id)) out.push('prod:' + p.id); });
+            const cg = new Set(cloud.sk_gone1 || []);
+            (local.sk_gone1 || []).forEach(id => { if (!cg.has(id)) out.push('gone:' + id); });
+            return out;
+        }
+        // 旧版数据(没有信封元数据)、或登录前攒的数据,第一次跟云端对上时怎么办。
+        // 能用现有元数据无歧义判断的都静默处理;只有「云端变过、本机也有云端没有的记录」才让她选。
+        //   L1 本机有的每个键都和云端一样(云端可能多几个键)          → 用云端(等于补拉)
+        //   L2 云端没有任何数据                                      → 用本机,传上去
+        //   L3 登录前随手点的设置 / 引导(没有真记录),云端已有数据   → 用云端
+        //   L4 云端自从这台设备上次成功推送后没变过(cloudAt <= lastPush) → 差别全是本机的,用本机(云端那份另存副本)
+        //   L5 其余(云端变过,或没有时间戳可比):本机有云端没有的记录 → 问;没有 → 用云端
+        // 用云端时本机那份早在升级时就另存过(before-sync-upgrade),之后又自动写过的再存一份。
+        function legacySyncDecision(local, cloud, cloudAt) {
+            if (Object.keys(local).every(k => _stableStr(local[k]) === _stableStr(cloud[k]))) return 'same';
+            if (!Object.keys(cloud).length) return 'local';
+            if (_syncDoc.adopted === 'weak') return 'cloud';
+            const lastPush = Number(_syncDoc.legacyLastPush || 0);
+            if (lastPush && cloudAt && cloudAt <= lastPush) return 'local';
+            return localOnlyRecords(local, cloud).length ? 'conflict' : 'cloud';
+        }
+        // 返回 true = 接着按普通流程走
+        function settleLegacy(cloud, raw, uid, session) {
+            const local = localSyncData();
+            const d = legacySyncDecision(local, cloud, Number(raw._updatedAt || 0));
+            if (d === 'conflict') { pauseSyncConflict(cloud, uid, session, 'legacy'); return false; }
+            if (d === 'local') {
+                if (Object.keys(cloud).length) backupSyncData(uid, cloud, 'cloud-before-upgrade');
+                const pulled = Object.keys(cloud).filter(k => !(k in _syncDoc.data));   // 本机缺、云端有 → 补拉(换账号后载入不了的老坑)
+                const data = Object.assign({}, cloudSyncData(cloud), _syncDoc.data);
+                commitSyncEnvelope(syncMeta({ data, base: syncHash(cloud), sent: [], rev: _syncDoc.rev + 1 }), pulled);
+                if (pulled.length) reloadFromStore();
+                return true;
+            }
+            if (d === 'cloud') backupSyncData(uid, _syncDoc.data, 'local-before-upgrade');
+            // 'same' / 'cloud':升级前遗留的未确认改动作废(副本在),下面按普通流程把云端落下来
+            commitSyncEnvelope(syncMeta({ ack: _syncDoc.rev, sent: [] }), []);
+            return true;
+        }
+        // 云端的键叠到本机上(云端没有的键本机照留)。排班表逐日合并:本机已成为"过去"的日子保留本地值,
+        // 否则另一台设备(时区/日期不同)推上来的整份 K.wk 会改写这边界面上标着"不可更改"的历史。
+        function applyCloudData(cloud) {
+            const data = Object.assign({}, _syncDoc.data), changed = [];
+            CLOUD_KEYS.forEach(k => {
+                if (!(k in cloud)) return;
+                let v = cloud[k];
+                if (k === K.wk && v && typeof v === 'object') {
+                    const localWk = data[k] || {};
+                    const merged = JSON.parse(JSON.stringify(v));
+                    const t = today();
+                    Object.keys(localWk).forEach(wkKey => {
+                        const lw = localWk[wkKey]; if (!lw) return;
+                        if (!merged[wkKey]) merged[wkKey] = { shower: Array(7).fill(false), shave: Array(7).fill(false) };
+                        for (let i = 0; i < 7; i++) {
+                            const mon = new Date(wkKey.slice(0, 4) + '-01-04T12:00:00');
+                            mon.setDate(mon.getDate() + (Number(wkKey.slice(6)) - 1) * 7 - ((mon.getDay() + 6) % 7) + i);
+                            if (localD(mon) < t) {
+                                merged[wkKey].shower[i] = !!(lw.shower || [])[i];
+                                merged[wkKey].shave[i]  = !!(lw.shave  || [])[i];
+                            }
+                        }
+                    });
+                    v = merged;
+                }
+                if (!(k in data) || _stableStr(data[k]) !== _stableStr(v)) { data[k] = cloneSync(v); changed.push(k); }
+            });
+            commitSyncEnvelope(syncMeta({ data, base: syncHash(cloud), sent: [] }), changed);
+            return changed;
+        }
+        // 本机有未确认改动时来了一份云端快照。返回 true = 已处理
+        function handlePendingSnapshot(cloud, h, uid, session) {
+            if (!hasPendingSync()) return false;
+            if (h === syncHash(localSyncData())) {   // 云端已经就是本机这份(自己刚推上去的回声)
+                commitSyncEnvelope(Object.assign({}, _syncDoc, { ack: _syncDoc.rev, base: h, sent: [] }), []);
+                showSyncStatus('已同步', 'ok');
+                return true;
+            }
+            const own = ownSentRev(h);
+            if (own >= 0) {   // 本机早先推的那一版落地了;之后又改的接着推
+                commitSyncEnvelope(Object.assign({}, _syncDoc, { ack: Math.max(_syncDoc.ack, own), base: h, sent: (_syncDoc.sent || []).filter(x => x.rev > own) }), []);
+                schedulePush(); return true;
+            }
+            const empty = !Object.keys(cloud).length;
+            if (_syncDoc.base == null ? !empty : h !== _syncDoc.base) { pauseSyncConflict(cloud, uid, session, 'remote'); return true; }   // 别处也改过 → 停下来让她选
+            if (_syncDoc.base == null) commitSyncEnvelope(Object.assign({}, _syncDoc, { base: h }), []);   // 云端是空的,没什么会被盖掉
+            showSyncStatus('有改动等待同步', 'syncing');
+            schedulePush(); return true;
+        }
+        function onCloudSnapshot(doc, uid, session) {
+            if (!syncSessionMatches(uid, session)) return;
+            // 本机自己刚写、还没到服务器的回声 / 离线缓存:都不是服务器的版本,不拿它判断任何事
+            if (doc.metadata && (doc.metadata.hasPendingWrites || doc.metadata.fromCache)) return;
+            const raw = doc.exists ? (doc.data() || {}) : {};
+            const cloud = cloudSyncData(raw), h = syncHash(cloud);
+            const first = !_hydrated; _hydrated = true;
+            if (_syncStorageBlocked) { syncStorageError(); return; }
+            try {
+                if (_syncConflict) {
+                    if (h === syncHash(localSyncData())) {   // 两边又变成同一份了:不用选了
+                        commitSyncEnvelope(syncMeta({ ack: _syncDoc.rev, base: h, sent: [] }), []);
+                        _syncConflict = null; closeSheet('sync-conflict'); showSyncStatus('已同步', 'ok');
+                    } else pauseSyncConflict(cloud, uid, session, _syncConflict.reason);
+                    return;
+                }
+                if (_syncDoc.legacy && !settleLegacy(cloud, raw, uid, session)) return;
+                if (handlePendingSnapshot(cloud, h, uid, session)) return;
+                // 极简模式:昨天的处方先落成记录('derived'),再让云端的键盖进来(sk_planday1 会被盖掉)
+                absorbPrescribedHistory();
+                if (_syncStorageBlocked) return;
+                if (handlePendingSnapshot(cloud, h, uid, session)) return;
+                const changed = applyCloudData(cloud);
+                if (changed.length) reloadFromStore();
+                const matched = autoMatchProfile(uid);
+                if (matched) reloadFromStore();
+                if (changed.length || matched) applyCloudThenRender();
+                if (hasPendingSync()) schedulePush();
+                showSyncStatus(changed.length ? '已从云端更新' : '云端已连接', 'ok');
+                // 全新的云端账号:不论什么模式都进引导,在引导里自己选「怎么用」(不再按邮箱定;AUDIT-ux P0-1)
+                if (first && !doc.exists) {
+                    if (_oobe) { if (_oobe.step === 'welcome') { const go = () => oobeNext(); (typeof aiProbe === 'function' ? aiProbe(true) : Promise.resolve()).then(go, go); } }
+                    else if (needsOOBE()) startOOBE({});
+                }
+            } catch (e) { syncStorageError(); }
+        }
         function setupRealtimeSync() {
             if (!_db || !_user) return;
             if (_unsub) _unsub();
-            _unsub = _db.collection('users').doc(_user.uid).onSnapshot(doc => {
-                let isInit = !_unsub.initialized; _unsub.initialized = true;
-                // 全新的云端账号:不论什么模式都进引导,在引导里自己选「怎么用」(不再按邮箱定;AUDIT-ux P0-1)
-                if (!doc.exists) { if (isInit) { if (_user) autoMatchProfile(_user.uid); if (_oobe) { if (_oobe.step === 'welcome') { const go = () => oobeNext(); (typeof aiProbe === 'function' ? aiProbe(true) : Promise.resolve()).then(go, go); } } else if (needsOOBE()) startOOBE({}); } return; }
-                if (doc.metadata && doc.metadata.hasPendingWrites) return;   // 这是本机自己刚写的回声，别拿它覆盖自己
-                const cloudDoc = doc.data() || {};
-                // 版本判断：云端比本机最后一次成功推送更旧 → 说明本地有还没推上去的新改动，
-                // 不能让旧云覆盖(这正是"改动没推成→下次打开被旧云盖掉"的丢数据主因),反过来把本地推上去。
-                const cloudAt = Number(cloudDoc._updatedAt || 0);
-                const lastPush = Number(localStorage.getItem('sk_lastpush') || 0);
-                // 【要紧】本机还有没推上去的改动 ⇒ 先上传,绝不接受覆盖。
-                // 只靠下面的 cloudAt<=lastPush 挡不住这一种:用户刚改完(2 秒防抖还没推出去),
-                // 而云端此刻恰好比 lastPush 新(另一台设备刚推过)→ 直接走"全盘应用云端",
-                // 刚改的那几下就没了。这正是"本地被无限覆盖"里**真会丢用户数据**的那一半。
-                if (_pushTimer || _pushing || _pushDirty) {
-                    showSyncStatus('↑ 本机有改动还没上传，先上传…', 'syncing');
-                    if (!_pushing) { clearTimeout(_pushTimer); _pushTimer = setTimeout(pushToCloud, 200); }
-                    return;
-                }
-                // 注意是 <= 不是 <（丢记录事故根因）：手机 PWA 上"最后几下勾选"常因 2 秒防抖没推完就被切后台,
-                // 下次冷启动时 cloudAt 恰好等于上次成功推送的时间戳,旧版 < 判断放行,旧云把昨晚的记录整个抹掉。
-                // 云端不比本机上次推送新 ⇒ 本机任何差异都只可能是还没推上去的新改动,应该上传,绝不能下载覆盖。
-                if (lastPush && cloudAt && cloudAt <= lastPush) {
-                    let dirty = false, pulled = false;
-                    CLOUD_KEYS.forEach(k => {
-                        const localV = localStorage.getItem(k);
-                        if (localV === null) {
-                            // 本机缺、云端有 → 补拉。没有这条,换账号/自己刚推送过之后,
-                            // 时间戳相等会拦住整个应用云端的分支,新账号的日志/产品永远载入不了。
-                            if (k in cloudDoc) { try { localStorage.setItem(k, JSON.stringify(cloudDoc[k])); pulled = true; } catch {} }
-                            return;
-                        }
-                        if (!(k in cloudDoc)) { dirty = true; return; }   // 本机有、云端缺 → 该上传
-                        let lv; try { lv = JSON.parse(localV); } catch { lv = localV; }
-                        // 键序无关比较：Firestore 回来的 map 键序和本地 JSON 不同，比原串会永远"脏"→无限互推
-                        if (_stableStr(lv) !== _stableStr(cloudDoc[k])) dirty = true;
-                    });
-                    if (pulled) { if (_user) autoMatchProfile(_user.uid); applyCloudThenRender(); }
-                    if (dirty) {
-                        showSyncStatus('↑ 本机数据较新，正在上传…', 'syncing');
-                        clearTimeout(_pushTimer); _pushTimer = setTimeout(pushToCloud, 200);
-                    } else if (pulled) showSyncStatus('已从云端更新');
-                    else if (isInit) showSyncStatus('云端已连接');
-                    return;
-                }
-                let changed = false;
-                Object.entries(cloudDoc).forEach(([k, v]) => {
-                    if (k === '_updatedAt') return;
-                    const localV = localStorage.getItem(k);
-                    let cloudVal = v;
-                    // 排班表要逐日合并：本地已成为"过去"的日子保留本地值。
-                    // 否则另一台设备（时区/日期不同）推上来的整份 K.wk 会改写这边界面上标着"不可更改"的历史。
-                    if (k === K.wk && v && typeof v === 'object') {
-                        const localWk = lg(K.wk) || {};
-                        const merged = JSON.parse(JSON.stringify(v));
-                        const t = today();
-                        Object.keys(localWk).forEach(wkKey => {
-                            const lw = localWk[wkKey]; if (!lw) return;
-                            if (!merged[wkKey]) merged[wkKey] = { shower: Array(7).fill(false), shave: Array(7).fill(false) };
-                            for (let i = 0; i < 7; i++) {
-                                const mon = new Date(wkKey.slice(0, 4) + '-01-04T12:00:00');
-                                mon.setDate(mon.getDate() + (Number(wkKey.slice(6)) - 1) * 7 - ((mon.getDay() + 6) % 7) + i);
-                                if (localD(mon) < t) {
-                                    merged[wkKey].shower[i] = !!(lw.shower || [])[i];
-                                    merged[wkKey].shave[i]  = !!(lw.shave  || [])[i];
-                                }
-                            }
-                        });
-                        cloudVal = merged;
-                    }
-                    const cloudV = JSON.stringify(cloudVal);
-                    if (localV !== cloudV) {
-                        try { localStorage.setItem(k, cloudV); changed = true; } catch {}
-                    }
-                });
-                if (changed) { if (_user) autoMatchProfile(_user.uid); applyCloudThenRender(); showSyncStatus('已从云端更新'); }
-                else if (isInit) { showSyncStatus('云端已连接'); }
-            }, e => console.warn('监听云端数据失败:', e));
+            const uid = _user.uid, session = _syncSession;
+            _unsub = _db.collection('users').doc(uid).onSnapshot({ includeMetadataChanges: true }, doc => onCloudSnapshot(doc, uid, session),
+                e => { if (syncSessionMatches(uid, session)) { console.warn('监听云端数据失败:', e); showSyncStatus('连不上云端', 'err'); } });
         }
 
-        function schedulePush() {
-            if (!_db || !_user) return;
-            clearTimeout(_pushTimer);
-            _pushTimer = setTimeout(pushToCloud, 2000);
+        // ── 两边都改了:暂停同步,两份都另存,让她选一整份(不自动合并)──
+        function pauseSyncConflict(cloud, uid, session, reason) {
+            if (!syncSessionMatches(uid, session)) return;
+            const prev = _syncConflict;
+            _syncConflict = { uid, session, cloud: cloneSync(cloud), reason };
+            clearTimeout(_pushTimer); _pushTimer = null;
+            try { backupSyncData(uid, _syncDoc.data, 'local-before-choice'); backupSyncData(uid, cloud, 'cloud-before-choice'); }
+            catch (e) { syncStorageError(); }
+            showSyncStatus('同步暂停', 'paused');
+            // 第一次发现就弹;点过「稍后再选」的,云端又变了只更新状态,不追着弹(sheet 开着就刷新内容)
+            if (!prev || document.getElementById('sync-conflict')) showSyncConflict();
         }
-
-        // 推送失败:指数退避(4s → 8s → … 最多 1 分钟),恢复网络(online 事件)立刻补推。
-        // 旧版的 finally 看到 _pushDirty 又排了 1.5 秒,把 catch 里的退避覆盖掉 → 离线时每十几秒弹一次错误(AUDIT-ux P1-15)。
-        let _pushBackoff = 0;
-        async function pushToCloud() {
-            if (!_db || !_user) return;
-            _pushTimer = null;   // 计时器已触发/被冲刷,清掉句柄,否则 flushPendingPush 每次切后台都误判有待推改动
-            if (_pushing) { _pushDirty = true; return; }   // 别丢掉推送中到来的改动
-            _pushing = true; _pushDirty = false;
-            const data = {};
-            CLOUD_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v !== null) { try { data[k] = JSON.parse(v); } catch { data[k] = v; } } });
-            data._updatedAt = Date.now();   // 版本戳：给云→本地覆盖做新旧判断，防"旧云盖新本地"
-            let failed = false;
+        function syncSummary(data) {
+            data = data || {};
+            const j = (data.sk_jrnl1 || []).filter(e => e && e.date);
+            const last = j.map(e => e.date).sort().pop();
+            const shelf = (data.sk_proddefs1 || []).filter(p => p && !p.hidden && !p.dropped).length;
+            const md = last ? Number(last.slice(5, 7)) + '月' + Number(last.slice(8, 10)) + '日' : '';
+            return j.length + ' 天的记录' + (md ? '，最近一天 ' + md : '') + (data.sk_proddefs1 ? '；货架 ' + shelf + ' 件' : '');
+        }
+        function showSyncConflict() {
+            const ctx = _syncConflict; if (!ctx) return;
+            const head = ctx.reason === 'legacy'
+                ? '升级后第一次同步，这台设备和云端的记录对不上，分不清哪份新。'
+                : '这台设备有还没传上去的改动，云端同时也被别的设备改过。';
+            openSheet({ id: 'sync-conflict', title: '两边的记录对不上', noClose: true, stack: true,
+                text: head + '不会自动合并，选一份接着用。\n\n这台设备：' + syncSummary(_syncDoc.data) + '\n云端：' + syncSummary(ctx.cloud)
+                    + '\n\n两份都已另存，选哪份，另一份都还在「设置 → 数据 → 恢复副本」里。',
+                actions: [
+                    { label: '用这台设备的', fn: () => resolveSyncConflict('local', ctx.uid, ctx.session) },
+                    { label: '用云端的', fn: () => resolveSyncConflict('cloud', ctx.uid, ctx.session) },
+                    { label: '稍后再选', fn: () => { showSyncStatus('同步暂停', 'paused'); toast('先不同步，改动照样存在这台设备上。想好了去设置里选。', 4000); } }
+                ] });
+        }
+        function resolveSyncConflict(choice, uid, session) {
+            if (!syncSessionMatches(uid, session) || !_syncConflict || ['local', 'cloud'].indexOf(choice) < 0) return false;
+            const cloud = _syncConflict.cloud;
             try {
-                // 加超时：离线时 set() 可能永不 settle，旧版会把 _pushing 永久卡死 → 之后所有修改再也不上传
-                await Promise.race([
-                    _db.collection('users').doc(_user.uid).set(data, { merge: true }),
-                    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
+                // 两份副本没存上就不让选(选了就回不去)
+                backupSyncData(uid, _syncDoc.data, 'local-before-choice');
+                backupSyncData(uid, cloud, 'cloud-before-choice');
+                // 用这台设备的:两边都有的以本机为准;只有云端有的键(比如旧版本 App 没有的顾问状态)先补进来,别顺手删掉
+                if (choice === 'local') {
+                    const pulled = Object.keys(cloud).filter(k => !(k in _syncDoc.data));
+                    commitSyncEnvelope(syncMeta({ data: Object.assign({}, cloudSyncData(cloud), _syncDoc.data), base: syncHash(cloud), sent: [], rev: _syncDoc.rev + 1 }), pulled);
+                }
+                else commitSyncEnvelope(syncMeta({ base: syncHash(cloud), sent: [], ack: _syncDoc.rev, data: cloneSync(cloud) }), CLOUD_KEYS);
+            } catch (e) { syncStorageError(); showSyncConflict(); return false; }
+            _syncConflict = null; closeSheet('sync-conflict');
+            reloadFromStore();
+            autoMatchProfile(uid);
+            applyCloudThenRender();
+            showSyncStatus(choice === 'local' ? '有改动等待同步' : '已同步', choice === 'local' ? 'syncing' : 'ok');
+            schedulePush();
+            return true;
+        }
+
+        // ── 恢复副本:列出 / 下载 / 换成某一份 ──
+        const RECOVERY_LABEL = { 'before-sync-upgrade': '升级前这台设备的', 'before-login': '登录前这台设备的', 'local-before-upgrade': '升级时这台设备的', 'cloud-before-upgrade': '升级时云端的',
+            'local-before-choice': '选之前这台设备的', 'cloud-before-choice': '选之前云端的', 'before-restore': '恢复之前这台设备的', 'corrupt-envelope': '读不出来的旧存档' };
+        let _recoveryList = [];
+        function syncRecoveryCopies(uid) {
+            const prefix = recoveryPrefix(uid == null ? _syncOwner : uid), out = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith(prefix)) { try { out.push(Object.assign({ key }, JSON.parse(localStorage.getItem(key)))); } catch (e) { } }
+            }
+            return out.sort((a, b) => String(b.savedAt).localeCompare(String(a.savedAt)));
+        }
+        function showSyncRecovery() {
+            _recoveryList = syncRecoveryCopies();
+            if (!_recoveryList.length) { sysAlert('这个账号在这台设备上没有恢复副本。升级、或者同步时两边对不上，才会自动存一份。', '恢复副本'); return; }
+            const when = s => { const d = new Date(s); return isNaN(d) ? '' : (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+            const rows = _recoveryList.map((c, i) => `<div class="sheet-sec"><div class="sec-t">${esc(when(c.savedAt))} · ${esc(RECOVERY_LABEL[c.reason] || '副本')}</div>`
+                + `<p class="note">${esc(c.data ? syncSummary(c.data) : '原样留着，下载下来能看')}</p><div class="btn-row"><button class="btn" onclick="downloadSyncCopy(${i})">下载</button>`
+                + (c.data ? `<button class="btn" onclick="restoreSyncCopy(${i})">换成这份</button>` : '') + `</div></div>`).join('');
+            openSheet({ id: 'sync-recovery', title: '恢复副本', full: true,
+                html: '<p class="note">升级、或者同步时两边对不上，会自动另存一份，只存在这台设备上。换成某一份之前，现在的记录也会先另存一份。</p>' + rows,
+                actions: [{ label: '关闭' }] });
+        }
+        function downloadSyncCopy(i) {
+            const c = _recoveryList[i]; if (!c) return;
+            const body = c.data ? JSON.stringify(Object.assign({ _meta: { version: 3, exported: c.savedAt, app: '护肤计划', recovery: c.reason } }, c.data), null, 2) : String(c.raw || '');
+            const url = URL.createObjectURL(new Blob([body], { type: 'application/json' }));
+            const a = document.createElement('a'); a.href = url; a.download = 'skincare_recovery_' + String(c.savedAt).slice(0, 19).replace(/[:T]/g, '-') + '.json'; a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+        function restoreSyncCopy(i) {
+            const c = _recoveryList[i]; if (!c || !c.data) return;
+            sysConfirm('换成这份记录？现在的记录会先另存一份副本，换完会照常同步。', () => {
+                try {
+                    backupSyncData(_syncOwner, _syncDoc.data, 'before-restore');
+                    commitSyncEnvelope(Object.assign({}, _syncDoc, { data: cloudSyncData(c.data), rev: _syncDoc.rev + 1 }), CLOUD_KEYS);
+                } catch (e) { syncStorageError(); return; }
+                closeSheet('sync-recovery');
+                reloadFromStore(); renderAll();
+                schedulePush();
+                toast('换好了');
+            }, { title: '换成这份', ok: '换成这份' });
+        }
+
+        function schedulePush(delay) {
+            if (!_db || !_user || !_hydrated || _syncDoc.legacy || _syncConflict || _syncStorageBlocked || !hasPendingSync()) return;
+            if (_pushing) { _pushDirty = true; return; }
+            if (_pushBackoff && _pushTimer) return;   // 正在退避:别每改一下就再撞一次网络,等那次重试(或 online)
+            const uid = _user.uid, session = _syncSession;
+            clearTimeout(_pushTimer);
+            _pushTimer = setTimeout(() => { if (syncSessionMatches(uid, session)) pushToCloud(); }, delay == null ? 2000 : delay);
+        }
+
+        // 上传:Firestore 事务里先读云端,还是「上次确认的那份」(或本机自己早先推的某一版)才写;否则是别处改过 → 暂停让她选。
+        // 推送失败:指数退避(4s → 8s → … 最多 1 分钟),恢复网络(online 事件)立刻补推。离线时事务完成不了,改动留在信封里。
+        async function pushToCloud() {
+            if (!_db || !_user || !_hydrated || _syncDoc.legacy || _syncConflict || _syncStorageBlocked || !hasPendingSync()) return;
+            clearTimeout(_pushTimer); _pushTimer = null;   // 计时器已触发/被冲刷,清掉句柄
+            if (_pushing) { _pushDirty = true; return; }   // 别丢掉推送中到来的改动
+            const uid = _user.uid, session = _syncSession, revision = _syncDoc.rev, base = _syncDoc.base;
+            const payload = localSyncData(), hash = syncHash(payload), stamp = Date.now();
+            try {   // 先记下「这一版推出去过」:超时后它才落地,下次在云端看到它也认得是自己写的
+                const sent = (_syncDoc.sent || []).filter(x => x.hash !== hash).concat([{ rev: revision, hash }]).slice(-5);
+                commitSyncEnvelope(Object.assign({}, _syncDoc, { sent }), []);
+            } catch (e) { return; }
+            const own = new Set(_syncDoc.sent.map(x => x.hash));
+            _pushing = true; _pushDirty = false;
+            let timer = null, failed = false;
+            try {
+                // 加超时：离线时事务可能永不 settle，旧版会把 _pushing 永久卡死 → 之后所有修改再也不上传
+                const res = await Promise.race([
+                    _db.runTransaction(async tx => {
+                        // Firestore 可能重跑这个回调:这里只读只算,不碰本机任何状态
+                        const ref = _db.collection('users').doc(uid);
+                        const snap = await tx.get(ref);
+                        const raw = snap.exists ? (snap.data() || {}) : {};
+                        const cloud = cloudSyncData(raw), h = syncHash(cloud);
+                        if (h === hash) return h;   // 云端已经是这一版(上次超时其实写成了)
+                        const known = base == null ? !Object.keys(cloud).length : (h === base || own.has(h));
+                        if (!known) throw Object.assign(new Error('sync-conflict'), { syncCloud: cloud });
+                        const out = {};
+                        Object.keys(raw).forEach(k => { if (CLOUD_KEYS.indexOf(k) < 0) out[k] = raw[k]; });   // 云键以外的字段原样留着
+                        Object.assign(out, payload, { _updatedAt: stamp });   // 版本戳:旧版本 App 还靠它判断新旧
+                        tx.set(ref, out);   // 整份替换(不用 merge):本机删掉的字段在云端也真的删掉,不会被下一次快照带回来
+                        return hash;
+                    }),
+                    new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('timeout')), 15000); })
                 ]);
-                try { localStorage.setItem('sk_lastpush', String(data._updatedAt)); } catch {}
+                if (!syncSessionMatches(uid, session)) return;
+                if (_syncDoc.ack < revision) commitSyncEnvelope(Object.assign({}, _syncDoc, { ack: revision, base: res, pushedAt: stamp, sent: (_syncDoc.sent || []).filter(x => x.rev > revision) }), []);
+                try { localStorage.setItem('sk_lastpush', String(stamp)); } catch (e) { }
                 _pushBackoff = 0;
-                showSyncStatus('已同步', 'ok');
+                showSyncStatus(hasPendingSync() ? '有改动等待同步' : '已同步', hasPendingSync() ? 'syncing' : 'ok');
             } catch (e) {
+                if (!syncSessionMatches(uid, session)) return;
+                if (e && e.syncCloud) { _pushing = false; pauseSyncConflict(e.syncCloud, uid, session, 'remote'); return; }
                 failed = true;
-                console.warn('上传失败:', e);
-                showSyncStatus('离线 · 改动先存在本机', 'err');
-                _pushDirty = true;
+                console.warn('上传失败:', e && e.message);
                 _pushBackoff = Math.min(60000, _pushBackoff ? _pushBackoff * 2 : 4000);
-                clearTimeout(_pushTimer); _pushTimer = setTimeout(pushToCloud, _pushBackoff);
+                showSyncStatus('离线 · 改动先存在本机', 'err');
             } finally {
-                _pushing = false;
-                if (_pushDirty && !failed) { clearTimeout(_pushTimer); _pushTimer = setTimeout(pushToCloud, 1500); }
+                clearTimeout(timer);
+                if (syncSessionMatches(uid, session)) {
+                    _pushing = false;
+                    if (hasPendingSync() && !_syncConflict && !_syncStorageBlocked) {
+                        clearTimeout(_pushTimer);
+                        _pushTimer = setTimeout(() => { if (syncSessionMatches(uid, session)) pushToCloud(); }, failed ? _pushBackoff : 1500);
+                    }
+                }
             }
         }
-        window.addEventListener('online', () => { if (_db && _user) pushToCloud(); });
+        window.addEventListener('online', () => {
+            _pushBackoff = 0;
+            if (_db && _user && hasPendingSync()) { clearTimeout(_pushTimer); _pushTimer = null; pushToCloud(); }
+            else showSyncStatus('', _syncState === 'err' ? 'ok' : _syncState);
+        });
 
-        let _syncFadeTimer = null, _syncState = 'ok';
-        // 同步状态不再弹吐司(旧版每点一下弹一次「已保存」):离线时头部挂一个安静的小标,设置里显示上次同步时间
+        // 同步状态不再弹吐司(旧版每点一下弹一次「已保存」):离线 / 暂停时头部挂一个安静的小标,设置里显示上次同步时间
         function showSyncStatus(msg, state) {
             state = state || 'ok';
             if (state !== 'syncing') _syncState = state;
+            const paused = !!_syncConflict;
             const b = document.getElementById('net-badge');
-            if (b) b.hidden = !(state === 'err' || (typeof navigator !== 'undefined' && navigator.onLine === false && _user));
+            if (b) {
+                b.hidden = !(paused || _syncState === 'err' || (typeof navigator !== 'undefined' && navigator.onLine === false && _user));
+                b.textContent = paused ? '同步暂停 · 去设置里选' : '离线 · 改动先存在本机';
+            }
+            const ch = document.getElementById('sync-choose'); if (ch) ch.hidden = !paused;
             const sl = document.getElementById('sync-line'); if (sl) sl.textContent = syncLineText();
         }
 
@@ -4558,7 +4911,9 @@
 
         // 子集外的生僻字:页面加载完、在线时才挂 Google 的 Noto Serif SC(按 unicode-range 只拉用到的那一片;SW 缓存住)。
         // 今晚页的渲染从不等它。
-        window.addEventListener('load', () => {
+        // 【注意】这段脚本是拿到窗口锁之后才跑的(见下面的启动脚本),那时 load 可能早就触发过了
+        function afterLoad(fn) { if (document.readyState === 'complete') fn(); else window.addEventListener('load', fn, { once: true }); }
+        afterLoad(() => {
             if (!navigator.onLine) return;
             const l = document.createElement('link');
             l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=Noto+Serif+SC&display=swap';
@@ -4566,7 +4921,7 @@
         });
         // Register Service Worker for PWA
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
+            afterLoad(() => {
                 navigator.serviceWorker.register('./sw.js').then(reg => {
                     console.log('ServiceWorker registration successful');
                 }).catch(err => {
@@ -4575,8 +4930,65 @@
             });
         }
     </script>
-    <!-- AI 顾问:单独一个文件(index.html 只留挂载点和钩子)。它挂了 / 没缓存上,离线规则照常跑 -->
-    <script src="ai.js"></script>
+
+    <!-- 启动:先拿「本设备只开一个窗口」的锁,拿到了才运行上面那段 App 脚本,再加载 AI 顾问(ai.js)。
+         ai.js 单独一个文件(index.html 只留挂载点和钩子)。它挂了 / 没缓存上,离线规则照常跑 -->
+    <script>
+        // 【要紧】同一台设备同一时间只让一个窗口碰记录(Web Locks)。两个窗口各拿一份信封、各自上传会互相盖掉 ——
+        //    信封 + 事务防得住「两台设备」,防不住「同一台设备开了两个窗口」(它们共用一个 localStorage)。
+        //    拿不到锁:App 脚本一行都不跑,本机记录一个字不动。浏览器没有 Web Locks:同样暂停(Codex 10/14 的做法)。
+        //    支持:Safari 与 iOS Safari 15.4 起、iOS 主屏 App(WKWebView)15.4 起、Chrome / Edge 69 起;只在 https 或本机地址下有。
+        //    刚刷新 / 导入后自动重开时,上一页的锁可能还没放,先自己悄悄重试几次再提示。
+        let _appLockStarted = false, _appLockPending = false, _appLockTries = 0;
+        function showAppLockNotice(title, text, retry) {
+            let ov = document.getElementById('app-lock');
+            if (!ov) {
+                ov = document.createElement('div'); ov.id = 'app-lock'; ov.className = 'sheet-ov'; ov.dataset.noesc = '1';
+                ov.innerHTML = '<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="app-lock-t"><div class="sheet-h"><h2 class="sheet-t" id="app-lock-t"></h2></div>'
+                    + '<div class="sheet-b text"></div><div class="sheet-actions"><button class="btn btn-primary" type="button">重试</button></div></div>';
+                (document.getElementById('sheet-root') || document.body).appendChild(ov);
+                ov.querySelector('button').onclick = () => { _appLockTries = 4; startSkincareApp(); };
+            }
+            ov.querySelector('.sheet-t').textContent = title;
+            ov.querySelector('.sheet-b').textContent = text;
+            ov.querySelector('.sheet-actions').hidden = !retry;
+        }
+        function bootSkincareApp() {
+            _appLockStarted = true;
+            const ov = document.getElementById('app-lock'); if (ov) ov.remove();
+            const app = document.createElement('script');
+            app.textContent = document.getElementById('skincare-app-source').textContent;
+            document.body.appendChild(app);   // 普通脚本:顶层函数照旧是全局的,onclick="..." 都认得
+            const ai = document.createElement('script'); ai.src = 'ai.js';
+            // 登录状态可能比 ai.js 先到:那次 handleAuthChange 没叫到顾问,这里补一下
+            ai.onload = () => { try { if (typeof _user !== 'undefined' && _user && typeof aiOnAuth === 'function') aiOnAuth(_user); } catch (e) { } };
+            document.body.appendChild(ai);
+        }
+        function startSkincareApp() {
+            if (_appLockStarted || _appLockPending) return;
+            if (!navigator.locks || !navigator.locks.request) {
+                showAppLockNotice('这个浏览器打不开', '这个浏览器保护不了「同时开两个窗口」，为了不弄乱记录，先不打开。这台设备上的记录都还在，一个字没动。换新版的 Safari 或 Chrome 打开就好。', false);
+                return;
+            }
+            _appLockPending = true;
+            navigator.locks.request('skincare-account-storage', { mode: 'exclusive', ifAvailable: true }, lock => {
+                _appLockPending = false;
+                if (!lock) {
+                    if (++_appLockTries < 5) { setTimeout(startSkincareApp, 200 * _appLockTries); return; }
+                    showAppLockNotice('已经在别的窗口打开了', '护肤计划同一时间只能开一个窗口，免得两边的记录互相盖掉。关掉另一个窗口再点重试。这里什么都没改。', true);
+                    return;
+                }
+                bootSkincareApp();
+                return new Promise(() => { });   // 一直拿着;页面关掉时浏览器自己放
+            }).catch(() => {
+                _appLockPending = false;
+                showAppLockNotice('暂时打不开', '浏览器没给这一页加上保护，先不打开，记录都还在。关掉别的护肤计划窗口再点重试。', true);
+            });
+        }
+        // 关掉另一个窗口回到这里时自己再试一次
+        window.addEventListener('focus', () => { if (!_appLockStarted && document.getElementById('app-lock')) { _appLockTries = 4; startSkincareApp(); } });
+        startSkincareApp();
+    </script>
 
 </body>
 
