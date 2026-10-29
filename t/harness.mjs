@@ -12,6 +12,7 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.css': 'text/css', '.woff2': 'font/woff2' };
 export const sleep = ms => new Promise(r => setTimeout(r, ms));
+export const BOOTED = 'document.readyState==="complete" && document.documentElement.dataset.boot==="ok"';
 
 export function serve() {
     return new Promise(res => {
@@ -72,8 +73,9 @@ export async function page(br, origin, opts = {}) {
     if (opts.pre) await send('Page.addScriptToEvaluateOnNewDocument', { source: opts.pre });
     const P = {
         errors, dialogs, blocked, send,
-        async nav(url, wait = 1500) { await send('Page.navigate', { url }); await P.waitFor('document.readyState==="complete" && typeof renderTn==="function"', 8000); await sleep(wait); },
-        async reload(wait = 1500) { await send('Page.reload', {}); await sleep(300); await P.waitFor('document.readyState==="complete" && typeof renderTn==="function"', 8000); await sleep(wait); },
+        // v2:外壳就绪 = js/app.js 拿到锁、画完第一屏后写的 <html data-boot="ok">(v1 时代等的是全局 renderTn,v2 没有全局)
+        async nav(url, wait = 1500) { await send('Page.navigate', { url }); await P.waitFor(BOOTED, 8000); await sleep(wait); },
+        async reload(wait = 1500) { await send('Page.reload', {}); await sleep(300); await P.waitFor(BOOTED, 8000); await sleep(wait); },
         async eval(expr, ms = 60000) {
             // 卡住的页面(等一个永远不回来的 Promise)别把整轮测试挂死:超时就当失败报出来
             let tm;

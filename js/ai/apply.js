@@ -17,10 +17,19 @@ import { tonight as offlineTonight } from '../engine/schedule.js';
 import { exfoliantCountInLastNDays, prodByName } from '../engine/util.js';
 import { shelfSignature } from '../engine/regimen.js';
 
-// ── 「要不要买」的重判触发(防抖、签名比对、真正去调 /api/shop 由 ai 层的 shop runner 管;P2 接界面)──
-let _shopListener = null;
-export function onShopLocalChange(fn) { _shopListener = fn; }
-export function shopLocalChange(why) { if (_shopListener) { try { _shopListener(String(why || '').slice(0, 80)); } catch (e) { } } }
+// ── 本机改了货架 / 方案之后的通知(防抖、签名比对、真正去调后端都由监听方自己管)──
+//   监听方有两个:产品页「要不要买」的 runner(ui/products.js ensureShopRunner)和今晚的「顾问重排」(app.js 接 ui/tonight.js localChange)。
+//   onShopLocalChange(fn) 返回取消函数;onShopLocalChange(null) 清空全部(只给单测用)。
+const _shopListeners = new Set();
+export function onShopLocalChange(fn) {
+    if (!fn) { _shopListeners.clear(); return () => { }; }
+    _shopListeners.add(fn);
+    return () => { _shopListeners.delete(fn); };
+}
+export function shopLocalChange(why) {
+    const w = String(why || '').slice(0, 80);
+    _shopListeners.forEach(fn => { try { fn(w); } catch (e) { } });
+}
 export function shopSig(W) {
     const reg = (W.regimen || []).slice(-1)[0];
     return shelfSignature(W) + '|low:' + (W.low || []).filter(id => (W.products || []).some(p => p.id === id)).sort().join(',') + '|v' + (reg ? (reg.v || 0) : 0);

@@ -15,7 +15,10 @@ import { buildWorld, planNow } from './model/world.js';
 import { createPhotoStore } from './model/photos.js';
 import { createAiClient, aiBase } from './ai/client.js';
 import { openSheet, closeSheet, hasSheet, toast, sysAlert, sysConfirm, download, bindEscape } from './ui/sheets.js';
-import { openSettings } from './ui/settings.js';
+import { openSettings, watchTheme } from './ui/settings.js';
+import { onBoot as oobeOnBoot, onFirstSnapshot as oobeOnFirstSnapshot } from './ui/oobe.js';
+import { ensureShopRunner } from './ui/products.js';
+import { onShopLocalChange } from './ai/apply.js';
 import * as tonightScreen from './ui/tonight.js';
 import * as advisorScreen from './ui/advisor.js';
 import * as recordScreen from './ui/record.js';
@@ -93,11 +96,13 @@ function boot() {
             absorbPrescribedHistory: () => absorbPrescribedHistory(store, today()),
             autoMatchProfile: (uid, user) => autoMatchProfile(store, uid, user),
             clearLocalExtras: () => { ai.clearLocal(); photos.clearLegacyUnprefixed(); },
-            onAuthUser: user => { fbUser = user || null; if (user) ai.probe(); },
-            onFirstSnapshot: () => { /* 新用户引导 / 改版说明:P2 */ }
+            // 登录后核一次顾问开通;核成了就补「新的一天」那次今晚(核不成不再追着核;页面在后台时 tonight.js 自己会跳过,等切回来)
+            onAuthUser: user => { fbUser = user || null; if (user) Promise.resolve(ai.probe()).then(() => { if (ai.ready()) tonightScreen.onAiReady(app); }, () => { }); },
+            onFirstSnapshot: () => oobeOnFirstSnapshot(app)   // 新用户引导 / 改版说明(oobe.js 另有兜底:第一份快照走待推分支时这里不来)
         }
     });
     Object.assign(app, { store, sync, ai, photos, today, show, renderAll, renderScreen,
+        tonightChanged: why => tonightScreen.localChange(app, why),   // 别的屏改了今晚的前提(今天洗澡 / 刮胡、模式)后调:签名变了才让顾问重排
         world: opts => buildWorld(store, Object.assign({ today: today() }, opts || {})),
         signIn() {
             if (typeof firebase === 'undefined') { sysAlert('登录服务没加载出来，检查一下网络再试。'); return; }
@@ -117,6 +122,11 @@ function boot() {
     const sealBtn = document.getElementById('btn-settings'); if (sealBtn) sealBtn.addEventListener('click', () => openSettings(app));
     window.addEventListener('hashchange', () => { const id = location.hash.replace(/^#\/?/, ''); if (id && id !== current) show(id); });
     show(location.hash.replace(/^#\/?/, '') || 'tonight');
+    ensureShopRunner(app);   // 「要不要买」的后台判断:只听本机操作入口(ai/apply.js 的 local* / apply* / undo*)
+    // 同一批本机入口(用完 / 买回 / 快用完、顾问方案落成 / 撤销 / 恢复)也让今晚重排:防抖 + 签名没变不调;同步来的不走这里
+    onShopLocalChange(why => tonightScreen.localChange(app, why));
+    watchTheme();            // 深浅色跟随系统 / 晚上自动
+    oobeOnBoot(app);         // 新用户引导 / 改版说明(没登录时 1.8 秒后按本机数据判断)
 
     // 跨零点 / 凌晨 3 点翻页(PWA 常挂在后台过夜)
     let lastDay = today();

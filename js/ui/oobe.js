@@ -12,7 +12,7 @@ import { jrnlEntry, saveJrnl } from '../model/journal.js';
 import { syncRegimen } from '../model/regimen.js';
 import { applyPlan } from '../ai/apply.js';
 import { buildSkincareContext } from '../ai/context.js';
-import { openAddSheet, readLabelFromFile } from './products.js';
+import { openAddSheet, readLabelFromFile, holdShop } from './products.js';
 import { MINIMAL_DESC, FULL_DESC, skinChipsHtml, bindSkinChips } from './settings.js';
 
 export const OOBE_STEPS = ['welcome', 'invite', 'mode', 'shelf', 'skin', 'first'];
@@ -43,6 +43,7 @@ export function startOobe(app, opts) {
     }
     const P = loadProfile(app.store);
     O = { redo: !!opts.redo, step: opts.redo ? 'mode' : ((P.oobe && P.oobe.step) || 'welcome') };
+    holdShop(true);
     if (O.step === 'welcome' && curUser(app)) { advance(app); return; }
     if (!applies(app, O.step)) { advance(app); return; }
     paint(app);
@@ -84,7 +85,7 @@ function stepHtml(app) {
         const live = (W.products || []).filter(p => !p.hidden);
         const canPhoto = app.ai.access() === 'on' && !!curUser(app);
         return { title: '家里有什么？', html: `<p class="note">一支一支加。有一支洁面、一支保湿，今晚就能排出来。</p>
-            <div class="acts">${canPhoto ? `<label class="btn btn-primary file-btn">${ico('camera')}拍成分表<input type="file" accept="image/*" capture="environment" id="ob-photo"></label>` : ''}<button type="button" class="btn" data-ob="add">手动加</button></div>
+            <div class="acts">${canPhoto ? `<label class="btn btn-primary file-btn">${ico('camera')}拍成分表<input type="file" accept="image/*" id="ob-photo"></label>` : ''}<button type="button" class="btn" data-ob="add">手动加</button></div>
             ${live.length ? `<div class="ob-list"><div class="sec-t">加好了 ${live.length} 件</div><div class="rows">${live.map(p => `<div class="row"><span class="row-main"><span class="lede">${esc(p.name)}</span></span><span class="note">${esc(ROLE_LABEL[p.role] || '还没选是什么')}</span></div>`).join('')}</div></div>` : ''}
             <div class="acts ob-next"><button type="button" class="btn${live.length ? ' btn-primary' : ''}" data-ob="next">${live.length ? '好了' : '稍后再说'}</button></div>` };
     }
@@ -100,12 +101,24 @@ function stepHtml(app) {
         <p class="note">第一晚不上任何活性（酸、面膜、维 A），先看皮肤对基础的几样有没有反应。之后从每周 1 次温和酸起步，看反应一档档加。</p>
         <div class="acts stack-acts ob-next"><button type="button" class="btn btn-primary" data-ob="finish">好，看今晚</button></div>` };
 }
+// 同一个全屏 sheet 原地换内容(不关了重开:每点一下都重放一次滑入动画,还会丢滚动位置)
 function paint(app) {
     if (!O) return;
     const idx = OOBE_STEPS.indexOf(O.step), st = stepHtml(app);
     const dots = `<div class="ob-dots" aria-hidden="true">${OOBE_STEPS.map((x, i) => `<i class="${i <= idx ? 'on' : ''}"></i>`).join('')}</div><p class="sr">第 ${idx + 1} 步，共 ${OOBE_STEPS.length} 步</p>`;
     const close = O.redo ? `<div class="ob-foot"><button type="button" class="btn-link quiet" data-ob="close">关掉</button></div>` : '';
-    openSheet({ id: 'oobe', title: st.title, full: true, noClose: true, under: true, html: `<div class="ob" data-step="${O.step}">${dots}${st.html}${close}</div>`, onMount: ov => bind(ov, app) });
+    const html = `<div class="ob" data-step="${O.step}">${dots}${st.html}${close}</div>`;
+    const ov = document.getElementById('oobe');
+    if (ov && ov.querySelector('.sheet-b')) {
+        const moved = ov.dataset.step !== O.step;
+        ov.querySelector('.sheet-t').textContent = st.title;
+        ov.querySelector('.sheet-b').innerHTML = html;
+        ov.dataset.step = O.step;
+        bind(ov, app);
+        if (moved) { const sh = ov.querySelector('.sheet'); if (sh) sh.scrollTop = 0; const f = ov.querySelector('.ob .btn-primary, .ob [data-ob]'); if (f) try { f.focus({ preventScroll: true }); } catch (e) { } }
+        return;
+    }
+    openSheet({ id: 'oobe', title: st.title, full: true, noClose: true, under: true, html, onMount: o => { o.dataset.step = O.step; bind(o, app); } });
 }
 function bind(ov, app) {
     const t = app.today();
@@ -113,7 +126,7 @@ function bind(ov, app) {
         const a = b.dataset.ob;
         if (a === 'skip' || a === 'next' || a === 'local') advance(app);
         else if (a === 'login') app.signIn();
-        else if (a === 'close') { closeSheet('oobe'); O = null; }
+        else if (a === 'close') { closeSheet('oobe'); O = null; holdShop(false); }
         else if (a === 'finish') finishOobe(app);
         else if (a === 'redeem') {
             const inp = ov.querySelector('#ob-code'), code = (inp && inp.value || '').trim();
@@ -148,13 +161,14 @@ export async function finishOobe(app) {
     syncRegimen(app.store, '第一版：按家里现有的东西和你说的皮肤情况', true, t);
     app.renderAll();
     app.show('tonight');
-    if (redo || !app.ai.ready() || !(app.world().products || []).some(p => !p.hidden)) return;
+    if (redo || !app.ai.ready() || !(app.world().products || []).some(p => !p.hidden)) { holdShop(false); return; }
     try {
         const r = await app.ai.api.plan(buildSkincareContext(app.world(), {}), '新用户第一版：用「建立耐受」的思路，前两周只做清洁、保湿、防晒，之后温和酸每周 1 次起步，看反应再加。');
         const reg = applyPlan(app.store, (r && r.data) || {}, { model: r && r.model, cost: r && r.cost }, app.today());
         toast('顾问出了第一版方案 v' + reg.v + '，在「顾问」页能看、能撤销');
         app.renderAll();
     } catch (e) { /* 顾问没排成:离线第一版照用,不打扰 */ }
+    holdShop(false);   // 引导里加的货架、第一版方案都不自动判断「要不要买」;她到产品页点「让顾问判断」
 }
 
 // ── 改版说明(v2)──
@@ -189,18 +203,28 @@ export function maybeOnboard(app) {
     return showWhatsNew(app);
 }
 // 启动后:1.8 秒还没登录 → 按本机数据判断(离线 / Firebase 没加载 / 就是不登录)
+// 兜底:sync.js 的 onFirstSnapshot 只在「第一份快照落地且本机没有待推的改动」时才调(新账号认领了本机的引导进度、
+//   或离线改过东西,第一份快照会走待推分支提前返回,hook 不来)。所以这里另外每半秒看一眼:登录了 + 云端已经落地过一次
+//   (sync.state.hydrated)→ 按同一套判断走一次(每个账号一次,和 hook 去重)。
+let _watch = null;
+const _settled = {};
 export function onBoot(app) {
     setTimeout(() => { if (!curUser(app)) maybeOnboard(app); }, 1800);
+    if (!_watch) _watch = setInterval(() => {
+        const u = curUser(app), st = app.sync && app.sync.state;
+        if (u && !_settled[u.uid] && st && st.hydrated) settle(app);
+    }, 500);
 }
 // 登录后第一份服务器快照落地:用云端档案判断
-export function onFirstSnapshot(app) {
-    setTimeout(() => {
-        if (!curUser(app)) return;
-        if (O) {
-            if (!O.redo && !oobePending(app.store)) { closeSheet('oobe'); O = null; return; }   // 云端是老账号:引导不用做了
-            if (O.step === 'welcome') { const nx = () => advance(app); app.ai.probe(true).then(nx, nx); }
-            return;
-        }
-        maybeOnboard(app);
-    }, 600);
+export function onFirstSnapshot(app) { setTimeout(() => settle(app), 600); }
+function settle(app) {
+    const u = curUser(app);
+    if (!u || _settled[u.uid]) return;
+    _settled[u.uid] = true;
+    if (O) {
+        if (!O.redo && !oobePending(app.store)) { closeSheet('oobe'); O = null; holdShop(false); return; }   // 云端是老账号:引导不用做了
+        if (O.step === 'welcome') { const nx = () => { if (O && O.step === 'welcome') advance(app); }; app.ai.probe(true).then(nx, nx); }
+        return;
+    }
+    maybeOnboard(app);
 }

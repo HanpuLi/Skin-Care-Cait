@@ -27,8 +27,9 @@
 .shop-it+.shop-it{margin-top:var(--sp-3)}
 .shop-need{font:18px/var(--lh-item) var(--serif);color:var(--ink)}
 .picks{margin-top:var(--sp-1)}
-.picks li{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:var(--sp-3);align-items:baseline;padding:var(--sp-2) 0;border-bottom:1px solid var(--line)}
-.picks a,.pick-n{font:16px/var(--lh-item) var(--serif);color:var(--ink);overflow-wrap:anywhere}
+/* 型号链接整行 44 高可点(链接本身撑高,不靠 li 的内边距) */
+.picks li{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:var(--sp-3);align-items:center;padding:0;border-bottom:1px solid var(--line)}
+.picks a,.pick-n{display:flex;align-items:center;min-height:44px;padding:var(--sp-1) 0;font:16px/var(--lh-item) var(--serif);color:var(--ink);overflow-wrap:anywhere}
 .picks a{text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:1px;text-decoration-color:var(--line-ctl)}
 .shop-skip{margin-top:var(--sp-4)}
 .shop-skip .list{margin-top:var(--sp-1)}
@@ -59,3 +60,9 @@
 .pr-low{margin-top:var(--sp-3)}
 .pr-notes{margin-top:var(--sp-3)}
 .pr-why{margin-top:var(--sp-3)}
+/* 编辑 sheet 的输入框:一条下划线(纸墨,不要白底方框);日期框保留系统的选择器 */
+#edit-sheet .field input,#edit-sheet .field textarea{display:block;width:100%;min-height:44px;margin-top:var(--sp-1);padding:var(--sp-2) 0;border:0;border-bottom:1px solid var(--line-ctl);border-radius:0;
+  background:transparent;color:var(--ink);font:16px/24px var(--serif);resize:none}
+#edit-sheet .field input:focus,#edit-sheet .field textarea:focus{outline:none;border-bottom:1.5px solid var(--ink)}
+#edit-sheet .field input::placeholder,#edit-sheet .field textarea::placeholder{color:var(--faint)}
+#edit-sheet .field-row input{margin-top:0}

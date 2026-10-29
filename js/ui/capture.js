@@ -15,16 +15,17 @@ import { mdOf, daysBetween } from '../clock.js';
 import { buildSkincareContext } from '../ai/context.js';
 import { openSheet, closeSheet, toast, esc, ico } from './sheets.js';
 
-// 档案里的开关字段(设置页写它;这里只读)
+// 档案里的开关字段(设置页写它;这里只读)。语义和 ui/settings.js 的 photoAnalysisOn(profile, owner) 一样(整合时两处并进 model/profile.js)
 export const PHOTO_FIELD = 'photoAnalysis';
-export function photoAnalysisOn(app) {
-    const P = loadProfile(app.store) || {};
+// profile 可以直接传(一次渲染里已经有 W 了就别再读一遍)
+export function photoAnalysisOn(app, profile) {
+    const P = profile || loadProfile(app.store) || {};
     if (P[PHOTO_FIELD] === true) return true;
     if (P[PHOTO_FIELD] === false) return false;
     const u = app.sync && app.sync.state && app.sync.state.user;
     return !!(u && isOwnerEmail(u.email));
 }
-export function canAnalyze(app) { return photoAnalysisOn(app) && !!app.ai && app.ai.access() === 'on'; }
+export function canAnalyze(app, profile) { return photoAnalysisOn(app, profile) && !!app.ai && app.ai.access() === 'on'; }
 
 const VIEW_NAME = { front: '正脸', left: '左脸', right: '右脸' };
 const VIEW_GUIDE = {
@@ -102,7 +103,7 @@ async function previousFor(app, W, date) {
 }
 
 // ══ 全屏 sheet ═══════════════════════════════════════════════════════════════════════
-// opts = {date, onChange()(写了记录之后), onEdit(hint)(「改一下」:交给记皮肤的 sheet,带上建议做标记)}
+// opts = {date, onChange()(写了记录之后), onSaved()(她点了「确认记上」之后:要顾问反馈), onEdit(hint)(「改一下」:交给记皮肤的 sheet,带上建议做标记)}
 export function openCapture(app, opts) {
     opts = opts || {};
     const date = opts.date || app.today();
@@ -238,6 +239,7 @@ export function openCapture(app, opts) {
             applySuggest(app, date, sug); s.saved = true;
             app.renderAll(); if (opts.onChange) opts.onChange();
             paint(); toast('记上了');
+            if (opts.onSaved) opts.onSaved();
         } else if (a === 'fill-edit') {
             const sug = suggestOf(cleanPhotoAssess(s.result, ''));
             stopCam();

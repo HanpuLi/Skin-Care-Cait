@@ -13,6 +13,7 @@ import { axisScore, SCORE_PRIOR } from '../engine/score.js';
 import { lastNDays } from '../engine/util.js';
 import { addDays, dowOf } from '../clock.js';
 import { startOobe, showWhatsNew } from './oobe.js';
+import { photoAnalysisOn, PHOTO_FIELD } from './capture.js';
 
 // 极简模式是什么,全 App 只有这一种说法(引导、设置都照它)
 export const MINIMAL_DESC = '护肤品不用打卡，排上的默认都算用了；哪一步没做点一下「今晚没做」。皮肤想记就记，不会催。';
@@ -43,9 +44,8 @@ export function watchTheme() {
     setInterval(() => { if (currentTheme() === 'auto') applyTheme(); }, 300000);
 }
 
-// ── 照片分析:按账号开关。没设过 = 主账号开、其他账号关(Cici 要她本人同意才开)──
-// 【整合时搬家】这个判断 A 路的拍照(capture)也要用,该进 model/profile.js
-export function photoAnalysisOn(profile, owner) { const p = profile || {}; return p.photoAnalysis === undefined ? !!owner : !!p.photoAnalysis; }
+// ── 照片分析:按账号开关(profile.photoAnalysis)。没设过 = 主账号开、其他账号关(Cici 要她本人同意才开)。
+//    判断只有一份:capture.js 的 photoAnalysisOn(app)(拍照那边也用它);这里只负责写开关。
 
 // ── 肤质 / 想解决的 / 避开的区域:设置和引导共用 ──
 const chip = (on, label, attrs) => `<button type="button" class="chip" aria-pressed="${!!on}" ${attrs}>${label}</button>`;
@@ -106,7 +106,7 @@ function body(app) {
     const acc = app.ai.access(), me = app.ai.state.me;
     const hp = habitPreset(W.preset, P);
     const at = acidTiming(W);
-    const photoOn = photoAnalysisOn(P, owner);
+    const photoOn = photoAnalysisOn(app);
     let opts = {}; try { opts = JSON.parse(app.store.getLocal(LOCAL_KEYS.aiOpts)) || {}; } catch (e) { }
     const accTxt = acc === 'out' ? '没登录：登录后才能用顾问。' : acc === 'none' ? '顾问是邀请制，这个账号还没开通。' : acc === 'mismatch' ? '这个邮箱绑定了另一个账号，用不了顾问。'
         : app.ai.state.down ? '已开通，这会儿连不上。' : app.ai.quotaText() || (app.ai.ready() ? '已开通。' : '已开通，正在连。');
@@ -130,8 +130,9 @@ function body(app) {
         ${skinChipsHtml(P)}</div>
 
     <div class="sheet-sec" id="set-habit"><div class="sec-t">通常哪几天洗澡${P.shaving ? '、刮胡' : ''}</div>
-        <div class="chips set-days" id="set-shower" role="group" aria-label="洗澡">${WEEK_ORDER.map(d => chip(!!(hp.find(x => x.dow === d) || {}).shower, '周' + WD[d], `data-hd="${d}" data-hk="shower" aria-label="周${WD[d]}洗澡"`)).join('')}</div>
-        ${P.shaving ? `<div class="chips set-days" id="set-shavedays" role="group" aria-label="刮胡">${WEEK_ORDER.map(d => chip(!!(hp.find(x => x.dow === d) || {}).shave, '周' + WD[d], `data-hd="${d}" data-hk="shave" aria-label="周${WD[d]}刮胡"`)).join('')}</div><p class="note">上一行洗澡，这一行刮胡。</p>` : ''}
+        ${P.shaving ? '<div class="set-days-l">洗澡</div>' : ''}
+        <div class="chips set-days" id="set-shower" role="group" aria-label="洗澡">${WEEK_ORDER.map(d => chip(!!(hp.find(x => x.dow === d) || {}).shower, WD[d], `data-hd="${d}" data-hk="shower" aria-label="周${WD[d]}洗澡"`)).join('')}</div>
+        ${P.shaving ? `<div class="set-days-l">刮胡</div><div class="chips set-days" id="set-shavedays" role="group" aria-label="刮胡">${WEEK_ORDER.map(d => chip(!!(hp.find(x => x.dow === d) || {}).shave, WD[d], `data-hd="${d}" data-hk="shave" aria-label="周${WD[d]}刮胡"`)).join('')}</div>` : ''}
         <p class="note">和顾问页「未来 7 晚」的「存成每周习惯」是同一份。改了以后，明天起两周按新习惯排；今晚在今晚页改。</p></div>
 
     <div class="sheet-sec" id="set-timing"><div class="sec-t">刷酸时机</div>
@@ -174,7 +175,8 @@ function paint(app) {
     bind(ov, app);
 }
 function changed(app) { app.renderAll(); paint(app); }
-function setProfile(app, fn) { updateProfile(app.store, fn); changed(app); }
+// 档案改了:模式 / 刮胡 / 刷酸时机 / 修护用法 / 酸的档位都可能改了今晚的前提 → 让今晚重排(tonight.js 签名没变就不调,改外观这类不花钱)
+function setProfile(app, fn) { updateProfile(app.store, fn); changed(app); if (app.tonightChanged) app.tonightChanged('设置改了'); }
 
 function bind(ov, app) {
     const s = app.sync, t = () => app.today();
@@ -205,11 +207,11 @@ function bind(ov, app) {
     on('set-acidlevel', el => setProfile(app, p => { const v = el.value ? +el.value : null; if (v !== (p.acidLevel || null)) { p.acidLevel = v; p.acidLevelAt = v ? t() : ''; } }));
     on('set-seal', el => setProfile(app, p => { const c = Array.from(String(el.value || '').trim())[0] || ''; p.stamp = c; p.seal = c; }));
     on('set-photoai', el => {
-        if (!el.checked) { setProfile(app, p => { p.photoAnalysis = false; }); return; }
+        if (!el.checked) { setProfile(app, p => { p[PHOTO_FIELD] = false; }); return; }
         el.checked = false;   // 先不算开:本人点「同意」才开
         openSheet({ id: 'photo-consent', title: '让顾问看照片？', html: `<p class="note ink">打开以后，你在「记录」里点「分析」时，拍的那几张照片会发到 Cait 家里的顾问服务器，再交给 Anthropic 的 Claude 模型逐区看，结果记进当天的记录。</p>
             <p class="note">照片本身只存在这台设备上；服务器分析完不留。随时能在这里关掉。这个开关只管你自己的账号，要你本人同意才开。</p>`,
-            actions: [{ label: '先不' }, { label: '我同意，打开', primary: true, fn: () => setProfile(app, p => { p.photoAnalysis = true; p.photoAnalysisAt = t(); }) }] });
+            actions: [{ label: '先不' }, { label: '我同意，打开', primary: true, fn: () => setProfile(app, p => { p[PHOTO_FIELD] = true; p.photoAnalysisAt = t(); }) }] });
     });
     on('set-model', () => saveOpts(app, ov));
     on('set-effort', () => saveOpts(app, ov));
@@ -308,6 +310,7 @@ function importBackup(app, file) {
 }
 
 export function openSettings(app) {
+    watchTheme();   // 幂等;整合后 app.js 启动时也会调
     openSheet({ id: 'settings-sheet', title: '设置', html: body(app), onMount: ov => bind(ov, app) });
     // 顾问状态还没核过:核完了把「顾问」那一段画对(模型 / 用量只有核过才有)
     if (app.ai.access() === 'on' && !app.ai.state.me && !app.ai.state.down) app.ai.probe().then(() => paint(app), () => { });

@@ -16,3 +16,7 @@
 .ob-next{margin-top:var(--sp-5)}
 .ob-foot{display:flex;justify-content:flex-start;margin-top:var(--sp-3)}
 .wn .row-main .meta,.wn .row-main .lede,.wn .row-main .note{display:block}
+#ob-code{display:block;width:100%;min-height:44px;margin-top:var(--sp-1);padding:var(--sp-2) 0;border:0;border-bottom:1px solid var(--line-ctl);border-radius:0;background:transparent;
+  color:var(--ink);font:16px/24px var(--mono);letter-spacing:.04em}
+#ob-code:focus{outline:none;border-bottom:1.5px solid var(--ink)}
+#ob-code::placeholder{color:var(--faint)}

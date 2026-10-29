@@ -41,6 +41,11 @@ await run('v2-a-tonight', [
         const tn = await p.eval(`return ${ENV}.sk_tn1`);
         S.ok(tn && tn.shave === true, '开关写进今晚(sk_tn1),排班跟着改', tn);
         await click(p, '#tn-shave-n', 300);
+        // 「只记皮肤」:不完成今晚,只开记皮肤的 sheet
+        await click(p, '#tn-finish [data-act=skin]', 300);
+        const only = await p.eval(`const ov=document.getElementById('skin-sheet');return {t:ov&&ov.querySelector('.sheet-t').textContent,done:!!(${TODAY_EN}).done}`);
+        S.ok(only.t === '今天皮肤' && !only.done, '「只记皮肤」:开记皮肤的 sheet,今晚不算完成', only);
+        await p.eval(`document.querySelector('#skin-sheet .sheet-x').click();return 1`); await sleep(150);
         // 打卡
         await click(p, '#tn-step-0', 200);
         const t1 = await p.eval(`return {aria:document.getElementById('tn-step-0').getAttribute('aria-checked'),prog:document.getElementById('tn-progress').textContent,en:${TODAY_EN},tn:${ENV}.sk_tnsteps1}`);
@@ -110,7 +115,9 @@ await run('v2-a-tonight', [
     }],
     ['安全提示(没有保湿)任何模式都在', async ({ S, open }) => {
         for (const who of ['minimal', 'full']) {
-            const p = await open({ seed: who, seedArg: `{nomoist:true}`, after: who === 'full' ? `localStorage.setItem('sk_gone1',JSON.stringify(['avene','toleriane','tolerianeSens']))` : '' });
+            // 没有保湿 + 修护霜只点涂 = 洗完全脸没有能涂的(和 engine-unit「没有保湿」同一个场景)
+            const p = await open({ seed: who, seedArg: who === 'minimal' ? `{nomoist:true,profile:{repairUse:'spot'}}` : `{profile:{repairUse:'spot'}}`,
+                after: who === 'full' ? `localStorage.setItem('sk_gone1',JSON.stringify(['avene','toleriane','tolerianeSens']))` : '' });
             const v = await view(p);
             S.ok(v.safety.some(t => /保湿这一档是空的/.test(t)), `${who}:「洗完全脸没有能涂的」安全提示在页面上(卡或「还有 N 条」里)`, v.safety);
             p.done(); await sleep(200);
@@ -156,7 +163,8 @@ await run('v2-a-tonight', [
         await p.eval(`const d=${ENV};d.sk_gone1=(d.sk_gone1||[]).concat(['cicaplast']);d._updatedAt=Date.now()+5000;fakeCloud.emit(d);${W8(2500)}return 1`);
         const v = await view(p);
         S.ok(await log(p, '/api/tonight') === base, '同步来的货架变化:不调顾问', { base });
-        S.ok(/情况变了/.test(v.src) && /让顾问重排/.test(v.src), '只标「情况变了,先用离线排法」+「让顾问重排」', v.src);
+        S.ok(/情况变了/.test(v.src) && /让顾问重排/.test(v.src), '只标「情况变了」+「让顾问重排」', v.src);
+        S.ok(/顾问/.test(v.head) && v.steps.includes(EYE), '只是货架 / 方案变了(前提没变):还用顾问那份,按现在的情况重新过闸', { head: v.head, steps: v.steps });
         await click(p, '#tn-src [data-act=ask]', 200);
         await p.waitFor(`(__AIF.log||[]).filter(x=>x.p==='/api/tonight').length===${base + 1}`, 4000);
         S.ok(true, '点「让顾问重排」:调一次');
@@ -174,6 +182,62 @@ await run('v2-a-tonight', [
         const r3 = await view(p);
         S.ok(/今晚跳过/.test(r3.rev) && !r3.steps.includes(EYE), '重做:再改回去', r3.rev);
         S.ok(await log(p, '/api/tonight') === calls, '撤销 / 重做不重调顾问');
+        // 另一台设备把今晚改成刮胡(顾问那份的前提不成立了)→ 先用离线排法,不调顾问
+        // (先等本机的撤销 / 重做推上去:本机还有没推的改动时云端来一份,会按「两边都改了」暂停让她选)
+        await p.waitFor(`!document.getElementById('sync-choose') || document.getElementById('sync-choose').hidden`, 1000).catch(() => { });
+        await sleep(2600);
+        await p.eval(`const d=${ENV};d.sk_tn1=Object.assign({},d.sk_tn1,{shave:true,date:__d(0),manual:true});d._updatedAt=Date.now()+15000;fakeCloud.emit(d);${W8(400)}return 1`);
+        const r4 = await view(p);
+        S.ok(/离线排法/.test(r4.head) && /情况变了/.test(r4.src) && r4.h1 === '今晚 · 刮胡夜', '同步来的刮胡(前提变了):先用离线排法,标「情况变了」', { head: r4.head, src: r4.src, h1: r4.h1 });
+        S.ok(await log(p, '/api/tonight') === calls, '同步来的前提变化:也不调顾问');
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
+    ['顾问版:打了勾的酸不被这周额度挪走;做完了不再重排', async ({ S, open }) => {
+        const p = await open({ seed: 'full', seedArg: `{products:i=>[]}`, mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)}}`, login: true });
+        await tab(p, 'record', 100); await tab(p, 'tonight', 100);
+        await p.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 6000);
+        const v0 = await view(p);
+        const i = v0.steps.indexOf(ACID);
+        S.ok(i >= 0, '顾问排了酸(这周额度 1 次,还没用)', v0.steps);
+        await click(p, '#tn-step-' + i, 300);
+        const v1 = await view(p);
+        const aria = await p.eval(`const b=[...document.querySelectorAll('#tn-plan [data-step]')].find(x=>x.dataset.step===${JSON.stringify(ACID)});return b?b.getAttribute('aria-checked'):null`);
+        S.ok(v1.steps.includes(ACID) && aria === 'true' && !/到上限了/.test(v1.allText), '勾了酸之后:还在列表里、是勾上的;不会被「这周已经刷过 1 次」挪走', { steps: v1.steps, aria });
+        S.ok(/顾问/.test(v1.head), '还是顾问那份', v1.head);
+        // 完成今晚之后:本机再改情况也不重调(今晚已经做完了)
+        await click(p, '#tn-finish-b', 300);
+        await p.eval(`document.querySelector('#skin-sheet .sheet-x').click();return 1`); await sleep(200);
+        const n = await log(p, '/api/tonight');
+        await p.eval(`const b=document.getElementById('tn-shave-y');if(b)b.click();return 1`); await sleep(2200);
+        S.ok(await log(p, '/api/tonight') === n, '今晚做完了:再点开关也不重调顾问', n);
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
+    ['页面在后台:不自动调顾问;切回来再调', async ({ S, open }) => {
+        const p = await open({ seed: 'full', seedArg: `{products:i=>[]}`, mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)}}` });
+        await p.eval(`window.__HID=true;Object.defineProperty(document,'hidden',{configurable:true,get:()=>!!window.__HID});return 1`);
+        await p.waitFor('!!(window.fakeCloud && fakeCloud.auth)', 5000);
+        await p.eval(`fakeCloud.auth({uid:'u-test',email:'t@example.com',displayName:'Tester Name',getIdToken:async()=>'fake-id-token'});return 1`);
+        try { await p.waitFor(`!!document.querySelector('#claim .btn-primary')`, 3000); await p.eval(`document.querySelector('#claim .btn-primary').click();return 1`); } catch (e) { }
+        await sleep(1200);
+        await p.eval(`document.getElementById('tab-tonight').click();return 1`); await sleep(600);
+        S.ok(await log(p, '/api/tonight') === 0, '在后台(同步落地 / 登录后重画):没调顾问', await log(p, '/api/tonight'));
+        await p.eval(`window.__HID=false;document.dispatchEvent(new Event('visibilitychange'));return 1`);
+        await p.waitFor(`(__AIF.log||[]).some(x=>x.p==='/api/tonight')`, 5000);
+        S.ok(true, '切回来、正看着今晚:调了「新的一天」那一次');
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
+    ['极简 + 顾问没排排班里的酸:放回来,顾问的理由写在这一步上,点「今晚没做」才算没做', async ({ S, open }) => {
+        const noAcid = Object.assign({}, TONIGHT_FULL, { steps: TONIGHT_FULL.steps.filter(x => x.product !== ACID), skips: [{ product: ACID, why: '鼻翼这两天起皮，先停一晚' }] });
+        const p = await open({ seed: 'minimal', mode: 'on', aif: `{tonight:${JSON.stringify(noAcid)}}`, login: true });
+        await tab(p, 'record', 100); await tab(p, 'tonight', 100);
+        await p.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 6000);
+        const r = await p.eval(VIEW + `const pd=${ENV}.sk_planday1;const st=[...document.querySelectorAll('#tn-plan .step')].find(x=>(x.querySelector('.step-name')||{}).textContent===${JSON.stringify(ACID)});return {v,pd:(pd&&pd.items||[]).map(i=>i.name),why:st?(st.querySelector('.step-why')||{}).textContent:'',miss:st?!!st.querySelector('[data-miss]'):false}`);
+        S.ok(r.pd.includes(ACID), '(前提)今晚排班里有这支酸', r.pd);
+        S.ok(r.v.steps.includes(ACID) && r.miss, '顾问没排:放回步骤里,带「今晚没做」', r.v.steps);
+        S.ok(/顾问说今晚可以不用/.test(r.why) && /鼻翼这两天起皮/.test(r.why) && /今晚没做/.test(r.why), '顾问的理由写在这一步上', r.why);
+        S.ok(!(((await p.eval(`return ${TODAY_EN}`)).skipped) || []).length, '渲染时没替她写「没做」');
+        await click(p, '#tn-plan [data-miss]', 200);
+        S.ok(((await p.eval(`return ${TODAY_EN}`)).skipped || []).includes(ACID), '点「今晚没做」:写进 skipped,第二天不会推定成用了');
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
     ['顾问用不了:没开通 / 连不上 / 额度用完 → 离线排法', async ({ S, open }) => {

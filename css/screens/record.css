@@ -21,7 +21,7 @@
 /* ② 今天记下的 + 顾问反馈 */
 .rec-day{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:var(--sp-3);margin-top:var(--sp-2)}
 .rec-day-main>*+*{margin-top:var(--sp-1)}
-.rec-thumb,.sk-thumb{width:64px;height:80px;object-fit:cover;border-radius:var(--r-ctl);box-shadow:inset 0 0 0 1px var(--line)}
+.rec-thumb,.sk-thumb,.pa-thumb{width:64px;height:80px;object-fit:cover;border-radius:var(--r-ctl);box-shadow:inset 0 0 0 1px var(--line)}
 .tags{display:flex;flex-wrap:wrap;column-gap:var(--sp-4);font:14px/var(--lh-note) var(--serif);color:var(--ink)}
 .tag{display:inline-flex;align-items:center}
 .fb-box{margin-top:var(--sp-3)}
@@ -73,7 +73,10 @@
 .sk-syms{margin-top:var(--sp-3)}
 .chip.hint{box-shadow:inset 0 0 0 1px var(--line-ctl);border-bottom:0}
 .hint-t{font:12px/var(--lh-meta) var(--mono);color:var(--rev);margin-left:var(--sp-1)}
-.sk-map>.note{margin-top:var(--sp-1)}
+.sk-map>.note,#sk-fm-box>.note{margin-top:var(--sp-1)}
+.sk-map>.btn-link{text-align:left}
+.sk-map>.btn-link .ico{transition:transform .15s}
+.sk-map>.btn-link[aria-expanded="true"] .ico{transform:rotate(90deg)}
 .fm-pick{margin-top:var(--sp-3);border-top:1px solid var(--line);padding-top:var(--sp-3)}
 .fm-pick .chips{margin-top:var(--sp-2)}
 .fm-pick-acts{margin-top:var(--sp-2);justify-content:flex-end}

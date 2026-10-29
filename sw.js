@@ -3,7 +3,7 @@
 //   核心文件缺一个就不装(老版本继续用);字体单独装,某一份没下完不连累整体,运行时再补。
 // · 同源请求:网络优先,拿到就更新缓存;断网回退到当前版本的缓存。
 // · Google 字体域(子集外的生僻字兜底):stale-while-revalidate,先给缓存、后台更新。
-const CACHE_NAME = 'skincare-app-v28';
+const CACHE_NAME = 'skincare-app-v29';
 const CORE = [
   './',
   './index.html',
@@ -16,8 +16,11 @@ const CORE = [
   './css/base.css',
   './css/components.css',
   './css/screens/advisor.css',
+  './css/screens/capture.css',
+  './css/screens/oobe.css',
   './css/screens/products.css',
   './css/screens/record.css',
+  './css/screens/settings.css',
   './css/screens/tonight.css',
   './css/tokens.css',
   './js/ai/apply.js',
@@ -46,7 +49,10 @@ const CORE = [
   './js/store.js',
   './js/sync.js',
   './js/ui/advisor.js',
+  './js/ui/capture.js',
   './js/ui/facemap.js',
+  './js/ui/guide.js',
+  './js/ui/oobe.js',
   './js/ui/products.js',
   './js/ui/record.js',
   './js/ui/settings.js',

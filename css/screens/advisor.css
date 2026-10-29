@@ -6,6 +6,11 @@
 #advisor .dot.ink{background:var(--ink)}
 #advisor .rev{color:var(--rev)}
 
+/* ── 极简模式:方案和未来 7 晚收成顶上一行折叠(样稿 Cici 版这一屏以对话为主)── */
+.adv-minfold{margin-top:var(--sp-3)}
+.adv-minfold>summary .note{display:block}
+.adv-minfold .adv-plan{margin-top:0}
+
 /* ── 现在的方案 ── */
 .adv-plan{margin-top:var(--sp-4)}
 .adv-line{margin-top:var(--sp-1);font:16px/var(--lh-body) var(--serif);color:var(--ink)}
@@ -33,16 +38,17 @@
 .adv-plan-acts{margin-top:var(--sp-2);column-gap:var(--sp-4)}
 
 /* ── 未来 7 晚 ── */
-.n7{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:var(--sp-1);margin-top:var(--sp-2)}
-.n7-d{display:flex;flex-direction:column;align-items:stretch;gap:var(--sp-1);padding:6px 2px;border-radius:var(--r-ctl);min-width:0}
+/* 一格的宽度 = 触控宽度:390 宽时 (350 - 6×2) / 7 ≈ 48px,360 宽时 44px(格间距和格内左右留白都压到最小) */
+.n7{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;margin-top:var(--sp-2)}
+.n7-d{display:flex;flex-direction:column;align-items:stretch;gap:var(--sp-1);padding:6px 0;border-radius:var(--r-ctl);min-width:0}
 .n7-d.today{background:var(--tint)}
-.n7-go{display:flex;flex-direction:column;align-items:center;min-height:44px;min-width:0}
+.n7-go{display:flex;flex-direction:column;align-items:center;min-height:44px;min-width:0;text-align:center}
 .n7-date{font:12px/var(--lh-meta) var(--mono);color:var(--faint)}
 .n7-dow{font:14px/18px var(--serif);color:var(--muted);white-space:nowrap}
 .n7-type{font:18px/28px var(--serif);color:var(--muted);white-space:nowrap}
 .n7-type.act{color:var(--ink)}
 .n7-d.moved .n7-type{color:var(--rev)}
-.n7-b{min-height:44px;min-width:0;border-radius:var(--r-ctl);font:14px/1 var(--serif);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line-ctl);
+.n7-b{display:flex;align-items:center;justify-content:center;min-height:44px;min-width:0;border-radius:var(--r-ctl);font:14px/1 var(--serif);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line-ctl);
   transition:background-color .15s,box-shadow .15s}
 .n7-b[aria-pressed="true"]{background:var(--tint);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
 @media(max-width:360px){.n7-type{font-size:16px}.n7-dow{font-size:12px}}
@@ -109,3 +115,8 @@
 .g-body>p+p,.g-body>ul+p,.g-body>p+ul{margin-top:var(--sp-2)}
 .g-body .note{color:var(--ink)}
 .g-ask{color:var(--rev)}
+/* 邀请码框:一条下划线 */
+#adv-code{display:block;width:100%;min-height:44px;margin-top:var(--sp-1);padding:var(--sp-2) 0;border:0;border-bottom:1px solid var(--line-ctl);border-radius:0;background:transparent;
+  color:var(--ink);font:16px/24px var(--mono);letter-spacing:.04em}
+#adv-code:focus{outline:none;border-bottom:1.5px solid var(--ink)}
+#adv-code::placeholder{color:var(--faint)}

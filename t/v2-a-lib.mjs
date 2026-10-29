@@ -133,7 +133,9 @@ export { suite, sleep };
 export async function run(name, blocks) {
     const S = suite(name);
     const { origin } = await server();
+    const only = process.env.ONLY ? new RegExp(process.env.ONLY) : null;   // ONLY=正则:只跑名字对得上的块(排查 / 变异检查用)
     for (const [label, fn] of blocks) {
+        if (only && !only.test(label)) continue;
         let p = null;
         try { await fn({ S, origin, open: async o => (p = await fresh(origin, o)) }); }
         catch (e) { S.ok(false, label + ' 抛异常: ' + e.message, e.stack && e.stack.split('\n').slice(0, 3).join(' | ')); }

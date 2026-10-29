@@ -82,7 +82,9 @@ body.minimal .adv{display:none!important}
 .tab[aria-selected="true"]::after{background:var(--medical)}
 .tab .badge{position:absolute;top:14px;left:calc(50% + 20px);width:4px;height:4px;border-radius:50%;background:var(--caution)}
 
-/* v2 外壳 */
-.p2-todo{margin-top:var(--sp-4)}
+/* v2 外壳:真机一屏(390×844)为准 —— 页头(日期 + 印章)贴顶,正文在它下面滚,底部 tab 固定。
+   用文档自己的滚动 + sticky,不另起一个 overflow 容器:iOS 点状态栏回顶、Safari 工具栏收起、键盘顶起输入框这些原生行为都不丢。 */
+html{scroll-padding-top:calc(44px + var(--safe-top) + var(--sp-2))}
+.hdr{position:sticky;top:0;z-index:40;background:var(--paper);margin:0 calc(-1 * var(--gutter));padding-left:var(--gutter);padding-right:var(--gutter)}
 .tab{background:none;border:0;cursor:pointer}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}

@@ -16,10 +16,11 @@ import { syncRegimen } from '../model/regimen.js';
 import { localMarkRunOut, localUnGone, localToggleLow, onShopLocalChange, shopLocalChange, shopSig } from '../ai/apply.js';
 import { buildSkincareContext } from '../ai/context.js';
 import { shopItems, gapsIfGone, pickReplacement } from '../engine/needs.js';
-import { restedNow, introNightsLeft } from '../engine/rules.js';
+import { restedNow, includedNow, introNightsLeft, regimenRules } from '../engine/rules.js';
+import { safetyGate, gateBlocks } from '../engine/gate.js';
 import { isExcluded } from '../engine/util.js';
 import { mdOf } from '../clock.js';
-import { askAdvisor } from './advisor.js';
+import { askAdvisor, probeOnce } from './advisor.js';
 
 export const id = 'products';
 export const title = '产品';
@@ -186,6 +187,8 @@ function criticalGaps(W, p) {
     if (!capsOf(p).some(c => ESSENTIAL_CAPS.indexOf(c) >= 0 || c === 'spf')) return [];
     return gapsIfGone(W, p.id).filter(g => g.key === 'clean' || g.key === 'hydrate' || g.key === 'spf');
 }
+const ACTIVE_TYPES = ['acid', 'mask', 'retinol'];
+function isActive(p) { return ACTIVE_TYPES.indexOf((p.schedule && p.schedule.type) || '') >= 0 || ACTIVE_TYPES.indexOf(p.role) >= 0; }
 function rowState(W, p) {
     const pao = paoState(W, p), low = (W.low || []).indexOf(p.id) >= 0;
     if (!p.role) return ['hollow', '还没选它是什么，点开选一下'];
@@ -195,6 +198,13 @@ function rowState(W, p) {
     const intro = introNightsLeft(W, p);
     if (intro) return ['hollow', '新加的 · 试用期还剩 ' + intro + ' 晚'];
     if (restedNow(W, p)) return ['hollow', '这一版先不排'];
+    // 和 engine/schedule.js computePlan 的口径一致:猛酸从不自动排;关了自动排班的活性也不排 —— 除非顾问方案点名
+    const rr = regimenRules(W), named = rr.source === 'ai' && (includedNow(W, p) || String(rr.acidName || '').split(' / ').map(x => x.trim()).indexOf(p.name) >= 0);
+    if (p.role === 'acid' && hasTrait(p, 'strong-exfo') && !named) return ['hollow', '先不排 · 猛酸，皮肤连续稳 4 周后再评估'];
+    const sc = p.schedule || {};
+    if (isActive(p) && !named && !(sc.enableAutoSchedule && (sc.maxPerWeek ?? 1) > 0)) return ['hollow', '不自动排 · 想用跟顾问说'];
+    // 活性的东西被安全闸拦着(就医提醒 / 近 3 天刺激 / 第一晚 / HRT 波动):照实说为什么现在不上
+    if (isActive(p) || hasTrait(p, 'scrub')) { const gb = gateBlocks(p, safetyGate(W), W); if (gb) return ['hollow', '现在不上 · ' + gb]; }
     if (criticalGaps(W, p).length) return ['ok', '在用 · 没有能顶替的'];
     return ['ok', p.role === 'spf' ? '在用 · 早上' : '在用'];
 }
@@ -206,7 +216,9 @@ function rowMeta(W, p) {
 // ══ 要不要买新的:后台 runner ═══════════════════════════════════════════════════════════
 export const SHOP = { delay: 5000 };   // 防抖(毫秒);无头测试 import 本模块把它调小
 const URG = [['now', '现在就缺'], ['before_out', '快用完前备上'], ['optional', '可买可不买']];
-const R = { app: null, bound: false, timer: null, whyQ: [], again: false, running: null, err: null };
+const R = { app: null, bound: false, timer: null, whyQ: [], again: false, running: null, err: null, hold: false };
+// 新用户引导期间(一支一支往空货架上加)不自动判断:那等于「第一次打开」,做完引导她自己点「让顾问判断」(oobe.js 调)
+export function holdShop(on) { R.hold = !!on; if (on) { clearTimeout(R.timer); R.timer = null; R.whyQ = []; } }
 // 挂监听(幂等)。整合时在 app.js 启动里调一次;没调之前,进顾问 / 产品页也会挂上
 export function ensureShopRunner(app) {
     if (app) R.app = app;
@@ -221,7 +233,7 @@ export function shopRec(app) {
 }
 export function shopLocal(why) {
     const app = R.app;
-    if (!app || !app.ai || !app.ai.ready()) return;
+    if (R.hold || !app || !app.ai || !app.ai.ready()) return;
     if (why && R.whyQ.indexOf(why) < 0) R.whyQ.push(String(why).slice(0, 80));
     if (R.running) { R.again = true; paintShop(); return; }
     const uid = shopUid();
@@ -473,7 +485,7 @@ export function openAddSheet(app, opts) {
     opts = opts || {};
     const canPhoto = app.ai.access() === 'on';
     openSheet({ id: 'add-sheet', title: '添加产品', html:
-        (canPhoto ? `<label class="btn btn-primary btn-block file-btn">${ico('camera')}拍成分表，自动认是什么<input type="file" accept="image/*" capture="environment" id="add-photo"></label>` : '') +
+        (canPhoto ? `<label class="btn btn-primary btn-block file-btn">${ico('camera')}拍成分表，自动认是什么<input type="file" accept="image/*" id="add-photo"></label>` : '') +
         `<div class="sec-t add-q">${canPhoto ? '或者手动加。' : ''}这是什么？</div>
         <div class="add-roles">${ADD_ROLES.map(([r, l]) => `<button type="button" class="btn" data-role="${r}">${esc(l)}</button>`).join('')}</div>`,
         onMount: ov => {
@@ -588,7 +600,7 @@ export function render(app) {
                 <span class="prod-sub"><span class="prod-state"><i class="dot ${tone}"></i>${esc(state)}</span><span class="meta nowrap">${esc(rowMeta(W, p))}</span></span></span></button>`;
     };
     return `<div class="title-row"><h1 class="page-title" id="products-h">${esc(title)}</h1><span class="meta" id="pr-count">${live.length ? live.length + ' 支' : ''}</span></div>
-        <div class="pr-top btn-row">${canPhoto ? `<label class="btn file-btn" id="pr-scan">${ico('camera')}拍成分表<input type="file" accept="image/*" capture="environment" id="pr-scan-in"></label>` : ''}
+        <div class="pr-top btn-row">${canPhoto ? `<label class="btn file-btn" id="pr-scan">${ico('camera')}拍成分表<input type="file" accept="image/*" id="pr-scan-in"></label>` : ''}
             <button type="button" class="${canPhoto ? 'btn-link quiet' : 'btn'}" id="pr-add">${canPhoto ? '手动添加' : ico('plus') + '添加产品'}</button></div>
         <div id="pr-label-box">${labelHtml(app, W)}</div>
         <section class="sec" id="pr-shop" aria-live="polite">${shopHtml(app, W)}</section>
@@ -620,5 +632,5 @@ export function mount(root, app) {
     if (lb) lb.querySelectorAll('[data-lbl]').forEach(b => b.addEventListener('click', () => labelAct(app, b.dataset.lbl)));
     const shop = root.querySelector('#pr-shop'); if (shop) bindShop(shop, app);
     // 顾问开通状态还没核过:核完了再画一遍「要不要买」这一块(不打断她)
-    if (app.ai.access() === 'on' && !app.ai.ready() && !app.ai.state.down) app.ai.probe().then(() => paintShop(), () => { });
+    probeOnce(app, () => paintShop());
 }

@@ -35,9 +35,25 @@ sw.js                 offline cache; its file list must match js/ and css/ exact
 
 4. **One safety gate.** `engine/gate.js` `safetyGate(W)` decides what tonight may contain (acid cap, strong actives, retinol, oils, masks), and `gateBlocks(product, gate, W)` explains why a product is blocked. The offline schedule (`engine/schedule.js`), the advisor's tonight changes, routine changes and whole plans (`ai/apply.js`) all pass through the same two functions. `engine/redline.js` decides when to suggest seeing a clinician. It counts only the status tags a person logged, not face-map spots or photo analysis results.
 
-5. **Advisor changes apply directly and can be undone.** `ai/apply.js` validates each change against the gate, applies what passes, explains what was blocked, and stores enough to undo. Routine changes become a new routine version (`model/regimen.js`); undo is itself a version. The "should I buy something" re-check (`shopLocalChange`) is triggered only from these local entry points, never from sync, startup maintenance or automatic routine regeneration. QA checks this statically and by counting calls.
+5. **Advisor changes apply directly and can be undone.** `ai/apply.js` validates each change against the gate, applies what passes, explains what was blocked, and stores enough to undo. Routine changes become a new routine version (`model/regimen.js`); undo is itself a version. The local-change notice (`shopLocalChange`) is fired only from these local entry points (apply / undo / restore and the `local*` shelf changes), never from sync, startup maintenance or automatic routine regeneration. QA checks this statically and by counting calls. It has two listeners, registered in `js/app.js`: the "should I buy something" runner (`ui/products.js` `ensureShopRunner`) and tonight's re-plan (`ui/tonight.js` `localChange`). Both debounce and skip the call when their signature has not changed.
 
 6. **Screens render from `W`.** A screen module gets `app` (`store`, `sync`, `ai`, `photos`, `today`, `world()`, `show`, `renderAll`, `signIn`, `signOut`). It builds its HTML in `render(app)` and binds events in `mount(root, app)`. It writes through model functions, then calls `app.renderAll()`. No inline event handlers and no globals on `window`.
+
+## Tonight written by the advisor
+
+`ui/tonight.js` asks the advisor (`/api/tonight`) for tonight's steps and runs the answer through `gateTonightPlan` before showing it. If the advisor is unavailable (offline, not invited, signed out, quota, error) the page uses the offline schedule from `engine/schedule.js` and says so.
+
+- Cache: device-only key `sk_ai_tonight1` = `{uid, date, sig, data | err, quota, down, at, model, why}`. It is in `LOCAL_KEYS`, not in `CLOUD_KEYS`, so each device keeps its own copy and nothing is synced.
+- `sig` = `date | shower | shave | minimal mode | routine version id | shelfSignature`. The first four parts are the premise of the advisor's answer. If only the last two change (a new routine version or a shelf change), the cached answer is gated again against the current state and kept, with a note and a "let the advisor re-plan" button. If the premise changes, the page falls back to the offline schedule until the advisor is asked again.
+- When it calls: once on a new day, only while the page is visible (`document.hidden` is false); after a local change (this page's shower/shave buttons, "let the advisor re-plan", or `app.tonightChanged(why)` / the local-change notice from other screens), debounced, and only if `sig` changed; never because of a synced change or an automatic routine regeneration; never after tonight is marked done.
+- Steps the person already ticked, and steps already logged today, are facts: the gate does not move them into "not tonight".
+- In minimal mode the advisor's active steps are aligned with today's plan (`sk_planday1`), because tomorrow's presumed history follows that plan: actives outside the plan are not shown, and planned actives the advisor left out stay as steps with the advisor's reason, so only her "not done tonight" marks them as skipped.
+
+Other device-only keys added in v2: `sk_aiprivacy1` (`{uid, at}`: the data notice shown the first time this account opens the advisor screen on this device; same format as v1) and the photo-analysis switch, which is a profile field (`photoAnalysis`, synced): unset means on only for the owner account, other accounts must turn it on themselves.
+
+## Shell
+
+The design target is a real phone screen (390 × 844). The page header (date and seal) is `position: sticky` at the top, the content scrolls under it with the document's own scrolling, and the tab bar is fixed at the bottom. There is no separate overflow container, so iOS keeps its native behaviours (tap the status bar to scroll up, Safari's toolbar collapsing, the keyboard pushing inputs into view).
 
 ## Data flow
 
@@ -67,13 +83,28 @@ Startup: lock, open envelope, migrate older keys, seed profile, then `'system'` 
 npm run test:sync      # sync envelope and lock, no browser (imports js/store.js + js/sync.js)
 npm run test:engine    # gate, redline, ladder, schedule, needs, routine versions, advisor apply/context, file table
 npm run test:rules     # Firestore security rules and round trip, needs Java for the emulator
-node t/v2-boot.mjs     # headless Chrome: shell loads, four tabs switch, deep links, lock, dark mode, 0 console errors
-node t/v1-parity.mjs   # headless Chrome: the previous version and v2 compute the same tonight, schedule, routine and plan on the same data
+node t/run.mjs         # everything that runs on this machine, one after another (needs Google Chrome; about 10 to 15 minutes)
 ```
+
+`t/run.mjs` runs the two unit suites, the migrated whole-page scenarios `t/s-*.mjs`, and these headless Chrome suites as separate processes:
+
+```sh
+node t/v2-boot.mjs        # shell loads, four tabs switch, deep links, lock, dark mode, 0 console errors
+node t/v2-a-tonight.mjs   # tonight: advisor-written plan, cache and gate, offline fallback, minimal mode, safety notices
+node t/v2-a-record.mjs    # record: quick note, skin sheet, face map, advisor feedback, HRT
+node t/v2-a-capture.mjs   # photo analysis: per-account switch, camera fallbacks, retake, confirm before writing
+node t/v2-b-advisor.mjs   # advisor: chat, revision lines, routine versions, next seven nights, guide
+node t/v2-b-products.mjs  # shelf, run out / bought again / running low, add, label reading, "should I buy something"
+node t/v2-b-settings.mjs  # settings: mode, habits, photo consent, owner options, backup and data notes
+node t/v2-b-oobe.mjs      # new-user setup and the one-time "what changed" note
+node t/v1-parity.mjs      # the previous version and v2 compute the same tonight, schedule, routine and plan on the same data
+```
+
+All of them use fake advisor and Firebase stand-ins inside the page; nothing calls the real advisor service.
 
 `t/v1-parity.mjs` guards the transition period, when one account may be open in both versions. Both versions write the routine and today's plan as `'system'` records only when they change, so any difference in what they compute would make them overwrite each other. If the engine is changed on purpose, document it here and bump `REGIMEN_ENGINE`.
 
-`t/s-*.mjs` are whole-page tests written against the previous single file. They are being moved screen by screen: each assertion about rules moves into `t/engine-unit.mjs`; each assertion about a screen is rewritten against the new DOM when that screen is built. `t/s-80-sync.mjs` already runs against the new modules.
+`t/s-*.mjs` were whole-page tests written against the previous single file. They now run against v2: they wait for `<html data-boot="ok">`, read records from the account's envelope in `localStorage` instead of globals, and click the real DOM. Assertions about rules moved into `t/engine-unit.mjs`; assertions that the v2 suites already cover point to them in each file's header; the few that no longer apply (for example the step timer, which the v2 design does not have) are listed with the reason at the top of `t/run.mjs`.
 
 ## Where new UI goes
 

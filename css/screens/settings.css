@@ -22,3 +22,7 @@
 .set-end{border-top:1px solid var(--line)}
 #mem-sheet .row-main .meta{display:block}
 .mem-acts{margin-top:var(--sp-2)}
+.set-days-l{font:14px/22px var(--serif);color:var(--muted);margin:var(--sp-2) 0 var(--sp-1)}
+.set-days-l+.set-days{margin-top:0}
+#settings-sheet input[type="text"]:focus,#settings-sheet select:focus{outline:none;border-bottom:1.5px solid var(--ink)}
+#settings-sheet input::placeholder{color:var(--faint)}

@@ -42,7 +42,8 @@ try {
         const t = r.titles;
         S.ok(['tonight', 'advisor', 'record', 'products'].every(id => t[id].active && t[id].others === 1 && t[id].sel === 'true' && t[id].hash === '#/' + id),
             '每个 tab 点了都能切过去(只有一屏 active、aria-selected、地址栏 #/id)', t);
-        S.ok(t.tonight.h === '今晚' && t.advisor.h === '顾问' && t.record.h === '记录' && t.products.h === '产品' && Object.values(t).every(x => x.todo), '每屏有标题和「P2 待做」', t);
+        // P2 之后:四屏都做出来了,「P2 待做」的占位不许再留着;今晚的标题是「今晚 · 夜型」(新用户空货架是「今晚 · 还没排」)
+        S.ok(/^今晚 · \S/.test(t.tonight.h || '') && t.advisor.h === '顾问' && t.record.h === '记录' && t.products.h === '产品' && Object.values(t).every(x => !x.todo), '每屏有标题,「P2 待做」占位都撤了', t);
         S.ok(/Skin Serif SC/.test(r.font) && r.bg === 'rgb(244, 241, 234)', '纸墨 token 生效(宋体栈、纸色底)', { font: r.font, bg: r.bg });
         S.ok(!r.globals.length, 'App 不往 window 上挂东西(模块里没有全局)', r.globals);
         // 设置(印章)能打开,同步一行在

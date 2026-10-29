@@ -27,7 +27,7 @@ export const title = '顾问';
 const CHAT_MAX = 40, CHAT_SEND = 24;
 const DOW = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 // 这一屏自己的界面状态(不进存储)
-const ST = { draft: '', img: null, busy: false, stream: '', ladderOpen: true, n7Prev: null, planBusy: '', reviewBusy: false, focus: false, probing: false };
+const ST = { draft: '', img: null, busy: false, stream: '', ladderOpen: true, n7Prev: null, planBusy: '', reviewBusy: false, focus: false, minOpen: false };
 
 // ── 小工具 ──
 const hm = t => { const d = new Date(t); return isNaN(d) ? '' : String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
@@ -39,6 +39,39 @@ function uidOf(app) { const u = user(app); return u ? u.uid : null; }
 function whoOf(app) { const u = user(app); return { name: u && u.displayName ? String(u.displayName).split(' ')[0] : '' }; }
 function isOwner(app) { try { return !!(app.sync.isOwner && app.sync.isOwner(user(app))); } catch (e) { return false; } }
 export function canTalk(app) { return app.ai.access() === 'on' && app.ai.ready() && !app.ai.state.down && !app.ai.quotaText(); }
+
+// 开通状态还没核过:每个账号只自动核一次(核不成就停在「没回应 + 重试」,别每次重画都再打一次 /api/me)
+const PROBE = { tried: {}, busy: false };
+export function probeOnce(app, after) {
+    const u = uidOf(app);
+    if (!u || app.ai.access() !== 'on' || app.ai.ready() || app.ai.state.down || PROBE.busy || PROBE.tried[u]) return;
+    PROBE.busy = true; PROBE.tried[u] = true;
+    const done = () => { PROBE.busy = false; if (after) after(); };
+    app.ai.probe().then(done, done);
+}
+// ── 数据说明:这个账号在这台设备上第一次进顾问页时弹一次(同 v1:sk_aiprivacy1 = {uid, at},本机键,v1 弹过的不再弹)──
+//   完整版在「设置 → 数据说明」。有别的 sheet 开着(引导、改版说明、同步冲突)时先不弹,下次进这一屏再看。
+export function dataNoticeSeen(app) {
+    let v = null;
+    try { v = JSON.parse(app.store.getLocal(LOCAL_KEYS.aiPrivacy)); } catch (e) { }
+    return !!(v && v.uid && v.uid === uidOf(app));
+}
+export function maybeDataNotice(app) {
+    const u = uidOf(app);
+    if (!u || dataNoticeSeen(app) || typeof document === 'undefined' || document.hidden) return false;
+    if (document.querySelector('#sheet-root .sheet-ov')) return false;
+    const sec = document.getElementById('advisor'); if (!sec || !sec.classList.contains('active')) return false;
+    const P = app.world().profile || {};
+    const seen = () => { app.store.setLocal(LOCAL_KEYS.aiPrivacy, JSON.stringify({ uid: u, at: app.store.now() })); };
+    openSheet({ id: 'ai-privacy', title: '顾问会看到什么', html: `<ul class="list lede">
+            <li>你的产品清单和成分特性</li>
+            <li>近 14 天的皮肤记录、标在脸上的位置、备注、做了哪几步</li>
+            <li>设置里的肤质、想解决的、要避开的区域${P.hrt ? '、HRT 阶段' : ''}；看过医生的记录（如果有）</li>
+            <li>你发的对话和照片</li></ul>
+        <p class="note">这些会发到 Cait 家里的服务器，再转给 Anthropic 的 Claude 模型生成回答。服务器只记每次花了多少钱，不存对话和照片；只存你让顾问「记住」的那几句，可以随时删。对话本身只存在这台设备上。详细的在「设置 → 数据说明」。</p>`,
+        actions: [{ label: '知道了', primary: true, fn: seen }], onClose: seen });
+    return true;
+}
 
 // ── 对话存档(本机,按账号)──
 function chatState(app) {
@@ -53,19 +86,28 @@ function updateAiState(store, fn) { const s = aiState(store); fn(s); return stor
 
 // ── 修订线:状态现算(今晚页撤了,这里也跟着变)──
 // 'applied' 生效中(能撤)· 'undone' 撤销了(能重做)· 'merged' 后面又改过今晚 · 'expired' 过了那天 · 'superseded' 后面又有新版本 · 'failed' 没改成
+const opKey = o => [o.op, o.product || '', o.to || '', o.level || ''].join('|');
 export function recLive(W, rec) {
     if (!rec || rec.state === 'failed') return 'failed';
     if (rec.kind === 'tonight') {
         if (rec.date && rec.date !== W.today) return 'expired';
-        const o = W.tnai;
-        if (o && o.date === W.today && o.id === rec.id) return 'applied';
-        if (o && o.date === W.today && o.undo && o.undo.prev && o.undo.prev.id === rec.id) return 'merged';
+        const o = W.tnai, live = o && o.date === W.today ? o : null;
+        if (live && live.id === rec.id) return 'applied';
+        if (!live) return 'undone';
+        // 后面又改过一次今晚:这一条的改动还在今晚里 = 并进去了(要撤先撤最近那条);已经不在了 = 之前撤过
+        const mine = (rec.changes || []).filter((c, k) => !(rec.result || [])[k] && c.op !== 'note').map(opKey);
+        const now = (live.ops || []).map(opKey);
+        if ((live.undo && live.undo.prev && live.undo.prev.id === rec.id) || (mine.length && mine.every(k => now.indexOf(k) >= 0))) return 'merged';
         return 'undone';
     }
     const hist = W.regimen || [], last = hist[hist.length - 1];
     if (!rec.versionId) return 'failed';
     if (last && last.id === rec.versionId) return 'applied';
-    if (hist.some(h => String(h.reason || '').indexOf('撤销了 v' + rec.v + '，') === 0)) return hist.some(h => h.id === rec.versionId) ? 'undone' : 'undone-final';
+    const ui = hist.findIndex(h => String(h.reason || '').indexOf('撤销了 v' + rec.v + '，') === 0);
+    if (ui >= 0) {
+        if (ui < hist.length - 1) return 'superseded';   // 撤了之后又有新的一版:不再给「重做」,免得盖掉后来的
+        return hist.some(h => h.id === rec.versionId) ? 'undone' : 'undone-final';
+    }
     return 'superseded';
 }
 function recRows(rec) {
@@ -86,7 +128,8 @@ function recAfter(W, rec) {
 function revHtml(W, rec, key) {
     const s = recLive(W, rec), tn = rec.kind === 'tonight';
     const who = rec.kind === 'review' ? '复盘' : '顾问';
-    const head = who + ' · ' + hm(rec.at) + ' · ' + (tn ? '改了今晚' : rec.kind === 'plan' ? '出了方案 v' + rec.v : (rec.fromV ? '改了方案 v' + rec.fromV + ' → v' + rec.v : '改了方案 v' + rec.v));
+    // 对话里这条修订线就挂在「顾问 · 时:分」那条消息下面,不再重复时间(复盘单独一块,留着)
+    const head = who + ' · ' + (rec.kind === 'review' ? hm(rec.at) + ' · ' : '') + (tn ? '改了今晚' : rec.kind === 'plan' ? '出了方案 v' + rec.v : (rec.fromV ? '改了方案 v' + rec.fromV + ' → v' + rec.v : '改了方案 v' + rec.v));
     const rows = recRows(rec);
     const ok = rows.filter(r => !r.bad), bad = rows.filter(r => r.bad);
     let text = '', act = '';
@@ -161,9 +204,9 @@ function planDetails(W, reg) {
 function histHtml(W) {
     const hist = (W.regimen || []).slice(-8).reverse();
     if (!hist.length) return '';
-    const n = (W.regimen || []).length;
-    return `<details class="fold" id="adv-hist"><summary><span class="fold-sum"><span class="lede">版本与撤销</span><span class="note">一共 ${n} 版，最新一版能撤销</span></span></summary><div class="fold-body rows">${hist.map((h, i) => {
-        const latest = i === 0, can = latest ? (n > 1 || h.source === 'ai') : true;
+    const n = (W.regimen || []).length, canUndo = n > 1 || hist[0].source === 'ai';
+    return `<details class="fold" id="adv-hist"><summary><span class="fold-sum"><span class="lede">版本与撤销</span><span class="note">${n > 1 ? '一共 ' + n + ' 版' : '只有这一版'}${canUndo ? '，最新一版能撤销' : ''}</span></span></summary><div class="fold-body rows">${hist.map((h, i) => {
+        const latest = i === 0, can = latest ? canUndo : true;
         return `<div class="row"><span class="row-main"><span class="meta">v${esc(h.v)} · ${esc(mdAt(h.at) || mdShort(h.date))} · ${h.source === 'ai' ? '顾问' : '离线规则'}${h.kind === 'undo' ? ' · 撤销 / 回退' : ''}</span><span class="note ink">${esc(h.reason || '')}</span></span>
             ${can ? `<button type="button" class="btn-link sm${latest ? '' : ' quiet'}" data-hist="${esc(h.id)}" data-latest="${latest ? 1 : 0}" data-v="${esc(h.v)}">${latest ? '撤销' : '回到这一版'}</button>` : ''}</div>`;
     }).join('')}</div></details>`;
@@ -180,7 +223,7 @@ function planHtml(app, W) {
         <button type="button" class="btn-link sm quiet" data-act="plan"${ST.planBusy || ST.busy ? ' disabled' : ''}>${ST.planBusy ? '在排…' : planBtn}</button>
         <button type="button" class="btn-link sm quiet" data-act="review"${ST.reviewBusy || ST.busy ? ' disabled' : ''}>${ST.reviewBusy ? '复盘中…' : '复盘这周'}</button></div>` : '';
     return `<section class="adv-plan" id="adv-plan">
-        <div class="sec-h"><h2 class="sec-t">现在的方案</h2><span class="meta" id="adv-ver">${reg ? esc('v' + reg.v + ' · ' + (mdAt(reg.at) || mdShort(reg.date)) + ' ' + hm(reg.at) + ' · ' + (ai ? '顾问' : '离线规则')) : ''}</span></div>
+        <div class="sec-h"><h2 class="sec-t">现在的方案</h2><span class="meta" id="adv-ver">${reg ? esc('v' + reg.v + ' · ' + (mdAt(reg.at) || mdShort(reg.date)) + ' · ' + (ai ? '顾问' : '离线规则')) : ''}</span></div>
         <p class="adv-line" id="adv-line">${esc(planLine(W))}</p>
         ${why ? `<p class="note adv-why">${esc(why)}</p>` : ''}
         ${ST.planBusy ? `<p class="note" role="status">${esc(ST.planBusy)}</p>` : ''}
@@ -230,11 +273,12 @@ function weekHtml(W) {
     const same = !!preset && days.every(d => { const x = preset.find(p => p.dow === dowOf(d.date)); return x && !!x.shower === !!d.shower && (!P.shaving || !!x.shave === !!d.shave); });
     const note = n7Note(W, days);
     const tg = (d, k, on, label) => `<button type="button" class="n7-b" data-date="${esc(d.date)}" data-k="${k}" aria-pressed="${on}" aria-label="${esc((d.date === W.today ? '今晚' : d.dayName) + label)}">${k === 'shower' ? '澡' : '刮'}</button>`;
+    // 日期只在第一格和跨月那格写「月/日」,其余只写几号(像日历;12px 的小字少一半,整页 <14px 的字不超 15%)
     const moved = ST.n7Prev ? days.filter(d => ST.n7Prev[d.date] !== undefined && ST.n7Prev[d.date] !== nightKey(d)).map(d => d.date) : [];
     return `<section class="sec adv-week" id="adv-week">
         <div class="sec-h"><h2 class="sec-t">未来 7 晚</h2><span class="note faint">点「澡」${P.shaving ? '「刮」' : ''}直接改</span></div>
-        <div class="n7" id="adv-n7" role="group" aria-label="未来 7 晚">${days.map(d => `<div class="n7-d${d.date === W.today ? ' today' : ''}${moved.indexOf(d.date) >= 0 ? ' moved' : ''}" data-day="${esc(d.date)}">
-            <button type="button" class="n7-go" data-night="${esc(d.date)}" aria-label="${esc((d.date === W.today ? '今晚' : d.dayName) + '：' + nightLabel(d) + '，看那晚的步骤')}"><span class="n7-date">${esc(mdShort(d.date))}</span><span class="n7-dow">${esc(d.date === W.today ? '今晚' : d.dayName)}</span><span class="n7-type${nightLabel(d) === '修' ? '' : ' act'}">${esc(nightLabel(d))}</span></button>
+        <div class="n7" id="adv-n7" role="group" aria-label="未来 7 晚">${days.map((d, i) => `<div class="n7-d${d.date === W.today ? ' today' : ''}${moved.indexOf(d.date) >= 0 ? ' moved' : ''}" data-day="${esc(d.date)}">
+            <button type="button" class="n7-go" data-night="${esc(d.date)}" aria-label="${esc((d.date === W.today ? '今晚' : d.dayName) + '：' + nightLabel(d) + '，看那晚的步骤')}"><span class="n7-date">${esc(i === 0 || d.date.slice(8) === '01' ? mdShort(d.date) : String(Number(d.date.slice(8, 10))))}</span><span class="n7-dow">${esc(d.date === W.today ? '今晚' : d.dayName)}</span><span class="n7-type${nightLabel(d) === '修' ? '' : ' act'}">${esc(nightLabel(d))}</span></button>
             ${tg(d, 'shower', !!d.shower, '洗澡')}${P.shaving ? tg(d, 'shave', !!d.shave, '刮胡') : ''}</div>`).join('')}</div>
         <p class="note${note.moved ? ' rev' : ''}" id="adv-n7-note" role="status">${esc(note.text)}</p>
         <div class="btn-row adv-habit"><button type="button" class="btn-link sm" id="adv-habit-save"${same ? ' aria-disabled="true"' : ''}>${same ? '已存成每周习惯' : '存成每周习惯'}</button>
@@ -261,6 +305,7 @@ function toggleNight(app, date, k) {
     if (date === t) toggleTn(app.store, k, !d[k], t);
     else setDayState(app.store, date, k === 'shower' ? !d.shower : d.shower, k === 'shave' ? !d.shave : d.shave, t);
     app.renderAll();
+    if (date === t && app.tonightChanged) app.tonightChanged('今晚' + (k === 'shower' ? '洗澡' : '刮胡') + '在顾问页改了');   // 今晚的前提变了:顾问重排(签名变了才调)
     const b = document.querySelector(`#adv-n7 .n7-b[data-date="${date}"][data-k="${k}"]`);
     if (b) try { b.focus({ preventScroll: true }); } catch (e) { }
 }
@@ -287,6 +332,7 @@ function fillWeekHabit(app) {
             else setDayState(app.store, ds, !!x.shower, !!x.shave, t);
         }
         app.renderAll();
+        if (app.tonightChanged) app.tonightChanged('今晚洗澡 / 刮胡按习惯重填了');
     }, { title: '按习惯重填？', ok: '按习惯填' });
 }
 
@@ -303,7 +349,10 @@ function accessHtml(app) {
         <div class="btn-row"><button type="button" class="btn" data-act="retry">重试</button></div></div>`;
     const q = app.ai.quotaText();
     if (q) return `<div class="adv-access" id="adv-access" data-acc="quota"><p class="lede">${esc(q)}</p><p class="note">今晚的步骤照离线规则排，记录不受影响。</p></div>`;
-    if (!app.ai.ready()) return `<div class="adv-access" id="adv-access" data-acc="connecting"><p class="note" role="status">在连顾问…</p></div>`;
+    if (!app.ai.ready()) return PROBE.tried[uidOf(app)] && !PROBE.busy
+        ? `<div class="adv-access" id="adv-access" data-acc="noreply"><p class="lede">顾问这会儿没回应。</p><p class="note">今晚照上面这版方案排，记录不受影响。</p>
+            <div class="btn-row"><button type="button" class="btn" data-act="retry">重试</button></div></div>`
+        : `<div class="adv-access" id="adv-access" data-acc="connecting"><p class="note" role="status">在连顾问…</p></div>`;
     return '';
 }
 function reviewHtml(app, W) {
@@ -502,6 +551,21 @@ function recAct(app, key) {
     app.renderAll();
 }
 
+// ── 给今晚页用(整合时接):对话里今天最近一条「改了今晚」和它现在的状态;撤销 / 重做走同一个 recAct,两边自然一致 ──
+//   今晚页自己的「已撤销 · 重做」只记在它模块里;在对话里撤的,今晚页靠这个也能显示「已撤销 · 重做」。
+export function lastTonightRec(app) {
+    const W = app.world(), chat = chatState(app).chat;
+    for (let mi = chat.length - 1; mi >= 0; mi--) {
+        const recs = chat[mi].recs || [];
+        for (let ri = recs.length - 1; ri >= 0; ri--) {
+            const r = recs[ri];
+            if (r && r.kind === 'tonight' && r.date === W.today) return { key: mi + '.' + ri, rec: r, state: recLive(W, r) };
+        }
+    }
+    return null;
+}
+export function revAct(app, key) { recAct(app, key); }
+
 // ── 从别的页跳过来问(产品「问顾问」、常识「问顾问这一条」):预填,不自动发 ──
 export function askAdvisor(app, text) {
     ST.draft = String(text || '');
@@ -512,7 +576,7 @@ export function askAdvisor(app, text) {
 // ── 拍照:拍成分表(去产品页认)/ 随这条消息发一张 ──
 function photoMenu(app) {
     openSheet({ id: 'adv-photo', title: '拍什么？', html: `<div class="acts stack-acts">
-        <label class="btn btn-block file-btn">${ico('camera')}拍成分表，认是什么产品<input type="file" accept="image/*" capture="environment" id="adv-ph-label"></label>
+        <label class="btn btn-block file-btn">${ico('camera')}拍成分表，认是什么产品<input type="file" accept="image/*" id="adv-ph-label"></label>
         <label class="btn btn-block file-btn">${ico('camera')}随这条消息发一张图<input type="file" accept="image/*" id="adv-ph-attach"></label></div>
         <p class="note">拍皮肤做全套分析在「记录」里。照片只在发出去的这一次用，不会存到服务器。</p>`,
         onMount: ov => {
@@ -529,17 +593,23 @@ function photoMenu(app) {
 
 // ══ 渲染 ═══════════════════════════════════════════════════════════════════════════════
 export function render(app) {
-    const W = app.world();
+    const W = app.world(), P = W.profile || {};
+    const shelf = (W.products || []).some(p => !p.hidden);
+    // 极简模式(样稿 Cici 版):这一屏以对话为主;方案和未来 7 晚收成顶上一行折叠,点开照样全有(离线可看、能撤销、能排洗澡)
+    const top = P.minimalMode && shelf
+        ? `<details class="fold adv-minfold" id="adv-minfold"${ST.minOpen ? ' open' : ''}><summary><span class="fold-sum"><span class="lede">现在的方案和未来 7 晚</span><span class="note">${esc(planLine(W))}</span></span></summary>
+            <div class="fold-body">${planHtml(app, W)}${weekHtml(W)}</div></details>`
+        : planHtml(app, W) + weekHtml(W);
     return `<h1 class="page-title" id="advisor-h">${esc(title)}</h1>
-        ${planHtml(app, W)}
-        ${weekHtml(W)}
+        ${top}
         ${chatHtml(app, W)}
-        <section class="sec adv-guide-sec">${renderGuide(W.profile, { canAsk: app.ai.access() === 'on' })}</section>
+        <section class="sec adv-guide-sec">${renderGuide(P, { canAsk: canTalk(app) })}</section>
         ${dockHtml(app)}`;
 }
 export function mount(root, app) {
     ensureShopRunner(app);
     const t = () => app.today();
+    const mf = root.querySelector('#adv-minfold'); if (mf) mf.addEventListener('toggle', () => { ST.minOpen = mf.open; });
     root.querySelectorAll('[data-go="products"]').forEach(b => b.addEventListener('click', () => app.show('products')));
     const lb = root.querySelector('#adv-ladder-btn');
     if (lb) lb.addEventListener('click', () => {
@@ -599,9 +669,7 @@ export function mount(root, app) {
     const cam = root.querySelector('#adv-cam'); if (cam) cam.addEventListener('click', () => photoMenu(app));
     bindGuide(root, (app.world().profile), txt => askAdvisor(app, txt));
     // 开通状态还没核过:核完了重画这一屏(只核一次,别和别处的重画互相触发)
-    if (app.ai.access() === 'on' && !app.ai.ready() && !app.ai.state.down && !ST.probing) {
-        ST.probing = true;
-        app.ai.probe().then(() => { ST.probing = false; const sec = document.getElementById('advisor'); if (sec && sec.classList.contains('active')) app.renderScreen('advisor'); }, () => { ST.probing = false; });
-    }
+    probeOnce(app, () => { const sec = document.getElementById('advisor'); if (sec && sec.classList.contains('active')) app.renderScreen('advisor'); });
+    maybeDataNotice(app);
     maybeAutoReview(app);
 }

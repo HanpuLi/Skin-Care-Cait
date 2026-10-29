@@ -19,3 +19,6 @@ node_modules/
 
 # t/v1-parity.mjs 运行时的临时副本
 .v1-parity.html
+# t/v2-b-lib.mjs 整合前临时生成的外壳和补丁版 app.js(跑完就删;测试中途被杀也不至于被提交)
+.v2-b-shell.html
+.v2-b-app.js

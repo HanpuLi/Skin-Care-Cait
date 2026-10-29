@@ -1,137 +1,71 @@
-// 顾问(全部用假后端 __AIF,不碰真服务器、不登录):
-//   没开通 → 邀请码框 + 兑换;连不上 / ai.js 没加载 → 今晚照离线规则排、不白屏;额度用完;
-//   对话里的 action(今晚小改)和 proposal(新方案)直接生效、能撤销,修订条撤销 / 重做;
-//   读成分标把特性写进产品、traitsOf 立刻用上;出方案 → 新一版 → 今晚的步骤跟着变;数据说明每个账号只弹一次。
-const STEPS = `(()=>{const plan=computePlanRolling().find(d=>d.isToday);return buildNightSteps(TN.shower,TN.shave,plan).steps.map(s=>s.p+' | '+s.h)})()`;
-export default async function ({ origin, S, open }) {
-    const boot = async (mode, o = {}) => {
-        const p = await open(o.page || {});
-        await p.nav(origin + '/index.html', 200);
-        await p.eval(`return __seed.${o.seed || 'full'}(${o.seedArg || ''})`);
-        await p.reload(800);
-        await p.eval(`__login();window.__AIF=Object.assign({mode:'${mode}'},${o.aif || '{}'});${o.noPrivacy ? '' : "localStorage.setItem('sk_aiprivacy1',JSON.stringify({uid:'u-test'}));"}await aiProbe(true);return 1`);
-        return p;
-    };
-    const wait = ms => `await new Promise(r=>setTimeout(r,${ms}));`;
-
-    // ── 没开通:看到邀请码框;错码留在原地,对的码开通 ──
+// 顾问:数据说明 —— 这个账号在这台设备上第一次进顾问页弹一次「顾问会看到什么」,点过就不再弹(按账号,本机键 sk_aiprivacy1,和 v1 同格式)。
+// v2 迁移(P3):v1 这个文件的其余断言都已有新家,不重复(见 t/run.mjs 的退役说明):
+//   邀请制 / 连不上 / 额度 / 没回应只核一次 / 修订条撤销重做 / 出方案 / 复盘 → t/v2-b-advisor.mjs;读成分标 → t/v2-b-products.mjs;
+//   连不上 / 额度用完时今晚照常 → t/v2-a-tonight.mjs「顾问用不了」;SSE 解析、去 emoji、过闸、撤销 → engine-unit;
+//   「ai.js 没加载」→ v2 没有单独的 ai.js(顾问层是 js/ai/*.js 模块,和 App 一起加载),退役。
+// 这条在迁移时发现 v2 漏了(P2 只把说明放进了设置),已补回 js/ui/advisor.js maybeDataNotice。
+// 另加一条整合时接上的联动:在对话里撤销了「改了今晚」,今晚页也显示「已撤销 · 重做」,点了走顾问页同一个 recAct,两边对得上。
+import fs from 'node:fs';
+import path from 'node:path';
+import { fresh } from './v2-a-lib.mjs';
+const DIR = path.dirname(new URL(import.meta.url).pathname);
+const PROBE = fs.readFileSync(path.join(DIR, 'probe.js'), 'utf8');
+const W8 = ms => `await new Promise(r=>setTimeout(r,${ms}));`;
+const tab = id => `document.getElementById('tab-${id}').click();${W8(300)}`;
+export default async function ({ origin, S }) {
+    // ── 没登录:进顾问页不弹(没有账号,也没有数据发出去)──
     {
-        const p = await boot('none');
-        const a = await p.eval(`show('coach');${wait(200)}return {acc:aiAccess(),box:!!document.getElementById('co-code'),composer:!!document.getElementById('co-chat-text'),probes:(__AIF.log||[]).filter(x=>x.p==='/api/me').length}`);
-        S.ok(a.acc === 'none' && a.box && !a.composer, '不在白名单:顾问页是邀请码框,没有对话框', a);
-        const a2 = await p.eval(`renderCoach();renderCoach();renderCoach();${wait(200)}return (__AIF.log||[]).filter(x=>x.p==='/api/me').length`);
-        S.ok(a2 - a.probes <= 1, '没开通时重画顾问页不会一直去问后端(节流)', { before: a.probes, after: a2 });
-        const bad = await p.eval(`document.getElementById('co-code').value='WRONG-CODE1';await aiRedeem();${wait(100)}return {acc:aiAccess(),box:!!document.getElementById('co-code'),btn:document.getElementById('co-code-go').textContent}`);
-        S.ok(bad.acc === 'none' && bad.box && bad.btn === '开通', '错的邀请码:还在邀请码框,按钮恢复', bad);
-        const good = await p.eval(`document.getElementById('co-code').value='GOOD1-CODE2';await aiRedeem();${wait(200)}return {acc:aiAccess(),ready:aiReady(),composer:!!document.getElementById('co-chat-text')}`);
-        S.ok(good.acc === 'on' && good.ready && good.composer, '对的邀请码:开通,出现对话框', good);
-        S.ok(!p.errors.length, '邀请制 0 报错', p.errors);
+        const p = await fresh(origin, { seed: 'full' });
+        try {
+            const r = await p.eval(`${tab('advisor')}return {n:!!document.getElementById('ai-privacy'),key:localStorage.getItem('sk_aiprivacy1')}`);
+            S.ok(!r.n && !r.key, '没登录:进顾问页不弹数据说明', r);
+        } finally { p.done(); }
     }
-
-    // ── 连不上:顾问页说清楚;今晚照常排 ──
+    // ── 登录了:第一次进顾问页弹一次;点「知道了」记下,再进 / 刷新都不弹;换个账号再弹 ──
     {
-        const p = await boot('down');
-        const r = await p.eval(`show('coach');${wait(150)}const t=document.getElementById('coach-content').innerText;show('tonight');${wait(100)}
-            return {down:_aiDown,txt:t,retry:/重试/.test(t),composer:!!document.getElementById('co-chat-text'),steps:document.querySelectorAll('#tn-plan .step').length,title:document.getElementById('tn-title').textContent}`);
-        S.ok(r.down && /连不上/.test(r.txt) && r.retry && !r.composer, '后端连不上:顾问页说「连不上,照上一版做」,有重试', r);
-        S.ok(r.steps >= 3 && r.title, '后端连不上:今晚页照常有步骤', r);
-        const s = await p.eval(`const r=await aiStream('/api/chat',{messages:[]});return r.err`);
-        S.ok(/连不上/.test(s || ''), '连不上时发消息:给一句人话,不抛异常', s);
-        S.ok(!p.errors.length, '连不上 0 报错', p.errors);
+        const p = await fresh(origin, { seed: 'full', mode: 'on', login: true });
+        try {
+            const tn = await p.eval(`${tab('tonight')}return !!document.getElementById('ai-privacy')`);
+            S.ok(!tn, '登录后停在今晚页:不弹(第一次进顾问页才弹)', tn);
+            const r = await p.eval(`${tab('advisor')}const ov=document.getElementById('ai-privacy');return ov?{t:ov.querySelector('.sheet-t').textContent,b:ov.querySelector('.sheet-b').innerText,btn:[...ov.querySelectorAll('.sheet-actions .btn')].map(x=>x.textContent)}:null`);
+            S.ok(r && r.t === '顾问会看到什么' && /Anthropic/.test(r.b) && /不存对话和照片/.test(r.b) && /只存在这台设备上/.test(r.b) && /设置 → 数据说明/.test(r.b) && r.btn.includes('知道了'),
+                '第一次进顾问页:弹「顾问会看到什么」(发到哪、存什么、不存什么,详细的在设置)', r);
+            await p.eval(PROBE + ';return 1');
+            const pr = await p.eval(`return __probe('#ai-privacy')`);
+            S.ok(!pr.emoji.length && pr.minFs >= 12 && !pr.lowCr.length && !pr.smallN && !pr.styleAttrs.length && pr.red === 0, '数据说明 sheet:0 emoji、字号、对比度、触控、没有 style=、不用红', pr);
+            const k = await p.eval(`[...document.querySelectorAll('#ai-privacy .sheet-actions .btn')].find(b=>b.textContent==='知道了').click();${W8(150)}
+                const v=JSON.parse(localStorage.getItem('sk_aiprivacy1')||'null');${tab('products')}${tab('advisor')}return {v,again:!!document.getElementById('ai-privacy'),cloud:Object.keys((${'(()=>{const ks=Object.keys(localStorage).filter(k=>k.startsWith("sk_sync_v1:"));const k=ks.find(x=>x!=="sk_sync_v1:")||ks[0];return JSON.parse(localStorage.getItem(k)).data})()'})).includes('sk_aiprivacy1')}`);
+            S.ok(k.v && k.v.uid === 'u-test' && k.v.at > 0 && !k.again && !k.cloud, '点「知道了」:按账号记在本机(不进云),再进顾问页不弹', k);
+            await p.reload(600);
+            await p.eval(`fakeCloud.auth({uid:'u-test',email:'t@example.com',displayName:'Tester Name',getIdToken:async()=>'fake-id-token'});${W8(400)}return 1`);
+            const again = await p.eval(`${tab('advisor')}return !!document.getElementById('ai-privacy')`);
+            S.ok(!again, '刷新后再进:不弹', again);
+            // v1 弹过的(同一个键、同一种格式)也算看过;别的账号看过的不算
+            const other = await p.eval(`localStorage.setItem('sk_aiprivacy1',JSON.stringify({uid:'u-other',at:1}));${tab('products')}${tab('advisor')}return !!document.getElementById('ai-privacy')`);
+            S.ok(other, '只记着别的账号看过:这个账号进顾问页照样弹(按账号)', other);
+            S.ok(!p.errors.length, '数据说明 0 报错', p.errors);
+        } finally { p.done(); }
     }
-    // ── ai.js 根本没加载到:今晚页照样渲染 ──
+    // ── 对话里撤销「改了今晚」→ 今晚页也给「重做」,点了两边一起回到生效 ──
     {
-        const p = await open({ blockPaths: ['/ai.js'] });
-        await p.nav(origin + '/index.html', 200);
-        await p.eval(`return __seed.full()`);
-        await p.reload(900);
-        const r = await p.eval(`return {ai:typeof aiSend,steps:document.querySelectorAll('#tn-plan .step').length,title:document.getElementById('tn-title').textContent,
-            coach:(show('coach'),document.getElementById('coach-content').innerText.slice(0,60))}`);
-        S.ok(r.ai === 'undefined' && r.steps >= 3 && r.title, 'ai.js 没加载:今晚页照样有标题和步骤', r);
-        S.ok(!p.errors.filter(e => !/ai\.js|Failed to load/.test(e)).length, 'ai.js 没加载:没有别的报错', p.errors);
-    }
-    // ── 额度用完 ──
-    {
-        const p = await boot('quota');
-        const r = await p.eval(`show('coach');${wait(150)}return {q:_aiQuotaText(),txt:document.getElementById('coach-content').innerText,composer:!!document.getElementById('co-chat-text'),steps:document.querySelectorAll('#tn-plan .step').length}`);
-        S.ok(/今天的顾问次数用完了/.test(r.q) && /今天的顾问次数用完了/.test(r.txt) && !r.composer, '额度用完:顾问页说明白,不给发送框', r);
-        S.ok(r.steps >= 3, '额度用完:今晚照常', r.steps);
-    }
-
-    // ── 对话:action 直接改今晚 + 撤销;proposal 直接出新一版 + 撤销;修订条撤销 / 重做 ──
-    {
-        const eye = 'MZ Skin Soothe & Smooth 眼部精华';
-        const chat = JSON.stringify([['delta', { t: '今晚眼霜先跳过。' }], ['action', { id: 'a1', changes: [{ op: 'skip', product: eye, why: '眼周有点干' }] }],
-            ['proposal', { id: 'p1', message: '酸改成每周 2 次', changes: [{ op: 'acid_freq', value: 2 }] }], ['done', { text: '今晚眼霜先跳过。', model: 'claude-test', cost: 0.01 }]]);
-        const p = await boot('on', { aif: `{chat:${chat}}` });
-        const r0 = await p.eval(`return {steps:${STEPS},v:(currentRegimen()||{}).v||0,n:regimenHistory().length}`);
-        S.ok(r0.steps.some(s => s.startsWith(eye)), '对话之前:今晚有眼霜', r0.steps);
-        const r1 = await p.eval(`show('coach');${wait(100)}await aiSend('眼周有点干');${wait(200)}const st=_aiMine(AIK.chat);const m=st.chat[st.chat.length-1];
-            show('tonight');${wait(100)}
-            return {steps:${STEPS},recs:m.recs.map(r=>({kind:r.kind,state:r.state})),src:regimenRules().source,acidCap:regimenRules().acidCap,v:currentRegimen().v,n:regimenHistory().length,
-                bar:document.getElementById('tn-change').innerText,skips:[...document.querySelectorAll('.skips li')].map(x=>x.textContent)}`);
-        S.ok(!r1.steps.some(s => s.startsWith(eye)) && r1.recs.some(x => x.kind === 'tonight' && x.state === 'applied'), 'action:今晚的眼霜直接跳过了,不用再点确认', r1);
-        S.ok(r1.src === 'ai' && r1.acidCap === 2 && r1.n === r0.n + 1, 'proposal:直接落成新的一版方案(source=ai,每周 2 次)', r1);
-        S.ok(/改了 2 处|眼|方案/.test(r1.bar), '今晚页顶上有修订条', r1.bar);
-        // 在对话里撤销 action
-        const r2 = await p.eval(`const st=_aiMine(AIK.chat);const mi=st.chat.length-1;const ri=st.chat[mi].recs.findIndex(r=>r.kind==='tonight');aiUndoRec(mi,ri);${wait(80)}
-            return {steps:${STEPS},state:_aiMine(AIK.chat).chat[mi].recs[ri].state}`);
-        S.ok(r2.state === 'undone' && r2.steps.some(s => s.startsWith(eye)), '对话里点撤销:眼霜回来了', r2);
-        // 撤销 proposal
-        const r3 = await p.eval(`const st=_aiMine(AIK.chat);const mi=st.chat.length-1;const ri=st.chat[mi].recs.findIndex(r=>r.kind==='regimen');aiUndoRec(mi,ri);${wait(80)}
-            return {src:regimenRules().source,n:regimenHistory().length,cur:(currentRegimen()||{}).source||''}`);
-        S.ok(r3.src !== 'ai' || r3.cur !== 'ai', '对话里撤销新方案:回到上一版', r3);
-        // 修订条:撤销 → 重做
-        const r4 = await p.eval(`aiApplyTonight({id:'a2',changes:[{op:'skip',product:${JSON.stringify(eye)},why:'测'}]});show('tonight');${wait(80)}
-            const b=[...document.querySelectorAll('#tn-change button')].find(x=>/撤销/.test(x.textContent));const had=!!b;b&&b.click();${wait(80)}
-            const afterUndo=${STEPS};const redo=[...document.querySelectorAll('#tn-change button')].find(x=>/重做/.test(x.textContent));const hadRedo=!!redo;redo&&redo.click();${wait(80)}
-            return {had,hadRedo,afterUndo,afterRedo:${STEPS}}`);
-        S.ok(r4.had && r4.afterUndo.some(s => s.startsWith(eye)), '修订条「撤销」:眼霜回来', r4);
-        S.ok(r4.hadRedo && !r4.afterRedo.some(s => s.startsWith(eye)), '撤销后 8 秒内能「重做」:又跳过了', r4);
-        S.ok(!p.errors.length, '对话场景 0 报错', p.errors);
-    }
-
-    // ── 读成分标:家里有的产品 → 特性写进它,traitsOf 立刻用;能撤销。新产品 → 预填添加表单 ──
-    {
-        const p = await boot('on', { seedArg: `{status:i=>i===-1?['爆痘']:['稳定']}` });
-        const r = await p.eval(`const vo=PD.find(x=>x.id==='votary');const before={tr:traitsOf(vo).slice(),gb:gateBlocks(vo)};
-            const res=aiVisionResult({name:'Votary 10% 乳酸',role:'去角质',traits:['strong-exfo','fragranced','not-a-trait']},'read_label',{});
-            const state=res.state;invalidatePlanCache();const after={tr:traitsOf(PD.find(x=>x.id==='votary')).slice(),gb:gateBlocks(PD.find(x=>x.id==='votary')),stored:(JSON.parse(localStorage.getItem('sk_proddefs1'))||[]).find(x=>x.id==='votary')};
-            aiUndoLabel();const undone={tr:traitsOf(PD.find(x=>x.id==='votary')).slice()};
-            return {before,after:{tr:after.tr,gb:after.gb,stored:after.stored&&after.stored.traits},undone,state,matched:res.matched}`);
-        S.ok(r.matched === 'Votary 10%乳酸' && r.state === 'applied', '读成分标:认出家里那支(名字空格不同也认)', r);
-        S.ok(JSON.stringify(r.after.tr) === '["strong-exfo","fragranced"]' && JSON.stringify(r.after.stored) === JSON.stringify(r.after.tr), '特性写进产品本身(随 sk_proddefs1 同步),不认识的特性丢掉', r.after);
-        S.ok(!r.before.gb && /猛酸不上/.test(r.after.gb || ''), 'traitsOf 立刻用上:标成猛酸后,近 3 天爆痘就拦它', r);
-        S.ok(JSON.stringify(r.undone.tr) === JSON.stringify(r.before.tr), '撤销:特性回到原来', r.undone);
-        const n = await p.eval(`aiVisionResult({name:'Brand New Glycolic Toner',role:'去角质',traits:['strong-exfo'],note:'7% 甘醇酸'},'read_label',{});${wait(80)}
-            const m=document.getElementById('prod-modal');return {open:!m.hidden,name:(document.getElementById('m-name')||{}).value,
-            role:(document.querySelector('#m-role-grid [aria-checked="true"]')||{dataset:{}}).dataset.v||'',traits:[...document.querySelectorAll('#m-traits [aria-pressed="true"]')].map(x=>x.dataset.v)}`);
-        S.ok(n.open && n.name === 'Brand New Glycolic Toner' && n.traits.join() === 'strong-exfo', '新产品:添加表单按成分标预填(名字、特性)', n);
-        S.ok(!p.errors.length, '读成分标 0 报错', p.errors);
-    }
-
-    // ── 出方案:新的一版;今晚的步骤跟着变;可撤销 ──
-    {
-        const eye = 'MZ Skin Soothe & Smooth 眼部精华';
-        const plan = JSON.stringify({ rationale: '眼周先停一支,修护霜全脸', rules: { acidCap: 1, acidName: '', acidZones: [], cleanse: '', repair: 'full', repairWhy: '最近偏干' }, resting: [{ name: eye, why: '先停' }], gaps: [] });
-        const p = await boot('on', { aif: `{plan:${plan}}` });
-        const r = await p.eval(`const before=${STEPS};const n0=regimenHistory().length;await aiPlan();${wait(100)}
-            return {before,after:${STEPS},src:(currentRegimen()||{}).source,n0,n1:regimenHistory().length,res:_aiResult&&_aiResult.state}`);
-        S.ok(r.src === 'ai' && r.n1 === r.n0 + 1 && r.res === 'applied', '出方案:直接落成新的一版(source=ai)', r);
-        S.ok(r.before.some(s => s.startsWith(eye)) && !r.after.some(s => s.startsWith(eye)), '今晚的步骤跟着变:被这一版停掉的眼霜不在了', r);
-        S.ok(r.after.some(s => /Cicaplast/.test(s) && /全脸薄涂/.test(s)), '今晚的修护霜改成全脸薄涂', r.after);
-        const u = await p.eval(`aiUndoPlan();${wait(80)}return {steps:${STEPS},src:(currentRegimen()||{}).source||''}`);
-        S.ok(u.steps.some(s => s.startsWith(eye)), '撤销方案:今晚回到之前', u);
-        S.ok(!p.errors.length, '出方案 0 报错', p.errors);
-    }
-
-    // ── 数据说明:每个账号第一次进顾问页弹一次 ──
-    {
-        const p = await boot('on', { noPrivacy: true });
-        const r = await p.eval(`show('coach');${wait(200)}const a=!!document.getElementById('ai-privacy');
-            const ok=[...document.querySelectorAll('#ai-privacy button')].find(b=>/知道了/.test(b.textContent));ok&&ok.click();${wait(200)}
-            show('tonight');show('coach');${wait(200)}return {first:a,second:!!document.getElementById('ai-privacy'),stored:!!_aiMine(AIK.privacy)}`);
-        S.ok(r.first && !r.second && r.stored, '数据说明:第一次进顾问页弹一次,点过就不再弹', r);
-        S.ok(!p.errors.length, '数据说明 0 报错', p.errors);
+        const p = await fresh(origin, { seed: 'full', mode: 'on', login: true });
+        try {
+            const eye = await p.eval(`localStorage.setItem('sk_aiprivacy1',JSON.stringify({uid:'u-test',at:1}));${tab('tonight')}
+                return [...document.querySelectorAll('#tn-plan .step-name')].map(x=>x.textContent).find(s=>/眼部|眼霜/.test(s))||''`);
+            await p.eval(`__AIF.chat=[['delta',{t:'可以。'}],['action',{id:'act-r',message:'跳过一步',changes:[{op:'skip',product:${JSON.stringify(eye)},why:'今晚想简单点'}],dropped:[]}],['done',{text:'可以，今晚跳过眼霜。',model:'claude-test',effort:'medium',cost:0.01}]];
+                ${tab('advisor')}const t=document.getElementById('adv-text');t.value='今晚能少一步吗';t.dispatchEvent(new Event('input'));document.getElementById('adv-send').click();
+                for(let i=0;i<40&&!document.querySelector('#adv-log .rev');i++)${W8(100)}return 1`);
+            const v = () => p.eval(`const rv=document.querySelector('#adv-log .rev');const chat=rv?rv.dataset.state:'';${tab('tonight')}
+                const bar=document.getElementById('tn-rev');return {chat,bar:bar?bar.innerText.replace(/\s+/g,' '):'',act:bar?(bar.querySelector('[data-act]')||{dataset:{}}).dataset.act:'',eye:[...document.querySelectorAll('#tn-plan .step-name')].some(x=>x.textContent===${JSON.stringify(eye)})}`);
+            const a = await v();
+            S.ok(eye && a.chat === 'applied' && a.act === 'undo' && !a.eye, '顾问改了今晚:对话里是生效中,今晚页有「顾问 · 改了今晚 · 撤销」,眼霜那步不在了', a);
+            await p.eval(`${tab('advisor')}document.querySelector('#adv-log .rev [data-recact]').click();${W8(250)}return 1`);
+            const b = await v();
+            S.ok(b.chat === 'undone' && b.act === 'redo-chat' && /已撤销/.test(b.bar) && b.eye, '在对话里撤销:今晚页也显示「已撤销 · 重做」,眼霜回来了', b);
+            await p.eval(`${tab('tonight')}document.querySelector('#tn-rev [data-act="redo-chat"]').click();${W8(250)}return 1`);
+            const c = await p.eval(`${tab('advisor')}return 1`).then(v);
+            S.ok(c.chat === 'applied' && c.act === 'undo' && !c.eye, '在今晚页点「重做」:两边一起回到生效(同一个 recAct)', c);
+            S.ok(!p.errors.length, '修订线联动 0 报错', p.errors);
+        } finally { p.done(); }
     }
 }

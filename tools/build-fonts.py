@@ -5,7 +5,7 @@
     uv run --with fonttools --with brotli python -I tools/build-fonts.py /path/to/NotoSerifCJKsc-Regular.otf
 
 字表 = 《GB 2312》一级 3755 个常用字(本地用 Python 自带的 gb2312 编解码生成,不用下载字表)
-     ∪ index.html / ai.js 里实际出现的汉字
+     ∪ index.html 和 js/ 下全部模块里实际出现的汉字(v2;v1 时是 index.html / ai.js)
      ∪ 全角标点、中文引号、省略号。
 顾问写出来的话基本落在常用字里,离线也是宋体;子集外的生僻字落到下一个字体(见 index.html 的 --serif)。
 
@@ -28,7 +28,7 @@ OUT = ROOT / "fonts" / "noto-serif-sc-400-skin.woff2"
 CHARS = ROOT / "fonts" / "noto-serif-sc-400-skin.chars.txt"
 META = ROOT / "fonts" / "noto-serif-sc-400-skin.meta.json"
 FAMILY = "Skin Serif SC"
-UI_FILES = ["index.html", "ai.js"]
+UI_FILES = ["index.html"] + sorted(str(p.relative_to(ROOT)) for p in (ROOT / "js").rglob("*.js"))
 CJK = re.compile(r"[　-〿㐀-䶿一-鿿豈-﫿＀-￯]")
 PUNCT = "·—‘’“”…、。，：；！？（）《》〈〉「」『』【】〔〕～－"
 
@@ -88,7 +88,7 @@ def main() -> int:
         "source_version": str(src_name.getName(5, 3, 1, 0x409)),
         "source_sha256": hashlib.sha256(src.read_bytes()).hexdigest(),
         "license": "SIL Open Font License 1.1 (fonts/LICENSES.txt)",
-        "charset": "GB 2312 level 1 + UI text of index.html/ai.js + CJK punctuation",
+        "charset": "GB 2312 level 1 + UI text of index.html/js/**/*.js + CJK punctuation",
         "character_count": len(have),
         "ui_characters": len(set(ui)),
         "ui_missing_in_source": "".join(missing),
