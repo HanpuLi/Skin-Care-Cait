@@ -48,7 +48,9 @@ try {
         S.ok(!r.globals.length, 'App 不往 window 上挂东西(模块里没有全局)', r.globals);
         // 设置(印章)能打开,同步一行在
         const st = await p.eval(`document.getElementById('btn-settings').click();await new Promise(r=>setTimeout(r,80));
-            const ov=document.getElementById('settings-sheet');return {open:!!ov,line:(document.getElementById('sync-line')||{}).textContent||'',signin:!!(ov&&ov.querySelector('[data-act=signin]'))}`);
+            const home=document.getElementById('settings').classList.contains('active')&&location.hash==='#/settings';
+            document.getElementById('set-go-account').click();await new Promise(r=>setTimeout(r,80));
+            const ov=home&&document.getElementById('settings');return {open:!!ov,line:(document.getElementById('sync-line')||{}).textContent||'',signin:!!(ov&&ov.querySelector('[data-act=signin]'))}`);
         S.ok(st.open && /没登录/.test(st.line) && st.signin, '印章打开设置:没登录时写「数据只在这台设备上」,有登录按钮', st);
         // 地址栏直接进某个 tab
         await p.send('Page.navigate', { url: origin + '/index.html#/products' }); await sleep(300);

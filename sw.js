@@ -8,7 +8,7 @@
 //   (t/engine-unit.mjs 从这里解析清单、对着 main 核;字体子集重做是原地覆盖同一个文件名,不升版已装 App 永远拿旧子集)。
 // · Firebase SDK(URL 带版本、内容不变):缓存优先。iOS 会清 HTTP 缓存,不放进 SW 的话离线首开就成了「没登录」。
 // · Google 字体域(子集外的生僻字兜底):stale-while-revalidate,先给缓存、后台更新。
-const CACHE_NAME = 'skincare-app-v34';
+const CACHE_NAME = 'skincare-app-v35';
 const CORE = [
   './',
   './index.html',
@@ -20,6 +20,8 @@ const CORE = [
   // v2:模块和样式(和仓库里 js/、css/ 的文件一一对应;t/engine-unit.mjs 核对,多一个少一个都报错)
   './css/base.css',
   './css/components.css',
+  './css/pages.css',
+  './css/sans.css',
   './css/screens/advisor.css',
   './css/screens/capture.css',
   './css/screens/oobe.css',

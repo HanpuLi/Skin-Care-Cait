@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#f4f1ea">
     <!-- 首帧前定主题(跟随系统 / 纸 / 夜 / 晚上自动),免得深色模式先闪一下浅色 -->
-    <script>(function(){var d=false,y='serif';try{var t=localStorage.getItem('sk_theme')||'system',h=new Date().getHours();d=t==='dark'||(t==='auto'&&(h>=21||h<7))||(t==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);y=localStorage.getItem('sk_type')==='sans'?'sans':'serif';}catch(e){}var r=document.documentElement;r.setAttribute('data-theme',d?'dark':'light');r.setAttribute('data-type',y);var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',y==='sans'?(d?'#0e0e10':'#f7f7f5'):(d?'#161412':'#f4f1ea'));})();</script>
+    <script>(function(){var d=false,y='serif';try{var t=localStorage.getItem('sk_theme')||'system',h=new Date().getHours();d=t==='dark'||(t==='auto'&&(h>=21||h<7))||(t==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);y=localStorage.getItem('sk_type')==='sans'?'sans':'serif';}catch(e){}var r=document.documentElement;r.setAttribute('data-theme',d?'dark':'light');r.setAttribute('data-type',y);var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',y==='sans'?(d?'#000000':'#f2f2f7'):(d?'#161412':'#f4f1ea'));})();</script>
     <title>护肤计划</title>
     <link rel="icon" href="icon-192.png" type="image/png">
     <link rel="manifest" href="manifest.json">
@@ -26,6 +26,9 @@
     <link rel="stylesheet" href="css/screens/capture.css">
     <link rel="stylesheet" href="css/screens/settings.css">
     <link rel="stylesheet" href="css/screens/oobe.css">
+    <link rel="stylesheet" href="css/pages.css">
+    <!-- 无衬线是独立的一套(DESIGN.md §5.2),放最后:只在 <html data-type="sans"> 时生效 -->
+    <link rel="stylesheet" href="css/sans.css">
     <!-- Firebase SDK(compat v9,全局 firebase)不在这里同步加载:弱网下三个同步脚本会挡住解析。
          js/app.js 画完第一屏后再按顺序插入(SW 也缓存它们);加载不到(离线 / 被墙)就只用本机数据 -->
     <!-- 看门狗(经典脚本,不依赖任何模块):模块图里任何一个文件没加载到 / 链接失败,App 会变成没有提示的空壳。

@@ -1,0 +1,110 @@
+/* ══ 无衬线 ·「仪器」(DESIGN.md §5.2;<html data-type="sans">,设置 → 提醒与外观 → 字体,只存本机 sk_type)═══════════
+   自成一套,不是纸墨换字体:纸墨靠通栏细线和字号分层,这里靠 inset-grouped 卡片(共同区域)和字重分层;
+   按钮是实心胶囊,chip 是浅灰底胶囊,分段控件是「滑块在槽里」;入栈页从右滑入,按压轻缩。
+   共同底线照旧:正文对比 ≥4.5:1、全 App 字号 ≤6 种(12/14/16/18/22/28)、触控 ≥44px —— s-50 两套都跑。 */
+:root[data-type="sans"]{
+  --serif:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  --mono:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Noto Sans SC",system-ui,sans-serif;
+  --paper:#f2f2f7;--sheet:#ffffff;--tint:#e9e9ef;
+  --line:#dcdce1;--line-ctl:#8e8e93;
+  --ink-strong:#000000;--ink:#1c1c1e;--muted:#5c5c61;--faint:#6a6a70;
+  --medical:#b3261e;--caution:#8a5a00;--ok:#2f6b3a;--rev:#2f5bb7;--accent:#2f5bb7;
+  --scrim:rgba(0,0,0,.28);
+  --lh-meta:18px;--lh-note:20px;--lh-body:24px;--lh-item:22px;--lh-head:28px;--lh-title:34px;--ls-body:0;
+  --r-ctl:12px;--r-card:16px;--r-sheet:22px;--gutter:16px;
+  --ease:cubic-bezier(.2,.8,.2,1);
+  font-synthesis-weight:auto;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+/* 深色:真黑底 + 抬升的卡片(OLED);灰阶取系统灰的明度,不带暖色 */
+:root[data-type="sans"][data-theme="dark"]{
+  --paper:#000000;--sheet:#1c1c1e;--tint:#2c2c2e;
+  --line:#38383a;--line-ctl:#7c7c82;
+  --ink-strong:#ffffff;--ink:#ececf0;--muted:#a5a5ab;--faint:#94949a;
+  --medical:#ff8a7a;--caution:#f0b85a;--ok:#86c98c;--rev:#7fa6ff;--accent:#7fa6ff;
+  --scrim:rgba(0,0,0,.6)}
+
+/* ── 字:4 档字重语义(大标题 700 / 标题 600 / 小标题 500 / 正文 400);数字等宽;大字号字距收紧 ── */
+:root[data-type="sans"] :is(b,strong){font-weight:600}
+:root[data-type="sans"] :is(.pg-t,.page-title){font-weight:700;letter-spacing:-.02em}
+:root[data-type="sans"] :is(.sheet-t,.ob-lede){font-weight:600;letter-spacing:-.01em}
+:root[data-type="sans"] :is(.sec-t,.rec-q-l,.rev-h){font-weight:600;color:var(--muted);letter-spacing:.02em}
+:root[data-type="sans"] :is(.btn,.btn-link,.tab[aria-selected="true"],.chip[aria-pressed="true"],.chip[aria-checked="true"],.nav-l){font-weight:500}
+:root[data-type="sans"] :is(.mono,.meta,.n7-dow,.eyebrow){font-variant-numeric:tabular-nums;letter-spacing:0}
+:root[data-type="sans"] .eyebrow{font-weight:600;color:var(--muted)}
+:root[data-type="sans"] .seal span{font-weight:600;box-shadow:none;background:var(--tint)}
+
+/* ── 骨架:页头和标签栏是半透明材质,内容从下面滑过 ── */
+:root[data-type="sans"] :is(.hdr,.tabbar){background:color-mix(in srgb,var(--paper) 78%,transparent);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px)}
+:root[data-type="sans"] .tabbar{border-top:.5px solid var(--line)}
+:root[data-type="sans"] .tab{color:var(--muted)}
+:root[data-type="sans"] .tab[aria-selected="true"]{color:var(--ink-strong)}
+:root[data-type="sans"] .tab::after{width:18px;height:3px;border-radius:2px}
+:root[data-type="sans"] .tab[aria-selected="true"]::after{background:var(--ink-strong)}
+
+/* ── 分组卡片(inset grouped):每个 .sec 是一张卡,组与组之间留白,不画通栏线 ── */
+:root[data-type="sans"] :is(.sec,.fold.sec){background:var(--sheet);border:0;border-radius:var(--r-card);margin-top:var(--sp-5);padding:var(--sp-4)}
+:root[data-type="sans"] .sec>.sec-h{margin-bottom:var(--sp-1)}
+:root[data-type="sans"] .rows{border-bottom:0}
+:root[data-type="sans"] .row{border-top:0;position:relative}
+:root[data-type="sans"] .row+.row::before,:root[data-type="sans"] .rows>li+li>.row::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:var(--line);transform:scaleY(.5);transform-origin:top}
+:root[data-type="sans"] .fold{border-top:0}
+:root[data-type="sans"] .fold>summary::after{transition:transform .2s var(--ease)}
+
+/* 页头:大标题,返回键用强调色(系统导航栏的语言) */
+:root[data-type="sans"] .pg-h{border-bottom:0;margin-bottom:0;padding-bottom:var(--sp-2)}
+:root[data-type="sans"] .pg-back{color:var(--accent);font-weight:400;margin-left:-10px}
+:root[data-type="sans"] .pg-back .ico{stroke-width:2.2}
+:root[data-type="sans"] .pg-t{line-height:var(--lh-title)}
+
+/* 「→」行:卡片里的一行;连着的几行合成一张卡,分隔线从文字起点开始 */
+:root[data-type="sans"] .nav-row{background:var(--sheet);border:0;border-radius:0;padding:var(--sp-3) var(--sp-4);position:relative;min-height:52px}
+:root[data-type="sans"] :not(.nav-row)+.nav-row,:root[data-type="sans"] .nav-row:first-child{border-top-left-radius:var(--r-card);border-top-right-radius:var(--r-card)}
+:root[data-type="sans"] .nav-row:not(:has(+.nav-row)){border-bottom-left-radius:var(--r-card);border-bottom-right-radius:var(--r-card)}
+:root[data-type="sans"] .nav-row+.nav-row::before{content:"";position:absolute;left:var(--sp-4);right:0;top:0;height:1px;background:var(--line);transform:scaleY(.5);transform-origin:top}
+:root[data-type="sans"] .nav-row:active{background:var(--tint)}
+:root[data-type="sans"] .nav-chev{width:16px;height:16px;stroke-width:2.2;color:var(--line-ctl)}
+:root[data-type="sans"] .sec .nav-row{padding-left:0;padding-right:0;background:transparent}
+:root[data-type="sans"] .sec .nav-row+.nav-row::before{left:0}
+
+/* 设置二级页:每段一张卡 */
+:root[data-type="sans"] .set-page>.sheet-sec{background:var(--sheet);border:0;border-radius:var(--r-card);padding:var(--sp-4);margin-top:var(--sp-5)}
+:root[data-type="sans"] .set-page>.sheet-sec:first-child{margin-top:var(--sp-3)}
+
+/* ── 控件 ── */
+/* 按钮:主 = 墨色实心胶囊;次 = 浅灰底,不描边 */
+:root[data-type="sans"] .btn{border-radius:999px;box-shadow:none;background:var(--tint);color:var(--ink);transition:transform .12s var(--ease),background-color .12s}
+:root[data-type="sans"] .btn-primary{background:var(--ink-strong);color:var(--paper)}
+:root[data-type="sans"][data-theme="dark"] .btn-primary{background:var(--ink-strong);color:#000}
+:root[data-type="sans"] .btn-danger{background:color-mix(in srgb,var(--medical) 12%,var(--sheet));color:var(--medical);box-shadow:none}
+:root[data-type="sans"] :is(.btn,.chip,.nav-row,.seg>button):active{transform:scale(.97)}
+:root[data-type="sans"] .btn-link{color:var(--accent)}
+:root[data-type="sans"] .btn-link.quiet{color:var(--muted)}
+:root[data-type="sans"] .btn-link.danger-link{color:var(--medical)}
+/* chip:浅灰底胶囊;选中是墨色实心 */
+:root[data-type="sans"] .chip{border-radius:999px;box-shadow:none;background:var(--tint)}
+:root[data-type="sans"] :is(.chip[aria-pressed="true"],.chip[aria-checked="true"]){background:var(--ink-strong);color:var(--paper);box-shadow:none}
+:root[data-type="sans"][data-theme="dark"] :is(.chip[aria-pressed="true"],.chip[aria-checked="true"]){color:#000}
+/* 分段控件:槽 + 滑块(唯一用投影的地方:滑块要浮在槽上) */
+:root[data-type="sans"] .seg{gap:2px;padding:2px;border-radius:12px;background:var(--tint)}
+:root[data-type="sans"] .seg>button{min-height:44px;border-radius:10px;box-shadow:none;transition:background-color .2s var(--ease)}
+:root[data-type="sans"] :is(.seg>button[aria-pressed="true"],.seg>button[aria-checked="true"]){background:var(--sheet);box-shadow:0 1px 3px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.04)}
+:root[data-type="sans"][data-theme="dark"] :is(.seg>button[aria-pressed="true"],.seg>button[aria-checked="true"]){background:#636366}
+/* 开关:系统样式,开 = 绿 */
+:root[data-type="sans"] .sw i{box-shadow:none;background:var(--tint);border-radius:999px}
+:root[data-type="sans"] .sw i::after{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+:root[data-type="sans"] .sw input:checked+i{background:#248a3d}
+:root[data-type="sans"] :is(input[type="text"],input[type="date"],input:not([type]),select,textarea){border-radius:var(--r-ctl)}
+
+/* ── 浮层:更大的圆角,从底部带一点弹性 ── */
+:root[data-type="sans"] .sheet{border-radius:var(--r-sheet) var(--r-sheet) 0 0;animation-timing-function:var(--ease)}
+:root[data-type="sans"] .sheet::before{width:36px;height:5px;border-radius:3px;background:var(--line)}
+:root[data-type="sans"] .sheet-sec{border-top:0}
+:root[data-type="sans"] .sheet-sec+.sheet-sec{border-top:1px solid var(--line)}
+:root[data-type="sans"] .toast{border-radius:999px;box-shadow:0 4px 16px rgba(0,0,0,.12);background:var(--ink-strong);color:var(--paper)}
+:root[data-type="sans"][data-theme="dark"] .toast{background:var(--tint);color:var(--ink)}
+
+/* ── 入栈从右滑入(跟系统导航的方向一致),出栈从左;减少动态效果时 base.css 统一关掉 ── */
+:root[data-type="sans"] .panel.pg-push{animation:sans-push .28s var(--ease)}
+:root[data-type="sans"] .panel.pg-pop{animation:sans-pop .24s var(--ease)}
+@keyframes sans-push{from{opacity:0;transform:translateX(40px)}}
+@keyframes sans-pop{from{opacity:.4;transform:translateX(-24px)}}
+:root[data-type="sans"] .panel:not(.pg-drag){transition:transform .28s var(--ease)}

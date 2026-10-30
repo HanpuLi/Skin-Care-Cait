@@ -1,0 +1,33 @@
+/* ══ 多页(DESIGN.md §3–4):页头、「→」行、入栈 / 出栈动效、左边缘右滑 ═══════════════════════════════
+   这一份是纸墨的写法;无衬线在 sans.css 里另有一套,不是在这上面换字体。 */
+
+/* 页头:「‹ 父页名」在上,大标题(每页一个 h1)在下;进页时焦点落在 h1,不画焦点框(它不是控件) */
+.pg-h{display:flex;flex-direction:column;align-items:flex-start;padding:0 0 var(--sp-4);border-bottom:1px solid var(--line);margin-bottom:var(--sp-2)}
+.pg-back{display:inline-flex;align-items:center;gap:var(--sp-1);min-height:44px;min-width:44px;margin-left:-8px;padding:0 var(--sp-3) 0 var(--sp-1);
+  font:16px/22px var(--serif);color:var(--muted)}
+.pg-back .ico{width:20px;height:20px}
+.pg-t{font:28px/var(--lh-title) var(--serif);color:var(--ink-strong);text-wrap:balance;margin-top:var(--sp-1)}
+.pg-t:focus{outline:none}
+.pg-h:not(:has(.pg-back)) .pg-t{margin-top:var(--sp-3)}
+.pg-b>.sec:first-child,.pg-b>section:first-child{border-top:0;margin-top:0}
+
+/* 「→」行:整行可点 ≥52px;左主文案,右一句现状(不点进去也知道里面的状态),末尾 chevron。连着几行共用分隔线 */
+.nav-row{display:flex;align-items:center;gap:var(--sp-3);min-height:52px;padding:var(--sp-3) 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  color:var(--ink);text-decoration:none;-webkit-touch-callout:none}
+.nav-row+.nav-row{border-top:0}
+.nav-l{flex:none;font:16px/var(--lh-item) var(--serif);color:var(--ink)}
+.nav-now{flex:1;min-width:0;text-align:right;font:14px/var(--lh-note) var(--serif);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nav-chev{color:var(--faint);margin-left:calc(-1 * var(--sp-1))}
+.nav-row:active{background:var(--tint)}
+.nav-list{margin-top:var(--sp-2)}
+.sec .nav-row:first-child,.nav-gap{margin-top:var(--sp-5)}
+
+/* 设置的二级页:一段一组 */
+.set-page>.sheet-sec:first-child{padding-top:var(--sp-2)}
+
+/* 入栈 / 出栈:纸墨只淡入(书页不滑);左边缘右滑时页面跟手 */
+.panel.pg-push,.panel.pg-pop{animation:pg-fade .16s ease-out}
+@keyframes pg-fade{from{opacity:0}}
+.panel{will-change:auto}
+.panel.pg-drag{transition:none}
+.panel:not(.pg-drag){transition:transform .2s ease-out}
