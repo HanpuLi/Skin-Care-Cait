@@ -184,7 +184,7 @@ function body(app) {
         <details class="fold" id="set-privacy"><summary><span class="fold-sum"><span class="lede">数据说明</span><span class="note">存在哪、发给谁</span></span></summary><div class="fold-body"><ul class="list note">${DATA_NOTE.concat(owner ? [DATA_NOTE_OWNER] : []).map(x => `<li>${esc(x)}</li>`).join('')}</ul></div></details></div>
 
     <div class="sheet-sec set-end"><div class="btn-row"><button type="button" class="btn-link quiet" data-act="oobe">重新做引导</button><button type="button" class="btn-link quiet" data-act="whatsnew">这一版改了什么</button></div>
-        <details class="fold" id="set-changelog"><summary><span class="fold-sum"><span class="meta" id="set-version">护肤计划 v${esc(VERSION)} · ${BUILD}</span><span class="note">更新日志</span></span></summary><div class="fold-body">${CHANGELOG.map(([v, d, L]) => `<div class="set-sub"><div class="sec-t">v${esc(v)} · ${esc(d)}</div><ul class="list note">${L.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`).join('')}</div></details></div>`;
+        <details class="fold" id="set-changelog"><summary><span class="fold-sum"><span class="meta" id="set-version">护肤计划 v${esc(VERSION)} (build ${BUILD})</span><span class="note">更新日志</span></span></summary><div class="fold-body">${CHANGELOG.map(([v, d, L]) => `<div class="set-sub"><div class="sec-t">v${esc(v)} · ${esc(d)}</div><ul class="list note">${L.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`).join('')}</div></details></div>`;
 }
 
 // ── 提醒(「主动找你」,ai/push.js):开关、安静时段、每天最多几条、这台设备的状态、iPhone 装到主屏的步骤 ──

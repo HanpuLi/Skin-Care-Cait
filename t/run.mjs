@@ -51,7 +51,7 @@ const want = process.argv.slice(2);
 const pick = f => !want.length || want.some(w => f.includes(w));
 const files = fs.readdirSync(DIR).filter(f => /^s-.*\.mjs$/.test(f)).sort().filter(pick);
 // 另起进程跑的几份(它们自己 process.exit,不能 import 进来)
-const SUITES = ['sync-unit', 'engine-unit', 'v2-boot', 'v2-a-tonight', 'v2-a-record', 'v2-a-capture', 'v2-b-advisor', 'v2-b-products', 'v2-b-settings', 'v2-b-oobe', 'v1-parity'].filter(pick);
+const SUITES = ['sync-unit', 'engine-unit', 'v2-boot', 'v2-a-tonight', 'v2-a-record', 'v2-a-capture', 'v2-b-advisor', 'v2-b-products', 'v2-b-settings', 'v2-b-oobe', 'v1-parity', 'v2-version'].filter(pick);
 
 const srv = await serve();
 const origin = 'http://127.0.0.1:' + srv.address().port;
