@@ -155,5 +155,29 @@ await run('v2-b-settings', [
         const pr = await design(p, '#settings-sheet');
         S.ok(!pr.emoji.length && !pr.lowCr.length && !pr.brightN && !pr.smallN, '深色:对比度、不刺眼、触控 ≥44', pr);
         S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
+    ['提醒(主动找你)', async ({ S, open }) => {
+        let p = await open({ seed: 'full' });
+        await openSet(p);
+        S.ok(await has(p, '#set-push') && !(await p.eval(`return document.getElementById('set-pushon').checked`)) && !(await has(p, '#set-pushqs')), '提醒:一段,默认关,关着不显示安静时段');
+        S.ok(/登录并开通顾问后可用/.test(await text(p, '#set-push-dev')) && /不写病名、用药/.test(await text(p, '#set-push')), '没登录:这台设备那行说要登录开通;写明锁屏上不写病名、用药');
+        await sw(p, 'set-pushon');
+        S.ok(!(await p.eval(`return document.getElementById('set-pushon').checked`)) && !('push' in (await prof(p))), '没登录点开关:开不了,档案不写');
+        S.ok(!p.errors.length, '0 console error(没登录)', p.errors);
+        p = await open({ seed: 'full', mode: 'on', login: true });
+        await openSet(p);
+        const line = await text(p, '#set-push-dev');
+        S.ok(!/登录并开通/.test(line) && /这台设备/.test(line), '登录 + 开通:这台设备那行换成设备状态', line);
+        await p.eval(`document.getElementById('set-privacy').open=true;return 1`);
+        S.ok(/开了「提醒」以后/.test(await text(p, '#set-privacy')) && /不带 HRT/.test(await text(p, '#set-privacy')), '数据说明:提醒发什么、不带 HRT 写清楚');
+        S.ok(!p.errors.length, '0 console error(登录)', p.errors);
+        // 已开着(别的设备开的,设置随档案同步过来):显示安静时段 / 每天最多;改了写进档案
+        p = await open({ seed: 'full', mode: 'on', login: true, after: `const P=JSON.parse(localStorage.getItem('sk_profile1'));P.push={on:true,qs:23,qe:8,max:1,at:1};localStorage.setItem('sk_profile1',JSON.stringify(P))` });
+        await openSet(p);
+        S.ok(await p.eval(`return document.getElementById('set-pushon').checked`) && await has(p, '#set-pushqs') && await has(p, '#set-pushmax'), '开着:开关亮、安静从 / 到、每天最多', await prof(p));
+        await p.eval(`const el=document.getElementById('set-pushmax');el.value='2';el.dispatchEvent(new Event('change'));return 1`); await sleep(300);
+        const pp = (await prof(p)).push || {};
+        S.ok(pp.max === 2 && pp.on === true && pp.at > 1, '每天最多改成 2 → 档案 profile.push(带改动时刻)', pp);
+        S.ok(!p.errors.length, '0 console error(登录)', p.errors);
     }]
 ]);

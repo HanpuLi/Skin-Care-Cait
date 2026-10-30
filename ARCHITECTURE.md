@@ -11,7 +11,7 @@ js/sync.js            Firestore sync, conflict and recovery UI, the one-window W
 js/firebase-config.js public Firebase client configuration (not a credential; see SECURITY.md)
 js/model/*.js         records: profile, products, journal, week (shower/shave schedule), regimen, photos, world
 js/engine/*.js        pure rules: gate, redline, ladder, rules, schedule, needs, score, assess, regimen
-js/ai/*.js            advisor: HTTP client, context snapshot, applying advisor changes through the gate
+js/ai/*.js            advisor: HTTP client, context snapshot, applying advisor changes through the gate; push.js = reminders (Web Push)
 js/ui/*.js            one module per screen plus shared sheets; each exports id, title, render(app), mount(root, app)
 css/tokens.css        paper-and-ink design tokens, light and dark
 css/base.css          reset, layout, typography, tab bar, toast
@@ -62,6 +62,16 @@ Nothing is sent to the advisor automatically (tonight's plan, feedback after log
 - If she has already ticked steps when a new advisor version arrives (late, or re-planned), the page keeps the list she is following and offers "swap in".
 
 Other device-only keys added in v2: `sk_aiprivacy1` (`{uid, at}`: the data notice shown the first time this account opens the advisor screen on this device; same format as v1) and the photo-analysis switch, which is a profile field (`photoAnalysis`, synced): unset means on only for the owner account, other accounts must turn it on themselves.
+
+## Reminders (Web Push)
+
+`js/ai/push.js` subscribes this device and uploads a few facts to the advisor service (`/api/push`, `/api/push/sub`, `/api/push/unsub`, `/api/push/prefs`, `/api/push/test`, `/api/state`); the service's `push.py tick` decides every 30 minutes and sends at most one notification per person per run. Off by default.
+
+- Settings live in the profile as `profile.push = {on, qs, qe, max, at}` (synced with the account; no new cloud key; `skinSignature` ignores it). Quiet hours default to 23:00–08:00, at most 1 a day.
+- Facts (`pushFacts(W, {plan, photoOn, shop, uid})`, pure, unit-tested in engine-unit): `today, mode, done, night` (the tonight page's night type), `key` (one product name, omitted while the medical notice or care state is on), `times` (last 14 "done tonight" clock times), `photo, lastPhoto, redline, redStart, shopNow` (short ids of "needed now" items). Nothing else: no context snapshot, no HRT, no skin tags, no notes. Uploaded only while on and signed in with the advisor enabled, when the facts' signature changes (checked from `renderAll` and the once-a-minute day check), and once when the app opens.
+- What the service sends: tonight's plan at her usual time (median of the last 14 "done tonight" times, at least 3, otherwise 21:30; not sent in full mode once done; in minimal mode it only says what is planned); a photo nudge and new "needed now" shopping items are folded into that message; the medical notice once per 7 days with fixed neutral text. Lock-screen text never names a condition, medication or HRT.
+- Notification clicks: `sw.js` posts `{type: 'sk-open', tab}` to an open window (the app calls `show(tab)`) or opens `./index.html#/<tab>`.
+- iPhone needs the app added to the home screen (iOS 16.4+); the settings section says so.
 
 ## Shell
 

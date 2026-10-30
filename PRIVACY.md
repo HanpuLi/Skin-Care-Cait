@@ -36,6 +36,8 @@ The server does not keep the request content. It logs only which account called 
 
 Some adviser output is saved into the user's own synced record: the photo analysis result (structured findings, not the photos), the adviser's feedback on a day's log, and weekly review results. Photos themselves are never synced; they stay in the browser's local database on the device and can be deleted from the app together with that day's record.
 
+Reminders (off by default, per account): when the user turns them on in settings, the device registers a Web Push subscription with the adviser server and, when something changes, uploads a few facts used to decide whether to send a notification: today's date, the mode, whether tonight is marked done, the type of night and the name of tonight's key product, the clock times of the last 14 "done tonight" marks, whether photo analysis is on and the date of the last analysis, whether the medical notice is on and since when, and short ids of shopping items marked as needed now. No hormone data, skin notes or other records are sent for this. The server keeps only the latest set and the subscription, and deletes both when reminders are turned off. The one-line notification text is written by a fast Claude model from these facts, or taken from a fixed template; lock-screen text never names a condition or medication, and the medical notice always uses the same neutral sentence.
+
 ## Public repository boundary
 
 No real user export, personal skincare record, account identifier, credential, private note or screenshot containing private information should be committed to this repository. Files explicitly listed in `.gitignore` are local-only operator material.
