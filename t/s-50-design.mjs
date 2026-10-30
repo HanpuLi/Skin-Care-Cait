@@ -28,12 +28,14 @@ const SCREENS = [
 const pass = (r, scheme) => !r.emoji.length && r.minFs >= 12 && r.pctLt14 <= 15 && !r.lowCr.length && !r.smallN && !r.inputsLt16 && r.red <= 2 && (scheme === 'light' || !r.brightN) && !r.styleAttrs.length;
 export default async function ({ origin, S, open }) {
     const allSizes = new Set();
-    const PART = process.env.DESIGN_PART || '';   // 只跑一段:DESIGN_PART=screens / states
+    const PART = process.env.DESIGN_PART || '';
+    const TYPE = process.env.DESIGN_TYPE || '';   // 只跑一段:DESIGN_PART=screens / states
     for (const scheme of PART === 'states' ? [] : ['light', 'dark']) {
         for (const who of ['full', 'minimal']) {
             const p = await open({ scheme });
             await p.nav(origin + '/index.html', 200);
             await p.eval(`return __seed.${who}({profile:{showJournal:true}})`);
+            if (TYPE) await p.eval(`localStorage.setItem('sk_type',${JSON.stringify(TYPE)});return 1`);   // DESIGN_TYPE=sans:无衬线那套同一口径再量一遍
             await p.reload(900);
             await p.eval(PROBE + ';return 1');
             for (const [tab, act, name] of SCREENS) {
@@ -144,7 +146,7 @@ export default async function ({ origin, S, open }) {
         .map(f => [f, fs.readFileSync(path.join(ROOT, f), 'utf8')]);
     const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
     const paperDefs = css.map(([f, s]) => [f, (s.match(/--paper:/g) || []).length]).filter(([, n]) => n);
-    S.ok(paperDefs.length === 1 && paperDefs[0][0] === 'css/tokens.css' && paperDefs[0][1] === 2, 'token 只定义一份(css/tokens.css,浅 / 深各一)', paperDefs);
+    S.ok(paperDefs.length === 1 && paperDefs[0][0] === 'css/tokens.css' && paperDefs[0][1] === 4, 'token 只定义一份(css/tokens.css,纸墨浅 / 深 + 无衬线浅 / 深)', paperDefs);
     const all = html + css.map(([, s]) => s).join('\n');
     S.ok(!/rgba\(128|rgba\(255,176|#22a06b|#e2483d|DM\+Sans|DM Sans|DM Mono/.test(all), '旧配色和 DM 字体都清掉了');
     S.ok(!/<style[\s>]/.test(html) && (html.match(/rel="stylesheet" href="css\//g) || []).length === css.length, 'index.html 不内联样式,css/ 下每个文件都挂上了', (html.match(/rel="stylesheet" href="css\//g) || []).length);

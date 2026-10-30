@@ -53,6 +53,19 @@ await run('v2-b-settings', [
         S.ok(th.t === 'dark' && th.ls === 'dark' && !th.cloud && th.meta === '#161412', '选「夜」:立刻变深色,只存本机(sk_theme 不进云)', th);
         await seg(p, 'theme', 'system');
         S.ok(await p.eval(`return document.documentElement.dataset.theme==='light'`), '回「跟随系统」:系统是浅色就浅色');
+        // 字体:纸墨(默认)/ 无衬线(Cici 10/30),只存本机,首帧就生效
+        S.ok(await p.eval(`return document.documentElement.dataset.type==='serif' && document.querySelector('[data-seg=type] [data-v=serif]').getAttribute('aria-checked')==='true'`), '字体默认「纸墨」');
+        await seg(p, 'type', 'sans');
+        const ty = await p.eval(`const r=document.documentElement,cs=getComputedStyle(document.body),t=getComputedStyle(document.querySelector('.page-title')||document.body);return {y:r.dataset.type,ls:localStorage.getItem('sk_type'),cloud:'sk_type' in ${DATA},ff:cs.fontFamily,bg:cs.backgroundColor,meta:document.querySelector('meta[name=theme-color]').content,on:document.querySelector('[data-seg=type] [data-v=sans]').getAttribute('aria-checked')}`);
+        S.ok(ty.y === 'sans' && ty.ls === 'sans' && !ty.cloud && /PingFang|apple-system|system-ui/.test(ty.ff) && !/Serif/.test(ty.ff) && ty.bg === 'rgb(247, 247, 245)' && ty.meta === '#f7f7f5' && ty.on === 'true', '选「无衬线」:立刻换系统黑体和中性底色,只存本机', ty);
+        await seg(p, 'theme', 'dark');
+        S.ok(await p.eval(`return getComputedStyle(document.body).backgroundColor==='rgb(14, 14, 16)' && document.querySelector('meta[name=theme-color]').content==='#0e0e10'`), '无衬线 + 夜:深色那套也换');
+        await p.eval(`location.reload();return 1`); await sleep(1500);
+        S.ok(await p.eval(`return document.documentElement.dataset.type==='sans' && document.documentElement.dataset.theme==='dark'`), '重开:首帧脚本就是无衬线 + 夜(不闪纸墨)');
+        await openSet(p);
+        await seg(p, 'theme', 'system');
+        await seg(p, 'type', 'serif');
+        S.ok(await p.eval(`return document.documentElement.dataset.type==='serif' && /Skin Serif/.test(getComputedStyle(document.body).fontFamily) && localStorage.getItem('sk_type')==='serif'`), '切回「纸墨」:宋体回来');
         const pr = await design(p, '#settings-sheet');
         S.ok(!pr.emoji.length && pr.minFs >= 12 && !pr.lowCr.length && !pr.inputsLt16 && !pr.styleAttrs.length, '纸墨:0 emoji、字号、对比度、输入框 16、没有 style=', pr);
         S.ok(!pr.smallN, '可点的都 ≥44', pr.small);

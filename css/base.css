@@ -92,3 +92,16 @@ html{scroll-padding-top:calc(44px + var(--safe-top) + var(--sp-2))}
 .hdr{position:sticky;top:0;z-index:40;background:var(--paper);margin:0 calc(-1 * var(--gutter));padding-left:var(--gutter);padding-right:var(--gutter)}
 .tab{background:none;border:0;cursor:pointer}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+/* iPhone Safari 标签页里「装到主屏」一行(app.js installHint);关了不再出 */
+.install-hint{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);margin:0 0 var(--sp-3);padding:var(--sp-2) 0;border-bottom:1px solid var(--line)}
+.install-hint[hidden]{display:none}
+.install-hint .note{margin:0}
+.install-hint .btn-link{white-space:nowrap;flex:none}
+/* 无衬线:层级多一层字重(纸墨那套只靠字号和墨色);系统黑体有真粗体,不用合成 */
+:root[data-type="sans"]{font-synthesis-weight:auto;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+:root[data-type="sans"] :is(.page-title,.sheet-t,.ob-lede){font-weight:600;letter-spacing:-.02em}
+:root[data-type="sans"] :is(b,strong){font-weight:500}
+:root[data-type="sans"] :is(.sec-t,.rec-q-l,.rev-h){font-weight:500}
+:root[data-type="sans"] :is(.btn-primary,.tab[aria-selected="true"],.chip[aria-pressed="true"]){font-weight:500}
+:root[data-type="sans"] :is(.mono,.meta,.n7-dow){font-variant-numeric:tabular-nums;letter-spacing:0}
+:root[data-type="sans"] .seal span{font-weight:500}

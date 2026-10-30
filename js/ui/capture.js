@@ -170,8 +170,8 @@ export function openCapture(app, opts) {
                 <p class="meta cap-count">已拍 ${shotN()} / 3${s.views.front ? '' : ' · 至少要一张正脸'}</p>
                 <div class="cap-acts"><button type="button" class="btn btn-primary btn-block" data-cap="go" id="cap-go"${s.views.front ? '' : ' disabled'}>${shotN() < 3 ? '先分析这几张' : '开始分析'}</button></div>`;
         }
-        // 看的时候不让关:关了的话结果页(「确认记上 / 改一下」)就再也找不到了
-        if (s.step === 'busy') return `<p class="lede" role="status">顾问在看照片，大约半分钟。</p><p class="note">看完之前先别关这一页，看完了在这里确认记不记。</p>`;
+        // 看的时候可以关:结果照样记进当天(analyze 里 ov 不在了就只弹一句);要不要预填状态和位置,到「记录」里那天点「加状态和位置」
+        if (s.step === 'busy') return `<p class="lede" role="status">顾问在看照片，大约半分钟。</p><p class="note">可以先关掉这一页做别的。看完会记在今天，要不要把建议的状态和位置填上，到「记录」里再定。</p>`;
         if (s.step === 'error') {
             return `<p class="lede">这次没分析成。</p><p class="note">${esc(s.err)}</p>
                 <div class="cap-acts"><button type="button" class="btn btn-primary btn-block" data-cap="go">再试一次</button><button type="button" class="btn btn-block" data-cap="keep">先不分析，只存照片</button></div>`;
@@ -216,12 +216,6 @@ export function openCapture(app, opts) {
         if (!v || !v.videoWidth) { toast('相机还没准备好，等一下再拍'); return; }
         took(toJpeg(v, v.videoWidth, v.videoHeight));   // 存原图方向(不镜像):左右要按她自己的左右
     }
-    // 分析中:藏起关闭按钮、挡住点背景和 Esc
-    function lock(on) {
-        s.locked = on;
-        if (on) ov.dataset.noesc = '1'; else delete ov.dataset.noesc;
-        const x = ov.querySelector('.sheet-x'); if (x) x.hidden = on;
-    }
     const sameOwner = () => ((app.store.state && app.store.state.owner) || '') === owner;
     async function saveViews(views) {
         let bad = 0;
@@ -230,7 +224,7 @@ export function openCapture(app, opts) {
     }
     async function analyze() {
         if (!s.views.front) return;
-        stopCam(); s.step = 'busy'; s.err = ''; lock(true); paint();
+        stopCam(); s.step = 'busy'; s.err = ''; paint();
         const W = app.world();
         const u = app.sync && app.sync.state && app.sync.state.user;
         const ctx = buildSkincareContext(W, { name: u && u.displayName ? String(u.displayName).split(' ')[0] : '', shown: app.shownTonight ? app.shownTonight(W) : null });
@@ -242,13 +236,11 @@ export function openCapture(app, opts) {
         let d;
         try { const r = await app.ai.api.assess(ctx, images, extra); d = (r && r.data) || {}; }
         catch (e) {
-            lock(false);
             if (!sameOwner()) { close(); return; }
             s.err = (e.code === 0 && !e.aborted ? (e.message || '顾问暂时连不上。') + '照片可以先存着，连上再分析。' : e.message) || '顾问出错了'; s.step = 'error';
             if (ov.isConnected) paint(); else toast('这次没分析成：' + s.err);
             return;
         }
-        lock(false);
         if (!sameOwner()) { close(); return; }   // 等结果的时候换了账号:这是上一个人的照片和结果,不写进这个人的记录
         s.result = d;
         if (d.usable === false) { s.step = 'retake'; if (ov.isConnected) paint(); else toast('这几张不太能用，下次重拍一下'); return; }
@@ -267,8 +259,6 @@ export function openCapture(app, opts) {
         if (opts.onChange) opts.onChange();
     }
     const ov = openSheet({ id: 'capture-sheet', title: '拍照分析', full: true, html: '<div id="cap-body" class="cap"></div>', onClose: stopCam });
-    // 分析中点背景不关(openSheet 的背景关闭在冒泡阶段;这里在捕获阶段先拦下)
-    ov.addEventListener('click', e => { if (s.locked && e.target === ov) e.stopImmediatePropagation(); }, true);
     ov.addEventListener('click', e => {
         const b = e.target && e.target.closest && e.target.closest('[data-cap]');
         if (!b || b.disabled) return;

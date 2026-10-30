@@ -15,6 +15,7 @@ import { addDays, dowOf } from '../clock.js';
 import { startOobe, showWhatsNew } from './oobe.js';
 import { photoAnalysisOn, PHOTO_FIELD } from './capture.js';
 import { invalidateChatCtx } from './advisor.js';
+import { VERSION, BUILD, CHANGELOG } from '../version.js';
 
 // 极简模式是什么,全 App 只有这一种说法(引导、设置都照它)
 export const MINIMAL_DESC = '护肤品不用打卡，排上的默认都算用了；哪一步没做点一下「今晚没做」。皮肤想记就记，不会催。';
@@ -32,10 +33,13 @@ export function themeIsDark(v) {
     return v === 'dark' || (v === 'auto' && (h >= 21 || h < 7)) || ((v || 'system') === 'system' && sys);
 }
 export function currentTheme() { try { return localStorage.getItem(LOCAL_KEYS.theme) || 'system'; } catch (e) { return 'system'; } }
+// 字体:纸墨(宋体,默认)/ 无衬线(Cici 10/30 要的,系统黑体)。sk_type 也只在本机,首帧那段同一套判断
+export function currentType() { try { return localStorage.getItem(LOCAL_KEYS.type) === 'sans' ? 'sans' : 'serif'; } catch (e) { return 'serif'; } }
 export function applyTheme(v) {
-    const d = themeIsDark(v || currentTheme());
-    document.documentElement.setAttribute('data-theme', d ? 'dark' : 'light');
-    const m = document.querySelector('meta[name=theme-color]'); if (m) m.setAttribute('content', d ? '#161412' : '#f4f1ea');
+    const d = themeIsDark(v || currentTheme()), y = currentType(), r = document.documentElement;
+    r.setAttribute('data-theme', d ? 'dark' : 'light');
+    r.setAttribute('data-type', y);
+    const m = document.querySelector('meta[name=theme-color]'); if (m) m.setAttribute('content', y === 'sans' ? (d ? '#0e0e10' : '#f7f7f5') : (d ? '#161412' : '#f4f1ea'));
 }
 // 系统切深浅色 / 跨过 21 点:跟着变(整合时 app.js 启动调一次)
 let _watching = false;
@@ -156,6 +160,8 @@ function body(app) {
     <div class="sheet-sec" id="set-look"><div class="sec-t">外观</div>
         ${seg('theme', currentTheme(), [['system', '跟随系统'], ['light', '纸'], ['dark', '夜'], ['auto', '晚上自动']], '外观')}
         <p class="note">晚上自动：21:00 到早上 7:00 用夜间配色。</p>
+        <div class="set-sub"><div class="sec-t">字体</div>${seg('type', currentType(), [['serif', '纸墨'], ['sans', '无衬线']], '字体')}
+        <p class="note">纸墨是宋体，像本护理手册；无衬线用系统黑体，更利落。只改这台设备。</p></div>
         <label class="field field-row"><span>印章上的字</span><input type="text" id="set-seal" maxlength="1" autocomplete="off" placeholder="一个字" value="${esc(P.seal || P.stamp || '')}"></label></div>
 
     <div class="sheet-sec" id="set-ai"><div class="sec-t">顾问</div>
@@ -169,9 +175,12 @@ function body(app) {
     <div class="sheet-sec" id="set-data"><div class="sec-t">数据</div>
         <div class="btn-row"><button type="button" class="btn" data-act="export">导出备份</button><label class="btn file-btn">恢复备份<input type="file" accept=".json,application/json" id="set-import"></label><button type="button" class="btn" data-act="recovery">恢复副本</button></div>
         <p class="note">备份里有全部记录和这台设备上的照片。恢复之前，现在的记录会先另存一份恢复副本。</p>
+        <div class="btn-row"><button type="button" class="btn-link quiet danger-link" data-act="reset" id="set-reset">${RESET.armed ? '再点一次：清空并从头开始' : '恢复出厂'}</button></div>
+        ${RESET.armed ? `<p class="note" role="alert">会先下载一份备份，再清空${u ? '这个账号在所有设备上的' : '这台设备上的'}记录、货架和方案（照片留在这台设备上）。清空前的记录另存一份恢复副本，在「恢复副本」里能换回来。</p>` : ''}
         <details class="fold" id="set-privacy"><summary><span class="fold-sum"><span class="lede">数据说明</span><span class="note">存在哪、发给谁</span></span></summary><div class="fold-body"><ul class="list note">${DATA_NOTE.concat(owner ? [DATA_NOTE_OWNER] : []).map(x => `<li>${esc(x)}</li>`).join('')}</ul></div></details></div>
 
-    <div class="sheet-sec set-end"><div class="btn-row"><button type="button" class="btn-link quiet" data-act="oobe">重新做引导</button><button type="button" class="btn-link quiet" data-act="whatsnew">这一版改了什么</button></div></div>`;
+    <div class="sheet-sec set-end"><div class="btn-row"><button type="button" class="btn-link quiet" data-act="oobe">重新做引导</button><button type="button" class="btn-link quiet" data-act="whatsnew">这一版改了什么</button></div>
+        <details class="fold" id="set-changelog"><summary><span class="fold-sum"><span class="meta" id="set-version">护肤计划 v${esc(VERSION)} · ${BUILD}</span><span class="note">更新日志</span></span></summary><div class="fold-body">${CHANGELOG.map(([v, d, L]) => `<div class="set-sub"><div class="sec-t">v${esc(v)} · ${esc(d)}</div><ul class="list note">${L.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`).join('')}</div></details></div>`;
 }
 
 function paint(app) {
@@ -197,12 +206,14 @@ function bind(ov, app) {
         else if (a === 'redeem') redeem(app, ov);
         else if (a === 'oobe') { closeSheet('settings-sheet'); startOobe(app, { redo: true }); }
         else if (a === 'whatsnew') { closeSheet('settings-sheet'); showWhatsNew(app, { force: true }); }
+        else if (a === 'reset') factoryReset(app);
     }));
     ov.querySelectorAll('[data-seg]').forEach(g => g.querySelectorAll('[data-v]').forEach(b => b.addEventListener('click', () => {
         const v = b.dataset.v, name = g.dataset.seg;
         if (name === 'mode') setProfile(app, p => { p.minimalMode = v === 'min'; p.showJournal = v !== 'min'; });
         else if (name === 'timing') setProfile(app, p => { if (v) p.acidTiming = v; else delete p.acidTiming; });
         else if (name === 'theme') { app.store.setLocal(LOCAL_KEYS.theme, v); applyTheme(v); paint(app); }
+        else if (name === 'type') { app.store.setLocal(LOCAL_KEYS.type, v === 'sans' ? 'sans' : 'serif'); applyTheme(); paint(app); }
     })));
     const on = (id, fn) => { const el = ov.querySelector('#' + id); if (el) el.addEventListener('change', () => fn(el)); };
     on('set-showrec', el => setProfile(app, p => { if (el.checked) delete p.hideRecords; else p.hideRecords = true; }));
@@ -291,6 +302,21 @@ async function exportBackup(app) {
     const data = await backupData(app);
     download('skincare_backup_' + app.today() + '.json', JSON.stringify(data, null, 2));
     if (data._meta.photosMissing) toast('这次备份里没带上照片：这台设备的本机照片存储没打开。记录都在里面。', 5000);
+}
+// ── 恢复出厂:点两次(第一次只是亮出说明,8 秒内再点才动)→ 先下载备份 → 整份换成空的(另存恢复副本)→ 从引导开始 ──
+const RESET = { armed: false, t: null };
+async function factoryReset(app) {
+    if (!RESET.armed) { RESET.armed = true; clearTimeout(RESET.t); RESET.t = setTimeout(() => { RESET.armed = false; paint(app); }, 8000); paint(app); return; }
+    RESET.armed = false; clearTimeout(RESET.t);
+    try { await exportBackup(app); } catch (e) { toast('备份没下载成功，没有清空。', 4000); paint(app); return; }
+    if (!app.sync.replaceWithData({}, 'before-reset')) {
+        openSheet({ id: 'reset-bad', title: '没有清空', text: '先另存恢复副本没成功（这台设备存不下了），所以什么都没动。', actions: [{ label: '知道了', primary: true }] });
+        paint(app); return;
+    }
+    closeSheet('settings-sheet');
+    app.renderAll();
+    toast('清空了。刚下载的备份和「恢复副本」都能换回来。', 4500);
+    startOobe(app, {});
 }
 function importBackup(app, file) {
     const rd = new FileReader();

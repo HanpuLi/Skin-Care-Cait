@@ -87,6 +87,7 @@
 .rev[data-state="undone"] .rev-t,.rev[data-state="undone-final"] .rev-t,.rev[data-state="merged"] .rev-t,.rev[data-state="expired"] .rev-t,.rev[data-state="superseded"] .rev-t{color:var(--muted)}
 .rev-bad{margin-top:var(--sp-1)}
 .rev-act{font-size:16px}
+.rev-ask{padding-left:16px;gap:var(--sp-4)}
 .adv-review{padding:var(--sp-3) 0;border-bottom:1px solid var(--line)}
 .adv-review .lede{margin-top:var(--sp-1)}
 .adv-rv-sum{margin-top:var(--sp-1)}

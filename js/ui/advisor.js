@@ -190,7 +190,14 @@ function revHtml(W, rec, key) {
     const blk = rec.kind === 'plan' && (rec.blocked || []).length ? `<span class="note rev-bad">${esc(rec.blocked.map(b => b.text + (b.partial ? '，暂缓：' : '，没生效：') + b.why).join('；'))}</span>` : '';
     const dropped = (rec.dropped || []).length ? `<span class="note">还提到 ${rec.dropped.length} 个不在你产品库里的：${esc(rec.dropped.join('、'))}</span>` : '';
     return `<div class="rev" data-rec="${esc(key)}" data-state="${s}"><div class="rev-main"><span class="rev-h">${esc(head)}</span><span class="rev-t">${esc(text)}</span>${badTxt}${blk}${dropped}</div>
-        ${act ? `<button type="button" class="btn-link rev-act" data-recact="${esc(key)}">${act}</button>` : ''}</div>`;
+        ${act ? `<button type="button" class="btn-link rev-act" data-recact="${esc(key)}">${act}</button>` : ''}</div>${revAskHtml(rec, s, key)}`;
+}
+// 方案 / 复盘生效之后:「改一下」「聊聊」(对应健身 AI 结果的「改一下 / 聊聊」)。预填进对话,不自动发;
+//   对话里顾问有 propose_regimen / change_tonight,改动照样直接生效 + 挂修订线。今晚的小改不挂(今晚页自己有单步操作)
+function recAskLabel(rec) { return rec.kind === 'review' ? '这周的复盘' : rec.kind === 'plan' ? '顾问出的方案 v' + rec.v : '方案 v' + rec.v + ' 这次改动'; }
+function revAskHtml(rec, s, key) {
+    if (rec.kind === 'tonight' || s !== 'applied') return '';
+    return `<div class="btn-row rev-ask"><button type="button" class="btn-link sm" data-recask="${esc(key)}" data-mode="revise">改一下</button><button type="button" class="btn-link sm quiet" data-recask="${esc(key)}" data-mode="talk">聊聊</button></div>`;
 }
 
 // ── 现在的方案(离线)──
@@ -578,6 +585,12 @@ function maybeAutoReview(app) {
     runReview(app, true);
 }
 // 修订线上的「撤销 / 重做」
+// 修订线的 key → rec(和 recAct 同一套:'review' 或 '对话第几条.第几个')
+function findRecByKey(app, key) {
+    if (key === 'review') { const s = aiState(app.store); return s.review && s.review.rec ? Object.assign({}, s.review.rec, { kind: 'review' }) : null; }
+    const [mi, ri] = key.split('.').map(Number), st = chatState(app);
+    return (st.chat[mi] && (st.chat[mi].recs || [])[ri]) || null;
+}
 function recAct(app, key) {
     const t = app.today(), W = app.world();
     let rec, save;
@@ -734,6 +747,10 @@ export function mount(root, app) {
     if (red) red.addEventListener('click', redeem);
     if (code) code.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); redeem(); } });
     root.querySelectorAll('[data-recact]').forEach(b => b.addEventListener('click', () => recAct(app, b.dataset.recact)));
+    root.querySelectorAll('[data-recask]').forEach(b => b.addEventListener('click', () => {
+        const rec = findRecByKey(app, b.dataset.recask); if (!rec) return;
+        askAdvisor(app, b.dataset.mode === 'revise' ? '关于' + recAskLabel(rec) + '，我想改一下：' : '关于' + recAskLabel(rec) + '，我想聊聊：');
+    }));
     // 没收完的那条:把它前面她问的那句再发一次
     root.querySelectorAll('[data-reask]').forEach(b => b.addEventListener('click', () => {
         const chat = chatState(app).chat, mi = +b.dataset.reask;

@@ -42,7 +42,7 @@ export const K = {
     ai: 'sk_ai1'             // 顾问的跨设备状态(每周复盘做过没有等)
 };
 // 只在本机、不进信封的键(按设备存;换账号时顾问那几个由 ai 层清掉)
-export const LOCAL_KEYS = { theme: 'sk_theme', uid: 'sk_uid', lastPush: 'sk_lastpush', aiChat: 'sk_aichat1', aiNote: 'sk_ainote1', aiAcc: 'sk_aiacc1', aiOpts: 'sk_aiopts1', aiPrivacy: 'sk_aiprivacy1', aiShop: 'sk_ai_shop1', aiTonight: 'sk_ai_tonight1' };
+export const LOCAL_KEYS = { theme: 'sk_theme', type: 'sk_type', uid: 'sk_uid', lastPush: 'sk_lastpush', aiChat: 'sk_aichat1', aiNote: 'sk_ainote1', aiAcc: 'sk_aiacc1', aiOpts: 'sk_aiopts1', aiPrivacy: 'sk_aiprivacy1', aiShop: 'sk_ai_shop1', aiTonight: 'sk_ai_tonight1' };
 export const UIDK = 'sk_uid';
 export const SYNC_PREFIX = 'sk_sync_v1:', SYNC_RECOVERY = 'sk_sync_recovery:', SYNC_RECOVERY_MAX = 4;
 export const STORAGE_FULL_MSG = '这台设备存不进去了，刚才的改动没保存。先导出备份、腾点空间再试。';

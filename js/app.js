@@ -26,6 +26,20 @@ import * as productsScreen from './ui/products.js';
 import { FIREBASE_CONFIG } from './firebase-config.js';
 
 export const SCREENS = [tonightScreen, advisorScreen, recordScreen, productsScreen];
+const INSTALL_OFF = 'sk_install_off';   // 本机:关过「装到主屏」那行就不再出
+
+// iPhone / iPad 的 Safari 标签页里(没装到主屏):提醒和离线首开都要装到主屏才行。iPadOS 冒充 Mac,按触点认
+export function needsInstallHint(nav, mm) {
+    const ua = String(nav.userAgent || ''), ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && (nav.maxTouchPoints || 0) > 1);
+    let standalone = nav.standalone === true; try { standalone = standalone || !!(mm && mm('(display-mode: standalone)').matches); } catch (e) { }
+    return ios && !standalone;
+}
+// 应用角标:完整模式、晚上 6 点以后、今晚还没点「完成今晚」= 1;极简模式不打卡,从来不挂(不催)
+export function badgeCount(W, hour) {
+    if (!W || (W.profile && W.profile.minimalMode) || hour < 18) return 0;
+    const en = (W.journal || []).find(e => e && e.date === W.today);
+    return en && en.done ? 0 : 1;
+}
 const WEEK = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
 function boot() {
@@ -102,7 +116,20 @@ function boot() {
             try { console.error(e); } catch (x) { }
         }
     }
-    function renderAll() { maintain(); applyVisibility(); renderHeader(); renderScreen(current); }
+    function renderAll() { maintain(); applyVisibility(); renderHeader(); renderScreen(current); updateBadge(); }
+    function updateBadge() {
+        if (!navigator.setAppBadge) return;
+        let n = 0; try { n = badgeCount(app.world(), new Date().getHours()); } catch (e) { return; }
+        try { (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => { }); } catch (e) { }
+    }
+    function installHint() {
+        const el = document.getElementById('install-hint'); if (!el) return;
+        let off = false; try { off = !!localStorage.getItem(INSTALL_OFF); } catch (e) { }
+        if (off || !needsInstallHint(navigator, window.matchMedia && window.matchMedia.bind(window))) { el.hidden = true; return; }
+        el.innerHTML = `<p class="note">装到主屏幕再用：Safari 里点「分享」（iOS 26 在右下角「•••」里），选「添加到主屏幕」。提醒和没网时打开都要这样装。</p><button type="button" class="btn-link sm quiet" data-x aria-label="不再提示">不再提示</button>`;
+        el.hidden = false;
+        el.querySelector('[data-x]').addEventListener('click', () => { try { localStorage.setItem(INSTALL_OFF, '1'); } catch (e) { } el.hidden = true; });
+    }
     function reloadFromStore() { initTN(store, today()); applyVisibility(); }
 
     const sync = createSync({
@@ -161,10 +188,12 @@ function boot() {
     onShopLocalChange(why => tonightScreen.localChange(app, why));
     watchTheme();            // 深浅色跟随系统 / 晚上自动
     oobeOnBoot(app);         // 新用户引导 / 改版说明(没登录时 1.8 秒后按本机数据判断)
+    installHint();           // iPhone Safari 标签页里:提示装到主屏(可关,关了不再出)
+    updateBadge();
 
     // 跨零点 / 凌晨 3 点翻页(PWA 常挂在后台过夜)
     let lastDay = today();
-    function checkDayRollover() { const t = today(); if (t === lastDay) return; lastDay = t; renderAll(); }
+    function checkDayRollover() { const t = today(); if (t === lastDay) { updateBadge(); return; } lastDay = t; renderAll(); }
     document.addEventListener('visibilitychange', () => { if (document.hidden) sync.flushPendingPush(); else checkDayRollover(); });
     window.addEventListener('focus', checkDayRollover);
     setInterval(checkDayRollover, 60000);

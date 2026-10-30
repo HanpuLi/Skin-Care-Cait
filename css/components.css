@@ -13,6 +13,7 @@
 .btn-link.quiet{color:var(--muted)}
 .btn-link.sm{font-size:14px}
 .btn-link:disabled{opacity:.4}
+.btn-link.danger-link{color:var(--medical)}
 .btn-row{display:flex;flex-wrap:wrap;gap:var(--sp-2);align-items:center}
 .acts{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-2);margin-top:var(--sp-5)}
 .acts.three{grid-template-columns:repeat(3,1fr)}
