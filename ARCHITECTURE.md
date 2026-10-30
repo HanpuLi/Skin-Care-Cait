@@ -63,6 +63,15 @@ Nothing is sent to the advisor automatically (tonight's plan, feedback after log
 
 Other device-only keys added in v2: `sk_aiprivacy1` (`{uid, at}`: the data notice shown the first time this account opens the advisor screen on this device; same format as v1) and the photo-analysis switch, which is a profile field (`photoAnalysis`, synced): unset means on only for the owner account, other accounts must turn it on themselves.
 
+## Tonight: per-step actions and "ask one thing"
+
+`ui/tonight-step.js` (opened from the "adjust" button at the right of every product step on `ui/tonight.js`; the row itself is still the tick checkbox) adds two things, both only through existing paths:
+
+- **Step sheet.** How to use / why, "not tonight", "swap for one on the shelf", "let the advisor pick" (`/api/swap`, reason used_up / uncomfortable / dont_want plus an optional line), "ask the advisor" (prefills the chat, never sends). Every change is written to the same tonight revision line as the advisor's (`sk_tnai1`, `ai/apply.js` `applyTonight`), so undo / redo are one mechanism. Her own changes carry `by: 'user'` on the op: the revision bar says "你改了今晚" (neutral rule, not the advisor's `--rev`), `withOverride` / the offline schedule word the reasons as "你". An advisor pick is the advisor's change (no `by`).
+- **The gate is not duplicated.** Candidates (same role, on the shelf, usable at night) must pass `validateTonight` (the check the advisor's tonight changes use) and then `shownTonight` is run on a derived world with the hypothetical op (`derive(W, {tnai})`), so the whole pipeline (override, `gateTonightPlan`, kept ticks, minimal-mode alignment, moisturiser cover) decides whether the product really gets a step. After a change is applied the shown plan is checked once more and the change is undone on the spot if it did not take. Ticked steps and a finished night cannot be edited. With the medical red line on there is no acid step and no acid candidate.
+- **Ask one thing.** A panel under the steps sends `/api/quick` with `live` = now, ticked / not yet / marked "not done" (minimal mode sends no ticks, only what she marked not done), and the steps she sees. The answer streams in; a `change_today` action goes through `applyTonight` (same gate, same revision line). State is in memory only (cleared on account switch and at midnight); no new storage key.
+- Both are hidden when `app.ai.access() !== 'on'` (signed out, not invited); "not tonight" and the shelf swap work offline. The first send asks for the "what the advisor sees" notice like every other request.
+
 ## Shell
 
 The design target is a real phone screen (390 × 844). The page header (date and seal) is `position: sticky` at the top, the content scrolls under it with the document's own scrolling, and the tab bar is fixed at the bottom. There is no separate overflow container, so iOS keeps its native behaviours (tap the status bar to scroll up, Safari's toolbar collapsing, the keyboard pushing inputs into view). Because the four tabs share the document scroll, `show(id)` remembers each tab's scroll position and restores it (a tab not visited yet starts at the top).

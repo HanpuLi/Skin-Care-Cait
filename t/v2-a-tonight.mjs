@@ -5,6 +5,8 @@
 //   就医红线卡(任何模式)、亮时不排酸、眼霜照用、「已约了 / 看过了」;安全提示任何模式都在
 //   顾问写今晚:新的一天自动调一次、按天 + 签名缓存、重画不重调、本机开关才重调(防抖)、过安全闸(刮胡夜拦酸、不在库的丢掉)、
 //   同步来的改动不调(只标「情况变了」+「让顾问重排」)、没开通 / 连不上 / 没登录 → 「离线排法」;顾问的今晚小改 + 撤销 / 重做
+//   单步操作(点步骤右边「调整」:今晚不用 / 换成货架上的 / 让顾问挑 /api/swap / 问顾问,全走今晚修订线 sk_tnai1,她自己改的标「你改了今晚」)
+//   + 「问一句」(/api/quick 流式、带实时状态、action 生效挂修订线);闸挡住的候选不出现、红线亮时酸类不出现
 //   跑:node t/v2-a-tonight.mjs
 import { run, tab, click, log, sleep, W8, ENV, TODAY_EN, TONIGHT_FULL, PROBE } from './v2-a-lib.mjs';
 
@@ -337,6 +339,192 @@ await run('v2-a-tonight', [
         const b = await hs();
         S.ok(b.sw <= b.cw, '记录页(顾问反馈里一个长网址):没有横向滚动', b);
         S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
+    // ══ 单步操作(调整面板)+ 问一句 ══
+    ['单步 · 面板内容、今晚不用 → 撤销 / 重做、换成货架上的(顾问版)', async ({ S, open }) => {
+        const p = await open({ seed: 'full', seedArg: `{products:i=>[]}`, mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)}}`, login: true });
+        await tab(p, 'tonight', 200);
+        await p.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 8000);
+        const SHEET = `(()=>{const ov=document.getElementById('step-ops');if(!ov)return null;const q=s=>ov.querySelector(s);return {title:q('.sheet-t').textContent,txt:ov.innerText,skip:!!q('#sa-skip'),swap:[...ov.querySelectorAll('[data-sa=swap]')].map(x=>x.dataset.to),pick:!!q('#sa-pick'),chat:!!q('#sa-chat')}})()`;
+        const opsOf = name => p.eval(`const b=[...document.querySelectorAll('.step-ops')].find(x=>x.dataset.name===${JSON.stringify(name)});if(!b)return false;b.click();await new Promise(r=>setTimeout(r,80));return true`);
+        const v0 = await view(p);
+        const nOps = await p.eval(`return document.querySelectorAll('.step-ops').length`);
+        S.ok(nOps === v0.steps.length - 1 && v0.boxes === v0.steps.length, '有产品的步骤各有一个「调整」(纯动作那步没有),整行仍是 checkbox', { nOps, steps: v0.steps });
+        await click(p, '#tn-step-1', 120);
+        S.ok((await p.eval(`return document.getElementById('tn-step-1').getAttribute('aria-checked')`)) === 'true' && !(await p.eval(`return !!document.getElementById('step-ops')`)), '点步骤本身仍是打卡,不开面板', {});
+        await click(p, '#tn-step-1', 120);
+        S.ok(await opsOf(EYE), '点「调整」开面板');
+        const a = await p.eval(`return ${SHEET}`);
+        S.ok(a && a.title === EYE && /怎么用\s*无名指轻拍眼眶骨/.test(a.txt) && /为什么\s*眼周不碰酸/.test(a.txt), '面板:这一步怎么用、为什么', a && a.txt);
+        S.ok(a.skip && a.pick && a.chat && a.swap.length === 1 && a.swap[0] === 'REN 亮黑眼圈眼霜', '面板:今晚不用 / 换成货架上的(同角色其他一支)/ 让顾问挑 / 问顾问', a);
+        await click(p, '#sa-skip', 250);
+        const s1 = await view(p), o1 = await p.eval(`return ${ENV}.sk_tnai1`);
+        S.ok(!s1.steps.includes(EYE) && s1.skips.some(x => /你：今晚先跳过/.test(x)) && !(await p.eval(`return !!document.getElementById('step-ops')`)), '今晚不用:这一步挪进「今晚不用的」,面板关了', s1.skips);
+        S.ok(/^你改了今晚/.test(s1.rev) && /今晚跳过「MZ/.test(s1.rev), '修订条标「你改了今晚」(不冒充顾问)', s1.rev);
+        S.ok(o1 && o1.ops.length === 1 && o1.ops[0].op === 'skip' && o1.ops[0].by === 'user' && o1.undo, '写进今晚修订线 sk_tnai1,带 by:user 和撤销所需的改前状态', o1);
+        S.ok(await p.eval(`return document.getElementById('tn-rev').classList.contains('you')`), '她自己的修订条用中性竖线(.you),不是顾问的 --rev');
+        await click(p, '#tn-rev [data-act=undo]', 300);
+        const s2 = await view(p);
+        S.ok(s2.steps.includes(EYE) && (await p.eval(`return ${ENV}.sk_tnai1`)) === null && /已撤销/.test(s2.rev) && /^你改了今晚/.test(await p.eval(`return document.querySelector('#tn-rev .who').textContent`)), '撤销:眼霜回来,sk_tnai1 清掉,「已撤销」仍标你', s2.rev);
+        await click(p, '#tn-rev [data-act=redo]', 300);
+        const s3 = await view(p);
+        S.ok(!s3.steps.includes(EYE) && /今晚跳过/.test(s3.rev), '重做:再划掉', s3.rev);
+        await click(p, '#tn-rev [data-act=undo]', 300);
+        S.ok(await opsOf(EYE));
+        await p.eval(`document.querySelector('#step-ops [data-sa=swap]').click();return 1`); await sleep(250);
+        const s4 = await view(p), o4 = await p.eval(`return ${ENV}.sk_tnai1`);
+        S.ok(!s4.steps.includes(EYE) && s4.steps.includes('REN 亮黑眼圈眼霜') && /换成「REN/.test(s4.rev) && /^你改了今晚/.test(s4.rev), '换成货架上的:眼霜换成另一支,修订条标你', { steps: s4.steps, rev: s4.rev });
+        S.ok(o4 && o4.ops[0].op === 'swap' && o4.ops[0].to === 'REN 亮黑眼圈眼霜' && o4.ops[0].by === 'user', '换:写进 sk_tnai1(swap,by:user)', o4);
+        S.ok(await p.eval(`return !!document.querySelector('.step.changed.you')`), '换上的那步带中性竖线(.you)', {});
+        await click(p, '#tn-rev [data-act=undo]', 300);
+        S.ok((await view(p)).steps.includes(EYE), '撤销:换回来');
+        await click(p, '#tn-step-3', 150);
+        S.ok(await opsOf(EYE));
+        const lk = await p.eval(`return ${SHEET}`);
+        S.ok(!lk.skip && !lk.swap.length && !lk.pick && /打了勾/.test(lk.txt), '打了勾的步骤:面板只说明,不给划 / 换 / 让顾问挑', lk.txt);
+        await p.eval(`document.querySelector('#step-ops .sheet-x').click();return 1`);
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
+    ['单步 · 闸挡住的候选不出现(发炎禁猛酸 / 就医红线酸全停)', async ({ S, open }) => {
+        const COLLECT = `const out={};for(const b of [...document.querySelectorAll('.step-ops')]){b.click();await new Promise(r=>setTimeout(r,60));const ov=document.getElementById('step-ops');out[b.dataset.name]=[...ov.querySelectorAll('[data-sa=swap]')].map(x=>x.dataset.to);ov.querySelector('.sheet-x').click();await new Promise(r=>setTimeout(r,30));}return out`;
+        const p1 = await open({ seed: 'full', seedArg: `{products:i=>[]}`, mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)}}`, login: true });
+        await tab(p1, 'tonight', 200); await p1.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 8000);
+        const c0 = await p1.eval(COLLECT);
+        S.ok((c0[ACID] || []).includes('Sunday Riley Good Genes'), '对照:平时酸这一步的候选里有 Good Genes', c0[ACID]);
+        p1.done(); await sleep(200);
+        const p2 = await open({ seed: 'full', seedArg: `{status:i=>i<=-8?['泛红']:['出油','闭口']}`, mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)}}`, login: true });
+        await tab(p2, 'tonight', 200); await p2.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 8000);
+        const c1 = await p2.eval(COLLECT);
+        S.ok(c1[ACID] && !(c1[ACID] || []).includes('Sunday Riley Good Genes'), '近两周发炎:猛酸被闸挡住,不出现在候选里', c1);
+        p2.done(); await sleep(200);
+        const p3 = await open({ seed: 'full', seedArg: `{status:i=>i>=-6?['泛红']:[]}`, mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)}}`, login: true });
+        await tab(p3, 'tonight', 200); await p3.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 8000);
+        const c2 = await p3.eval(COLLECT);
+        const all = [].concat(...Object.values(c2));
+        S.ok(await p3.eval(`return !!document.getElementById('tn-med')`) && !Object.keys(c2).includes(ACID) && Object.keys(c2).includes(EYE), '就医红线亮:今晚没有酸这一步,眼霜照用', Object.keys(c2));
+        S.ok(!all.some(n => /酸|Good Genes|Votary/.test(n)), '就医红线亮:任何一步的候选里都没有酸类', all);
+        p3.done();
+    }],
+    ['单步 · 让顾问挑(/api/swap):带理由三选一 + 一句话,过闸后直接生效,标顾问', async ({ S, open }) => {
+        const SWAP = { options: [{ name: '不在货架上的神仙眼霜', why: '假的' }, { name: 'REN 亮黑眼圈眼霜', why: '更温和，眼周不刺。' }], dropped: [] };
+        const p = await open({ seed: 'full', seedArg: `{products:i=>[]}`, mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)},swap:${JSON.stringify(SWAP)}}`, login: true });
+        await tab(p, 'tonight', 200); await p.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 8000);
+        await p.eval(`[...document.querySelectorAll('.step-ops')].find(x=>x.dataset.name===${JSON.stringify(EYE)}).click();return 1`); await sleep(100);
+        const n0 = await log(p, '/api/swap');
+        await click(p, '#sa-pick', 80);
+        S.ok(/先选一个原因/.test(await p.eval(`return document.getElementById('sa-msg').textContent`)) && await log(p, '/api/swap') === n0, '没选原因就点「让顾问挑」:提示先选,不发请求');
+        await p.eval(`document.querySelector('[data-r=uncomfortable]').click();const n=document.getElementById('sa-note');n.value='涂了有点刺';return 1`);
+        S.ok((await p.eval(`return document.querySelector('[data-r=uncomfortable]').getAttribute('aria-pressed')`)) === 'true' && (await p.eval(`return document.querySelector('[data-r=used_up]').getAttribute('aria-pressed')`)) === 'false', '选了原因:选中态在(三选一)');
+        await click(p, '#sa-pick', 100);
+        await p.waitFor(`!document.getElementById('step-ops')`, 5000);
+        await sleep(200);
+        const sw = await p.eval(`return (__AIF.log||[]).filter(x=>x.p==='/api/swap').map(x=>x.body)`);
+        S.ok(sw.length === 1 && sw[0].product === EYE && sw[0].reason === 'uncomfortable' && sw[0].note === '涂了有点刺' && Array.isArray(sw[0].context.products) && sw[0].context.products.length > 3, '/api/swap 请求:产品、理由(uncomfortable)、一句话、带货架快照', { n: sw.length, b: sw[0] && { product: sw[0].product, reason: sw[0].reason, note: sw[0].note } });
+        const v = await view(p), o = await p.eval(`return ${ENV}.sk_tnai1`);
+        S.ok(!v.steps.includes(EYE) && v.steps.includes('REN 亮黑眼圈眼霜'), '顾问挑的第一支不在货架上(过不了闸)被跳过,第二支直接生效', v.steps);
+        S.ok(/^顾问/.test(v.rev) && /换成「REN/.test(v.rev) && /更温和，眼周不刺/.test(v.rev), '修订条标顾问、带顾问的理由', v.rev);
+        S.ok(o && o.ops[0].op === 'swap' && !o.ops[0].by && o.ops[0].why === '更温和，眼周不刺。', 'sk_tnai1:swap + 理由,不带 by:user', o);
+        await click(p, '#tn-rev [data-act=undo]', 300);
+        S.ok((await view(p)).steps.includes(EYE) && (await p.eval(`return ${ENV}.sk_tnai1`)) === null, '撤销:和顾问对话里的改动同一套,换回来');
+        await p.eval(`__AIF.swap={options:[{name:'不在货架上的神仙眼霜',why:'假的'}],dropped:[]};[...document.querySelectorAll('.step-ops')].find(x=>x.dataset.name===${JSON.stringify(EYE)}).click();return 1`); await sleep(100);
+        await p.eval(`document.querySelector('[data-r=dont_want]').click();return 1`);
+        await click(p, '#sa-pick', 100);
+        await p.waitFor(`/没过安全闸/.test((document.getElementById('sa-msg')||{}).textContent||'')`, 5000);
+        S.ok((await view(p)).steps.includes(EYE) && (await p.eval(`return ${ENV}.sk_tnai1`)) === null, '顾问挑的都过不了闸:今晚不动,面板里说明原因', await p.eval(`return document.getElementById('sa-msg').textContent`));
+        const chats = await log(p, '/api/chat');
+        await click(p, '#sa-chat', 300);
+        const ad = await p.eval(`return {draft:(document.getElementById('adv-text')||{}).value||''}`);
+        S.ok(/今晚的「MZ Skin/.test(ad.draft) && await log(p, '/api/chat') === chats, '问顾问:预填一句进对话,不自动发', ad);
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
+    ['单步 · 没登录:只有今晚不用 / 换成货架上的,没有顾问的入口和「问一句」', async ({ S, open }) => {
+        const p = await open({ seed: 'full', seedArg: `{products:i=>[]}` });
+        S.ok(!(await p.eval(`return !!document.getElementById('tn-quick')`)), '没登录:不出现「问一句」');
+        const step = await p.eval(`return document.querySelector('.step-ops').dataset.name`);
+        await p.eval(`document.querySelector('.step-ops').click();return 1`); await sleep(100);
+        const a = await p.eval(`const ov=document.getElementById('step-ops');return {skip:!!ov.querySelector('#sa-skip'),pick:!!ov.querySelector('#sa-pick'),chat:!!ov.querySelector('#sa-chat'),note:!!ov.querySelector('#sa-note')}`);
+        S.ok(a.skip && !a.pick && !a.chat && !a.note, '没登录:面板里没有「让顾问挑」「问顾问」', a);
+        await click(p, '#sa-skip', 250);
+        const v = await view(p);
+        S.ok(!v.steps.includes(step) && /^你改了今晚/.test(v.rev), '离线排法也能划掉:步骤没了,标你改了今晚', { step, steps: v.steps, rev: v.rev });
+        await click(p, '#tn-rev [data-act=undo]', 300);
+        S.ok((await view(p)).steps.includes(step), '撤销回来');
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
+    ['问一句 · 带今晚实时状态、流式显示、action 生效挂修订线、闸挡住的不改', async ({ S, open }) => {
+        const ACT = { id: 'q1:tonight', message: '眼霜先停。', changes: [{ op: 'skip', product: EYE, to: '', level: '', text: '', why: '刺痛' }], dropped: [] };
+        const p = await open({ seed: 'full', seedArg: `{products:i=>[]}`, mode: 'on', login: true,
+            aif: `{tonight:${JSON.stringify(TONIGHT_FULL)},quickMs:160,quick:[['delta',{t:'先停这一步，'}],['delta',{t:'只做保湿。'}],['done',{text:'先停这一步，只做保湿。',model:'claude-test',effort:'low',cost:0.001}]]}` });
+        await tab(p, 'tonight', 200); await p.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 8000);
+        S.ok(await p.eval(`return !!document.getElementById('tn-quick') && !!document.getElementById('qk-q')`), '登录且开通顾问:今晚页有「问一句」');
+        await click(p, '#tn-step-1', 100);
+        await p.eval(`const q=document.getElementById('qk-q');q.value='刚涂完有点刺，要停吗？';q.dispatchEvent(new Event('input',{bubbles:true}));return 1`);
+        await p.eval(`document.getElementById('tn-step-4').click();return 1`); await sleep(100);
+        S.ok((await p.eval(`return document.getElementById('qk-q').value`)) === '刚涂完有点刺，要停吗？', '整屏重画(点了别的步骤)输入的字不丢');
+        await p.eval(`document.getElementById('tn-step-4').click();return 1`); await sleep(80);
+        await click(p, '#qk-go', 10);
+        await p.waitFor(`(document.getElementById('qk-a')||{}).textContent==='先停这一步，'`, 3000);
+        S.ok(await p.eval(`return document.getElementById('qk-go').textContent==='停一下'`), '流式:先到一半时按钮是「停一下」,已经显示前半句');
+        await p.waitFor(`(document.getElementById('qk-a')||{}).textContent==='先停这一步，只做保湿。'`, 3000);
+        await p.waitFor(`document.getElementById('qk-go').textContent==='问'`, 3000).catch(() => { });
+        S.ok(await p.eval(`return document.getElementById('qk-go').textContent==='问'`), '收完:按钮回「问」');
+        const q = await p.eval(`return (__AIF.log||[]).filter(x=>x.p==='/api/quick').map(x=>x.body)`);
+        const b = q[0] || {}, live = b.live || {};
+        S.ok(q.length === 1 && b.messages.length === 1 && b.messages[0].role === 'user' && /刚涂完有点刺/.test(b.messages[0].text) && b.context && Array.isArray(b.context.products), '/api/quick:一条用户消息 + 快照', { n: q.length, m: b.messages });
+        S.ok(/^\d\d:\d\d$/.test(live.now) && Array.isArray(live.ticked) && live.ticked.length === 1 && live.notYet.length === 3 && live.tonight.steps.length === 4 && live.tonightDone === false, 'live:现在几点、做了哪几步、还没做哪几步、今晚排的步骤', live);
+        S.ok(!(await p.eval(`return !!document.getElementById('tn-rev')`)), '普通问答不改今晚');
+        await p.eval(`__AIF.quick=[['delta',{t:'眼霜先停。'}],['action',${JSON.stringify(ACT)}],['done',{text:'眼霜先停。',model:'claude-test',effort:'low',cost:0.001,action:'q1:tonight'}]];__AIF.quickMs=5;return 1`);
+        await p.eval(`document.getElementById('qk-q').value='眼周刺';return 1`);
+        await click(p, '#qk-go', 10);
+        await p.waitFor(`!!document.getElementById('tn-rev')`, 3000);
+        const v = await view(p), o = await p.eval(`return ${ENV}.sk_tnai1`);
+        S.ok(!v.steps.includes(EYE) && /^顾问/.test(v.rev) && /今晚跳过「MZ/.test(v.rev) && o && o.ops[0].op === 'skip' && !o.ops[0].by, 'action 照对话那条路生效:眼霜挪走,修订条标顾问,能撤销', { rev: v.rev, o });
+        S.ok((await p.eval(`return document.getElementById('qk-a').textContent`)) === '眼霜先停。', '答案还留在面板上');
+        await click(p, '#tn-rev [data-act=undo]', 300);
+        S.ok((await view(p)).steps.includes(EYE), '撤销:眼霜回来');
+        S.ok(!p.errors.length, '0 console error', p.errors);
+        p.done(); await sleep(200);
+        const ADD = { id: 'q2:tonight', message: '加一支酸。', changes: [{ op: 'add', product: ACID, to: '', level: '', text: '', why: '' }], dropped: [] };
+        const p2 = await open({ seed: 'full', seedArg: `{status:i=>i>=-6?['泛红']:[]}`, mode: 'on', login: true,
+            aif: `{tonight:${JSON.stringify(TONIGHT_FULL)},quick:[['delta',{t:'加一支酸。'}],['action',${JSON.stringify(ADD)}],['done',{text:'加一支酸。',model:'claude-test',effort:'low',cost:0.001}]]}` });
+        await tab(p2, 'tonight', 200); await p2.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 8000);
+        await p2.eval(`document.getElementById('qk-q').value='今晚能刷酸吗';return 1`);
+        await click(p2, '#qk-go', 10);
+        await p2.waitFor(`/没过安全闸/.test((document.getElementById('qk-a')||{}).textContent||'')`, 3000);
+        const v2 = await view(p2);
+        S.ok(!v2.steps.includes(ACID) && v2.med && (await p2.eval(`return ${ENV}.sk_tnai1`)) == null, '就医红线亮:quick 想加酸被同一道闸拦下,今晚不动、红线卡还在', { steps: v2.steps, a: await p2.eval(`return document.getElementById('qk-a').textContent`) });
+    }],
+    ['极简模式 · 能调整,不加打卡也不催;问一句不带「没做」', async ({ S, open }) => {
+        const p = await open({ seed: 'minimal', mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)},quick:[['delta',{t:'好。'}],['done',{text:'好。',model:'claude-test',effort:'low',cost:0.001}]]}`, login: true });
+        await tab(p, 'tonight', 200); await p.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 8000);
+        const v = await view(p);
+        S.ok(v.boxes === 0 && (await p.eval(`return document.querySelectorAll('.step-ops').length`)) >= 2 && !/还没做|记得打|别忘了打/.test(v.allText), '极简:没有 checkbox、有「调整」、没有催促', { boxes: v.boxes });
+        const first = await p.eval(`const b=[...document.querySelectorAll('.step-ops')].find(x=>x.dataset.name!==${JSON.stringify(ACID)});return b.dataset.name`);
+        await p.eval(`document.getElementById('qk-q').value='这支能上吗';return 1`);
+        await click(p, '#qk-go', 10);
+        await p.waitFor(`(document.getElementById('qk-a')||{}).textContent==='好。'`, 3000);
+        const live = await p.eval(`return (__AIF.log||[]).filter(x=>x.p==='/api/quick').map(x=>x.body)[0].live`);
+        S.ok(!('ticked' in live) && !('notYet' in live) && /极简/.test(live.mode) && Array.isArray(live.notDone), '极简:live 里没有 ticked / notYet(不把没打卡说成没做)', live);
+        await p.eval(`[...document.querySelectorAll('.step-ops')].find(x=>x.dataset.name===${JSON.stringify(first)}).click();return 1`); await sleep(100);
+        await click(p, '#sa-skip', 250);
+        const v2 = await view(p);
+        S.ok(!v2.steps.includes(first) && /^你改了今晚/.test(v2.rev) && v2.boxes === 0, '极简:能划掉,标你改了今晚,仍无打卡', { first, rev: v2.rev });
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
+    ['单步面板 / 问一句 · 美学探针(浅 / 深 × 衬线 / 无衬线)', async ({ S, open }) => {
+        for (const scheme of ['light', 'dark']) for (const type of ['serif', 'sans']) {
+            const p = await open({ seed: 'full', seedArg: `{products:i=>[]}`, scheme, mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)}}`, login: true });
+            await p.eval(`document.documentElement.dataset.type='${type}';return 1`);
+            await tab(p, 'tonight', 200); await p.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 8000);
+            const tag = scheme + '/' + type;
+            const r0 = await p.eval(PROBE + `;return __probe('#tonight')`);
+            S.ok(!r0.emoji.length && !r0.lowCr.length && !r0.smallN && !r0.styleAttrs.length && r0.sizes.every(x => [12, 14, 16, 18, 22, 28].includes(x)), `${tag}:今晚页(含调整按钮、问一句):0 emoji、对比度、≥44、无 style=、6 档字号`, { e: r0.emoji, cr: r0.lowCr, small: r0.small, st: r0.styleAttrs, sz: r0.sizes });
+            await p.eval(`[...document.querySelectorAll('.step-ops')][1].click();return 1`); await sleep(150);
+            const r1 = await p.eval(PROBE + `;return __probe('#step-ops')`);
+            S.ok(!r1.emoji.length && !r1.lowCr.length && !r1.smallN && !r1.styleAttrs.length && r1.sizes.every(x => [12, 14, 16, 18, 22, 28].includes(x)), `${tag}:面板:0 emoji、对比度、≥44、无 style=、6 档字号`, { e: r1.emoji, cr: r1.lowCr, small: r1.small, st: r1.styleAttrs, sz: r1.sizes });
+            S.ok(!p.errors.length, `${tag}:0 console error`, p.errors);
+            p.done(); await sleep(150);
+        }
     }],
     ['美学探针:浅 / 深,完整 / 极简', async ({ S, open }) => {
         for (const scheme of ['light', 'dark']) for (const who of ['full', 'minimal']) {
