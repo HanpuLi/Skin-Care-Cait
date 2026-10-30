@@ -204,6 +204,8 @@ export function gateTonightPlan(W, data) {
         }
         const p = prodByName(W, name);
         if (!p) { dropped.push(name); return; }
+        // 两人平时几乎不化妆:没开「需要卸妆步骤」就不排卸妆(白天涂了防晒也是普通洗面奶一遍);今晚明说加的(byOv)放行
+        if (p.role === 'precleanse' && !P.useMakeupRemoval && !s.byOv) { skips.push({ product: p.name, why: '平时不化妆，默认不卸妆；今天化了妆就跟顾问说一声' }); return; }
         const t = (p.schedule && p.schedule.type) || '';
         const act = ['acid', 'mask', 'retinol'].indexOf(t) >= 0 ? t : (p.role === 'acid' ? 'acid' : (p.role === 'mask' || p.role === 'retinol') ? p.role : '');
         let gb = gateBlocks(p, g, W);
@@ -280,13 +282,13 @@ export function withOverride(W, data, ov) {
             if (i >= 0) { d.steps.splice(i, 1); d.skips.push({ product: c.product, why: who + '：今晚先跳过' + why }); } else missed.push(c);
         } else if (c.op === 'swap') {
             const s = d.steps.find(x => x && x.product === c.product);
-            if (s && c.to) { s.product = c.to; s.why = who + '今晚换的' + why; changed.add(c.to); } else missed.push(c);
+            if (s && c.to) { s.product = c.to; s.why = who + '今晚换的' + why; s.byOv = true; changed.add(c.to); } else missed.push(c);
         } else if (c.op === 'add') {
             if (!c.product || d.steps.some(x => x && x.product === c.product)) return;
             const ri = roleIdx(c.product);
             let at = d.steps.findIndex(x => x && x.product && roleIdx(x.product) > ri);
             if (at < 0) at = d.steps.length;
-            d.steps.splice(at, 0, { product: c.product, how: '', why: who + '今晚加的' + why });
+            d.steps.splice(at, 0, { product: c.product, how: '', why: who + '今晚加的' + why, byOv: true });
             changed.add(c.product);
         } else if (c.op === 'acid') {
             const i = d.steps.findIndex(x => x && x.product && kindOf(x.product) === 'acid');

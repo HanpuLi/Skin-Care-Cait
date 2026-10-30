@@ -22,7 +22,7 @@ import { cleanPhotoAssess, setPhotoAssess } from '../js/model/journal.js';
 import { syncRegimen, currentRegimen, commitAiRegimen } from '../js/model/regimen.js';
 import { buildSkincareContext } from '../js/ai/context.js';
 import { applyTonight, undoTonightChange, applyRegimen, validatePlan, gateTonightPlan, onShopLocalChange, undoRegimenChange, localToggleLow,
-         shownTonight, next7Shown, localMarkRunOut, localUndoRunOut } from '../js/ai/apply.js';
+         shownTonight, next7Shown, localMarkRunOut, localUndoRunOut, withOverride } from '../js/ai/apply.js';
 import { liveContext } from '../js/ai/context.js';
 import { medicalFollowUp } from '../js/ui/tonight.js';
 import { parseSseBlock, aiClean, createAiClient } from '../js/ai/client.js';
@@ -291,6 +291,23 @@ export async function runEngineUnit(S) {
         const r2 = gateTonightPlan(used, { steps: [{ product: PC, how: '涂' }, { product: 'Lacura 温和洗面奶', how: '洗' }] });
         S.ok(r2 && r2.blocked.some(b => b.product === PC && /这周已经刷过/.test(b.why)), '这周已经刷到上限:顾问写的酸也拦下', r2 && r2.blocked);
         S.ok(gateTonightPlan(w, { steps: [{ product: GG }] }) === null, '一步都不剩:返回 null(退回离线今晚)');
+    });
+    t('卸妆默认不排(两人几乎不化妆;白天防晒晚上也只洗面奶)', () => {
+        const WS = 'Wild Source 卸妆膏', LAC = 'Lacura 温和洗面奶';
+        const w = W(full({ status: () => ['稳定'] }));
+        const off = tonight(w);
+        S.ok(!off.steps.some(x => x.p === WS) && !off.steps.some(x => /卸|防晒/.test(x.h || '')), '离线今晚:默认没有卸妆一步,洗面奶那句也不提卸妆 / 厚防晒', off.steps.map(x => x.p + '|' + x.h));
+        const on = tonight(W(full({ status: () => ['稳定'], profile: { useMakeupRemoval: true } })));
+        S.ok(on.steps.some(x => /化了妆先用Wild Source 卸妆膏卸/.test(x.h || '')) && !on.steps.some(x => /防晒/.test(x.h || '')), '开了「需要卸妆步骤」:洗面奶那句提醒化了妆先卸,不再拿防晒当理由', on.steps.map(x => x.h));
+        const ai = { title: '今晚', why: '', steps: [{ product: WS, how: '卸防晒' }, { product: LAC, how: '洗' }], skips: [] };
+        const r = gateTonightPlan(w, ai);
+        S.ok(r && !r.steps.some(x => x.product === WS) && r.skips.some(x => x.product === WS && /不化妆/.test(x.why)) && !r.blocked.length, '顾问排了卸妆:挪进「今晚不用」(不算闸拦)', r);
+        const r2 = gateTonightPlan(W(full({ status: () => ['稳定'], profile: { useMakeupRemoval: true } })), ai);
+        S.ok(r2 && r2.steps[0].product === WS, '开了「需要卸妆步骤」:顾问排的卸妆照排', r2 && r2.steps);
+        const o = withOverride(w, { steps: [{ product: LAC, how: '洗' }], skips: [] }, { ops: [{ op: 'add', product: WS, why: '今天化了妆', by: 'user' }] });
+        const r3 = gateTonightPlan(w, o.data);
+        S.ok(r3 && r3.steps[0].product === WS, '今晚明说化了妆、加上卸妆:放行,排在洗面奶前', r3 && r3.steps);
+        S.ok(buildSkincareContext(w).user.makeupRemoval === false && buildSkincareContext(W(full({ profile: { useMakeupRemoval: true } }))).user.makeupRemoval === true, '顾问快照带 user.makeupRemoval');
     });
     t('顾问写的今晚过闸(修复员 r1)', () => {
         const TS = 'La Roche-Posay Toleriane Sensitive Fluide', IPSA = 'IPSA 深层净化泥面膜', VOT = 'Votary 10%乳酸', LAC = 'Lacura 温和洗面奶';

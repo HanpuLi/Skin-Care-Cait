@@ -261,9 +261,9 @@ export function buildNightSteps(W, shower, shave, slot) {
         const wantPre = !!P.useMakeupRemoval;
         if (cleanser) {
             const why = cleanserReason(W, ctx);
-            const preNote = (wantPre && pre) ? `（化了妆或涂了厚防晒，先用${pre.name}卸）` : '';
+            const preNote = (wantPre && pre) ? `（化了妆先用${pre.name}卸）` : '';
             add(cleanser.name, (why ? why + '；' : '') + (cleanser.pmHint || '打圈 30 到 60 秒，温水洗净') + preNote, { t: 60 });
-        } else if (wantPre && pre) add(pre.name, hint(pre) || '化了妆或厚防晒时用');
+        } else if (wantPre && pre) add(pre.name, hint(pre) || '化了妆时用');
         else add('温水冲洗', '家里还没有洁面，去「产品」加一支');
         const irritated = irritatedNow(W);
         let faceCovered = false;

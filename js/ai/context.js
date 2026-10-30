@@ -56,7 +56,7 @@ export function buildSkincareContext(W, who) {
     const axes = {}; a.axes.forEach(x => { axes[x.key] = x.score; });
     const rules0 = (reg && reg.rules) || {};
     const ctx = {
-        user: Object.assign({ name: who.name || '', mode: minimal ? '极简' : '完整' },
+        user: Object.assign({ name: who.name || '', mode: minimal ? '极简' : '完整', makeupRemoval: !!P.useMakeupRemoval },
             minimal ? { modeNote: '极简模式：她基本不记录；排上的酸默认按计划用了(日志里 auto=true 是推定的，不是她记的)。没记到刺激不代表耐受，不能据此加量；只有她在对话/照片里明确说了反应才算。' } : {}),
         skinType: P.skinType || '',
         concerns: (P.concerns && P.concerns.length) ? P.concerns : (P.goal && P.goal.concern ? [P.goal.concern] : []),
