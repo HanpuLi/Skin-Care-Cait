@@ -15,8 +15,8 @@ import { buildWorld, planNow } from './model/world.js';
 import { createPhotoStore } from './model/photos.js';
 import { createAiClient, aiBase } from './ai/client.js';
 import { createPush } from './ai/push.js';
-import { openSheet, closeSheet, hasSheet, toast, sysAlert, sysConfirm, download, bindEscape, esc } from './ui/sheets.js';
-import { openSettings, watchTheme, refreshSettings } from './ui/settings.js';
+import { openSheet, closeSheet, hasSheet, toast, sysAlert, sysConfirm, download, bindEscape, esc, ico } from './ui/sheets.js';
+import { watchTheme, refreshSettings } from './ui/settings.js';
 import { photoAnalysisOn } from './ui/capture.js';
 import { onBoot as oobeOnBoot, onFirstSnapshot as oobeOnFirstSnapshot } from './ui/oobe.js';
 import { ensureShopRunner } from './ui/products.js';
@@ -25,9 +25,11 @@ import * as tonightScreen from './ui/tonight.js';
 import * as advisorScreen from './ui/advisor.js';
 import * as recordScreen from './ui/record.js';
 import * as productsScreen from './ui/products.js';
+import * as settingsScreen from './ui/settings.js';
 import { FIREBASE_CONFIG } from './firebase-config.js';
 
 export const SCREENS = [tonightScreen, advisorScreen, recordScreen, productsScreen];
+const ALL_SCREENS = SCREENS.concat([settingsScreen]);   // 设置也是一屏(有自己的二级页),只是不在标签栏
 const INSTALL_OFF = 'sk_install_off';   // 本机:关过「装到主屏」那行就不再出
 
 // iPhone / iPad 的 Safari 标签页里(没装到主屏):提醒和离线首开都要装到主屏才行。iPadOS 冒充 Mac,按触点认
@@ -71,7 +73,7 @@ function boot() {
         b.toggle('hide-hrt', !p.hrt);
         b.toggle('hide-rec', !!p.minimalMode && !!p.hideRecords);
         const seal = document.getElementById('seal-ch'); if (seal) seal.textContent = sealChar(p);
-        if (b.contains('hide-rec') && current === 'record') show('tonight');
+        if (b.contains('hide-rec') && current === 'record') go('tonight', { replace: true });
     }
     function renderHeader() {
         const t = today(), el = document.getElementById('hdr-date');
@@ -84,39 +86,128 @@ function boot() {
         let n = ''; try { n = (sync.state.user && sync.state.user.displayName) || ''; } catch (e) { }   // 首帧时 sync 可能还没建好
         return /^[一-鿿]/.test(n) ? n[0] : '我';
     }
-    // ── 路由:#/tonight /advisor /record /products ──
-    // 四个 tab 共用文档滚动(外壳不另起 overflow 容器):切 tab 时各记各的位置,没记过的从顶上开始(真机 844 高,每屏都从标题看起)
-    let current = 'tonight';
-    const scrollAt = {};
-    function show(id) {
-        if (!SCREENS.some(s => s.id === id)) id = 'tonight';
-        if (id === 'record' && document.body.classList.contains('hide-rec')) id = 'tonight';
-        const prev = current, moved = prev !== id;
-        if (moved) scrollAt[prev] = window.scrollY || 0;
-        current = id;
-        SCREENS.forEach(s => {
+    // ── 路由(DESIGN.md §3):#/tab[/页[/参数]] ──
+    // tab 之间 = replaceState(不入栈);进二级页 = pushState(入栈,有返回、浏览器后退、左边缘右滑返回)。
+    // 每个 tab 的 <section> 记着自己正停在哪一页(routes[tab]),别的模块 renderScreen('advisor') 重画的是那一页。
+    // 设置(#/settings…)也是一个 <section>,从页头印章进,不在标签栏;它的首页返回到来时的 tab。
+    // 四个 tab 共用文档滚动(外壳不另起 overflow 容器):每一页各记各的位置;新进的页从顶上开始,返回的页回到原处
+    let current = 'tonight', lastTab = 'tonight', navDir = '';
+    const routes = {}, scrollAt = {};
+    const screenOf = id => ALL_SCREENS.find(s => s.id === id);
+    const keyOf = r => r.tab + (r.page ? '/' + r.page + (r.arg ? '/' + r.arg : '') : '');
+    function parseRoute(h) {
+        const parts = String(h || '').replace(/^#?\/?/, '').split('/').filter(Boolean).map(x => { try { return decodeURIComponent(x); } catch (e) { return x; } });
+        let tab = parts[0] || 'tonight', page = parts[1] || '', arg = parts.slice(2).join('/');
+        const sc = screenOf(tab);
+        if (!sc) { tab = 'tonight'; page = ''; arg = ''; }
+        else if (page && !(sc.pages && sc.pages[page])) { page = ''; arg = ''; }
+        if (tab === 'record' && document.body.classList.contains('hide-rec')) { tab = 'tonight'; page = ''; arg = ''; }
+        return { tab, page, arg };
+    }
+    const hrefOf = r => '#/' + [r.tab, r.page, r.arg].filter(Boolean).map(x => x.split('/').map(encodeURIComponent).join('/')).join('/');
+    // 父页:二级页 → 本 tab 首页;设置首页 → 来时的 tab
+    function parentOf(r) { return r.page ? { tab: r.tab, page: '', arg: '' } : r.tab === 'settings' ? { tab: lastTab, page: '', arg: '' } : null; }
+    function route(r, how) {
+        const prevKey = routes[current] ? keyOf(routes[current]) : '';
+        const key = keyOf(r);
+        if (prevKey && prevKey !== key) scrollAt[prevKey] = window.scrollY || 0;
+        if (r.tab !== 'settings') lastTab = r.tab;
+        const moved = prevKey !== key || current !== r.tab;
+        current = r.tab; routes[r.tab] = r;
+        navDir = how || '';
+        ALL_SCREENS.forEach(s => {
             const sec = document.getElementById(s.id), tab = document.getElementById('tab-' + s.id);
-            const on = s.id === id;
-            if (sec) sec.classList.toggle('active', on);
+            if (sec) sec.classList.toggle('active', s.id === r.tab);
+            // 设置页里标签栏照样在,亮着来时的那个 tab
+            const on = s.id === (r.tab === 'settings' ? lastTab : r.tab);
             if (tab) { tab.setAttribute('aria-selected', on ? 'true' : 'false'); tab.tabIndex = on ? 0 : -1; }
         });
-        renderScreen(id);
-        if (location.hash !== '#/' + id) history.replaceState(null, '', '#/' + id);
-        if (moved) try { window.scrollTo(0, scrollAt[id] || 0); } catch (e) { }
+        renderScreen(r.tab);
+        if (moved) try { window.scrollTo(0, how === 'push' ? 0 : (scrollAt[key] || 0)); } catch (e) { }
+        if (moved && (r.page || r.tab === 'settings')) { const h = document.querySelector('#' + r.tab + ' .pg-t'); if (h) try { h.focus({ preventScroll: true }); } catch (e) { } }
     }
-    // 一屏的数据出了问题,只拖垮这一屏:画一张「这一屏出错了」,其余三屏和启动照常
+    // go('tonight/week') 入栈;go('advisor', {replace:true}) 换掉当前这条。tab 本身(没有页)默认 replace
+    function go(path, o) {
+        o = o || {};
+        const r = parseRoute(path);
+        const replace = o.replace != null ? o.replace : (!r.page && r.tab !== 'settings');
+        const href = hrefOf(r);
+        if (location.hash !== href) {
+            if (replace) history.replaceState(null, '', href); else history.pushState({ sk: 1 }, '', href);
+        }
+        route(r, o.how || (replace ? '' : 'push'));
+    }
+    function show(path) { go(path); }   // 旧接口:别的模块 app.show('products') / show('advisor') 照用
+    // 返回:站内来的就退一步(和浏览器后退同一条历史);直达的(书签 / 通知点进来)换成父页
+    function back() {
+        const r = routes[current], par = r && parentOf(r);
+        if (!par) return;
+        if (history.state && history.state.sk) history.back();
+        else { history.replaceState(null, '', hrefOf(par)); route(par, 'pop'); }
+    }
+    function onHistory() {
+        const r = parseRoute(location.hash);
+        const cur = routes[current];
+        if (cur && keyOf(cur) === keyOf(r) && current === r.tab) return;   // popstate 和 hashchange 都会来,第二次不重画
+        route(r, 'pop');
+    }
+    // 页头:「‹ 父页名」+ 大标题(每页一个 h1,进页时焦点落在这里)
+    function pageHead(r, sc) {
+        const par = parentOf(r), pSc = par && screenOf(par.tab);
+        const pg = r.page ? sc.pages[r.page] : null;
+        const title = pg ? (typeof pg.title === 'function' ? pg.title(app, r.arg) : pg.title) : sc.title;
+        const pName = pSc ? (par.page ? pSc.pages[par.page].title : pSc.title) : '';
+        return `<header class="pg-h">${par ? `<button type="button" class="pg-back" data-back aria-label="返回 ${esc(pName)}">${ico('back')}<span>${esc(pName)}</span></button>` : ''}
+            <h1 class="pg-t" tabindex="-1">${esc(title)}</h1></header>`;
+    }
+    // 一页的数据出了问题,只拖垮这一页:画一张「这一页出错了」,其余各页和启动照常
     function renderScreen(id) {
-        const s = SCREENS.find(x => x.id === (id || current)); if (!s) return;
+        const s = screenOf(id || current); if (!s) return;
         const root = document.getElementById(s.id); if (!root) return;
+        const r = routes[s.id] || { tab: s.id, page: '', arg: '' };
+        root.dataset.page = r.page || '';
+        root.classList.remove('pg-push', 'pg-pop');
+        if (s.id === current && navDir) { void root.offsetWidth; root.classList.add(navDir === 'push' ? 'pg-push' : 'pg-pop'); }
+        if (s.id === current) navDir = '';
         try {
-            root.innerHTML = s.render(app);
-            s.mount(root, app);
+            if (r.page) {
+                const pg = s.pages[r.page];
+                root.innerHTML = pageHead(r, s) + `<div class="pg-b">${pg.render(app, r.arg)}</div>`;
+                pg.mount(root.querySelector('.pg-b'), app, r.arg);
+            } else {
+                root.innerHTML = (s.id === 'settings' ? pageHead(r, s) : '') + s.render(app);
+                s.mount(root, app);
+            }
         } catch (e) {
-            root.innerHTML = `<section class="sec screen-err"><h2 class="sec-t">这一屏出错了</h2><p class="lede">记录都在这台设备上，一个字没动。重新加载一次通常就好。</p>
+            root.innerHTML = (r.page ? pageHead(r, s) : '') + `<section class="sec screen-err"><h2 class="sec-t">这一页出错了</h2><p class="lede">记录都在这台设备上，一个字没动。重新加载一次通常就好。</p>
                 <p class="note">${esc((e && e.message) || String(e))}</p><div class="btn-row"><button type="button" class="btn" data-reload>重新加载</button></div></section>`;
             const b = root.querySelector('[data-reload]'); if (b) b.addEventListener('click', () => location.reload());
             try { console.error(e); } catch (x) { }
         }
+    }
+    // 主屏 App 里没有系统的返回手势:二级页从左边缘 24px 内起手右滑,页面跟手;过 1/3 宽或甩得够快就返回(DESIGN.md §2)
+    function bindEdgeSwipe() {
+        let sx = 0, sy = 0, st = 0, dx = 0, el = null, live = false;
+        document.addEventListener('touchstart', e => {
+            const t = e.touches[0], r = routes[current];
+            el = null; live = false;
+            if (!t || t.clientX > 24 || !r || !parentOf(r) || document.querySelector('#sheet-root .sheet-ov')) return;
+            el = document.getElementById(current); sx = t.clientX; sy = t.clientY; st = Date.now(); dx = 0;
+        }, { passive: true });
+        document.addEventListener('touchmove', e => {
+            if (!el) return; const t = e.touches[0];
+            dx = t.clientX - sx;
+            if (!live) { if (Math.abs(t.clientY - sy) > Math.abs(dx)) { el = null; return; } if (dx > 8) { live = true; el.classList.add('pg-drag'); } }
+            if (live) el.style.transform = 'translateX(' + Math.max(0, dx) + 'px)';
+        }, { passive: true });
+        const end = () => {
+            if (!el) return; const e2 = el; el = null;
+            if (!live) return;
+            const v = dx / Math.max(1, Date.now() - st);
+            e2.classList.remove('pg-drag'); e2.style.transform = '';
+            if (dx > window.innerWidth / 3 || v > 0.5) back();
+        };
+        document.addEventListener('touchend', end); document.addEventListener('touchcancel', end);
     }
     function renderAll() { maintain(); applyVisibility(); renderHeader(); renderScreen(current); updateBadge(); }
     function updateBadge() {
@@ -164,7 +255,8 @@ function boot() {
     app.push = createPush(app, { navigator, window, localStorage: window.localStorage, toast,
         photoOn: W => photoAnalysisOn(app, W.profile), shownTonight: W => app.shownTonight(W),
         user: () => fbUser, rerender: () => refreshSettings(app) });
-    Object.assign(app, { store, sync, ai, photos, today, show, renderAll, renderScreen,
+    Object.assign(app, { store, sync, ai, photos, today, show, go, back, renderAll, renderScreen,
+        route: () => Object.assign({}, routes[current] || { tab: current, page: '', arg: '' }),
         tonightChanged: why => tonightScreen.localChange(app, why),   // 别的屏改了今晚的前提(今天洗澡 / 刮胡、模式)后调:签名变了才让顾问重排
         // 她眼前的今晚(今晚页显示的那份,顾问版或离线):对话 / 反馈 / 拍照分析的上下文、change_tonight 的校验、未来 7 晚的今晚那格都用它
         aiTonightData: W => tonightScreen.aiTonightData(app, W),
@@ -187,10 +279,26 @@ function boot() {
     applyVisibility();
     renderHeader();
     bindEscape();
-    document.querySelectorAll('.tab[data-tab]').forEach(t => t.addEventListener('click', () => show(t.dataset.tab)));
-    const sealBtn = document.getElementById('btn-settings'); if (sealBtn) sealBtn.addEventListener('click', () => openSettings(app));
-    window.addEventListener('hashchange', () => { const id = location.hash.replace(/^#\/?/, ''); if (id && id !== current) show(id); });
-    show(location.hash.replace(/^#\/?/, '') || 'tonight');
+    // 点 tab:切过去(不入栈);已经在这个 tab 的二级页 → 回这个 tab 首页;已在首页 → 回到顶上(HIG · Tab bars)
+    document.querySelectorAll('.tab[data-tab]').forEach(t => t.addEventListener('click', () => {
+        const id = t.dataset.tab, r = routes[id];
+        if (current === id && r && r.page) go(id, { replace: true, how: 'pop' });
+        else if (current === id) try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); }
+        else go(id);
+    }));
+    const sealBtn = document.getElementById('btn-settings'); if (sealBtn) sealBtn.addEventListener('click', () => { if (current !== 'settings') go('settings'); });
+    // 站内链接 <a href="#/…">:走 go() 入栈(带 sk 标记,返回键才知道能 history.back());返回键委托
+    document.addEventListener('click', e => {
+        const bk = e.target.closest && e.target.closest('[data-back]');
+        if (bk) { e.preventDefault(); back(); return; }
+        const a = e.target.closest && e.target.closest('a[href^="#/"]');
+        if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
+        e.preventDefault(); go(a.getAttribute('href'));
+    });
+    window.addEventListener('popstate', onHistory);
+    window.addEventListener('hashchange', onHistory);
+    bindEdgeSwipe();
+    go(location.hash || '#/tonight', { replace: true });
     ensureShopRunner(app);   // 「要不要买」的后台判断:只听本机操作入口(ai/apply.js 的 local* / apply* / undo*)
     // 同一批本机入口(用完 / 买回 / 快用完、顾问方案落成 / 撤销 / 恢复)也让今晚重排:防抖 + 签名没变不调;同步来的不走这里
     onShopLocalChange(why => tonightScreen.localChange(app, why));

@@ -12,7 +12,7 @@ try {
     await p.nav(origin + '/index.html', 300);
     await p.eval(`return __seed.${who}()`);
     await p.reload(1200);
-    if (tab !== 'tonight') { await p.eval(`show('${tab}')`); await sleep(400); }
+    if (tab !== 'tonight') { await p.eval(`location.hash='#/${tab}';return 1`); await sleep(500); }
     if (expr) { console.log('expr →', JSON.stringify(await p.eval(expr))); await sleep(400); }
     const r = await p.eval(`const f=document.querySelector('#tn-plan .step'); return { firstStepY: f ? Math.round(f.getBoundingClientRect().top + scrollY) : null, text: (document.querySelector('.panel.active')||document.body).innerText.slice(0, 2500), sheets: [...document.querySelectorAll('#sheet-root .sheet-ov')].map(x=>x.innerText.slice(0,400)) }`);
     console.log('firstStepY', r.firstStepY);

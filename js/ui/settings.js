@@ -6,7 +6,7 @@
 // 写档案一律走 model/profile.js 的 updateProfile(读 → 改 → 写回,别拿内存旧档案盖掉刚同步来的);洗澡习惯走 model/week.js。
 // 【要紧】#sync-line / #sync-choose / #auth-btn 这几个 id 不能改:sync.js 的状态回调和整页同步测试(s-85)直接找它们。
 import { LOCAL_KEYS, CLOUD_KEYS } from '../store.js';
-import { openSheet, closeSheet, esc, toast, sysConfirm, download } from './sheets.js';
+import { openSheet, closeSheet, esc, ico, toast, sysConfirm, download } from './sheets.js';
 import { updateProfile, ZONE_PRESETS, userZones, CONCERN_ADVICE, CONCERN_AXIS } from '../model/profile.js';
 import { habitPreset, saveHabit, getDayState, setDayState } from '../model/week.js';
 import { acidTiming } from '../engine/rules.js';
@@ -110,7 +110,7 @@ export const DATA_NOTE = [
 // 主账号:家里的服务器会另外附上运营者自己在服务器上记的 HRT 用药和化验(server 端,和 App 里的开关无关;这里照实说,不写具体内容)
 export const DATA_NOTE_OWNER = '你是主账号：家里的服务器会另外附上你在服务器上单独记的 HRT 用药和化验，和 App 里的 HRT 开关无关。';
 
-function body(app) {
+function groups(app) {
     const s = app.sync, u = s.state.user, W = app.world(), P = W.profile || {};
     const minimal = !!P.minimalMode, owner = isOwner(app);
     const acc = app.ai.access(), me = app.ai.state.me;
@@ -120,14 +120,14 @@ function body(app) {
     let opts = {}; try { opts = JSON.parse(app.store.getLocal(LOCAL_KEYS.aiOpts)) || {}; } catch (e) { }
     const accTxt = acc === 'out' ? '没登录：登录后才能用顾问。' : acc === 'none' ? '顾问是邀请制，这个账号还没开通。' : acc === 'mismatch' ? '这个邮箱绑定了另一个账号，用不了顾问。'
         : app.ai.state.down ? '已开通，这会儿连不上。' : app.ai.quotaText() || (app.ai.ready() ? '已开通。' : '已开通，正在连。');
-    return `<div class="sheet-sec"><div class="sec-t">账号与同步</div>
+    const G = {};
+    G.account = `<div class="sheet-sec"><div class="sec-t">账号与同步</div>
         <div id="auth-btn">${u
             ? `<div class="row"><span class="row-main"><span class="lede">${esc(u.displayName ? String(u.displayName).split(' ')[0] : '已登录')}</span>${u.email ? `<span class="meta">${esc(u.email)}</span>` : ''}</span><button type="button" class="btn-link quiet" data-act="signout">退出登录</button></div>`
             : `<button type="button" class="btn btn-primary btn-block" data-act="signin">用 Google 登录（换手机数据还在）</button>`}</div>
         <p class="note" id="sync-line">${esc(s.syncLineText())}</p>
-        <button type="button" class="btn btn-primary" id="sync-choose" data-act="choose"${s.state.conflict ? '' : ' hidden'}>选一份记录</button></div>
-
-    <div class="sheet-sec" id="set-mode-sec"><div class="sec-t">怎么用</div>
+        <button type="button" class="btn btn-primary" id="sync-choose" data-act="choose"${s.state.conflict ? '' : ' hidden'}>选一份记录</button></div>`;
+    G.skin = `<div class="sheet-sec" id="set-mode-sec"><div class="sec-t">怎么用</div>
         ${seg('mode', minimal ? 'min' : 'full', [['min', '只看今晚'], ['full', '记录并看变化']], '怎么用')}
         <p class="note set-mode-note" id="set-mode-note">${esc(minimal ? MINIMAL_DESC : FULL_DESC)}</p>
         ${minimal ? sw('set-showrec', '显示「记录」页', P.hideRecords !== true) : '<p class="note faint">这个用法下「记录」页一直在。</p>'}</div>
@@ -139,9 +139,8 @@ function body(app) {
         ${sw('set-premakeup', '需要卸妆步骤', !!P.useMakeupRemoval)}
         ${sw('set-care', '在看医生 / 用药', P.startState === 'care' && !!P.careAt)}
         <p class="note set-hint">打开时护肤只排清洁、保湿、修护和眼霜，酸、面膜、维 A、精华、面油都先不上，医生开的药优先；顾问也会看到。</p>
-        ${skinChipsHtml(P)}</div>
-
-    <div class="sheet-sec" id="set-habit"><div class="sec-t">通常哪几天洗澡${P.shaving ? '、刮胡' : ''}</div>
+        ${skinChipsHtml(P)}</div>`;
+    G.week = `<div class="sheet-sec" id="set-habit"><div class="sec-t">通常哪几天洗澡${P.shaving ? '、刮胡' : ''}</div>
         ${P.shaving ? '<div class="set-days-l">洗澡</div>' : ''}
         <div class="chips set-days" id="set-shower" role="group" aria-label="洗澡">${WEEK_ORDER.map(d => chip(!!(hp.find(x => x.dow === d) || {}).shower, WD[d], `data-hd="${d}" data-hk="shower" aria-label="周${WD[d]}洗澡"`)).join('')}</div>
         ${P.shaving ? `<div class="set-days-l">刮胡</div><div class="chips set-days" id="set-shavedays" role="group" aria-label="刮胡">${WEEK_ORDER.map(d => chip(!!(hp.find(x => x.dow === d) || {}).shave, WD[d], `data-hd="${d}" data-hk="shave" aria-label="周${WD[d]}刮胡"`)).join('')}</div>` : ''}
@@ -153,39 +152,65 @@ function body(app) {
         <details class="fold set-adv"><summary><span class="fold-sum"><span class="lede">高级 · 手动覆盖</span><span class="note">默认交给方案</span></span></summary><div class="fold-body">
             <label class="field"><span>修护霜用法</span><select id="set-repairuse"><option value="">交给方案</option><option value="full"${P.repairUse === 'full' ? ' selected' : ''}>全脸薄涂</option><option value="spot"${P.repairUse === 'spot' ? ' selected' : ''}>只点涂</option></select></label>
             <label class="field"><span>没连上顾问时的刷酸档位</span><select id="set-acidlevel"><option value="">${minimal ? '自动（停在每周 1 次，不会自己加）' : '自动（没刺激就一档档加）'}</option>${[1, 2, 3].map(n => `<option value="${n}"${+P.acidLevel === n ? ' selected' : ''}>每周 ${n} 次</option>`).join('')}</select></label>
-        </div></details></div>
-
-    <div class="sheet-sec" id="set-photo"><div class="sec-t">照片分析</div>
+        </div></details></div>`;
+    G.skin += `<div class="sheet-sec" id="set-photo"><div class="sec-t">照片分析</div>
         ${sw('set-photoai', '拍的皮肤照片可以发给顾问分析', photoOn)}
-        <p class="note">${photoOn ? '开着：你点「分析」时，那几张照片（本机有上一次的正脸照片的话也一起）发给顾问逐区看，结果记进当天。' : '关着：照片只存在这台设备上，不发给顾问。'}每个账号单独开关，只有本人能开。</p></div>
-
-    ${pushSec(app)}
+        <p class="note">${photoOn ? '开着：你点「分析」时，那几张照片（本机有上一次的正脸照片的话也一起）发给顾问逐区看，结果记进当天。' : '关着：照片只存在这台设备上，不发给顾问。'}每个账号单独开关，只有本人能开。</p></div>`;
+    G.look = `${pushSec(app)}
 
     <div class="sheet-sec" id="set-look"><div class="sec-t">外观</div>
         ${seg('theme', currentTheme(), [['system', '跟随系统'], ['light', '纸'], ['dark', '夜'], ['auto', '晚上自动']], '外观')}
         <p class="note">晚上自动：21:00 到早上 7:00 用夜间配色。</p>
         <div class="set-sub"><div class="sec-t">字体</div>${seg('type', currentType(), [['serif', '纸墨'], ['sans', '无衬线']], '字体')}
         <p class="note">纸墨是宋体，像本护理手册；无衬线用系统黑体，更利落。只改这台设备。</p></div>
-        <label class="field field-row"><span>印章上的字</span><input type="text" id="set-seal" maxlength="1" autocomplete="off" placeholder="一个字" value="${esc(P.seal || P.stamp || '')}"></label></div>
-
-    <div class="sheet-sec" id="set-ai"><div class="sec-t">顾问</div>
+        <label class="field field-row"><span>印章上的字</span><input type="text" id="set-seal" maxlength="1" autocomplete="off" placeholder="一个字" value="${esc(P.seal || P.stamp || '')}"></label></div>`;
+    G.account += `<div class="sheet-sec" id="set-ai"><div class="sec-t">顾问</div>
         <p class="note" id="set-ai-st">${esc(accTxt)}</p>
         ${acc === 'none' ? `<label class="field"><span>邀请码</span><input type="text" id="set-code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="16" placeholder="ABCDE-FGHJK"></label><div class="btn-row"><button type="button" class="btn btn-primary" data-act="redeem">开通</button></div>` : ''}
         ${acc === 'on' && !app.ai.state.down ? `<div class="btn-row"><button type="button" class="btn" data-act="memory">顾问记得的事</button></div>` : ''}
         ${owner && me ? `<div class="set-sub"><div class="sec-t">模型与用量（只有你看得到）</div><p class="meta">今天 $${Number(me.today || 0).toFixed(2)}${me.daily_cap ? ' / $' + Number(me.daily_cap).toFixed(0) : ''} · 本期 $${Number(me.cycle || 0).toFixed(2)}</p>
             <label class="field"><span>模型</span><select id="set-model"><option value="">自动（按任务挑）</option>${(me.models || []).map(m => `<option value="${esc(m[0])}"${opts.model === m[0] ? ' selected' : ''}>${esc(m[1] + (m[2] ? ' · ' + m[2] : ''))}</option>`).join('')}</select></label>
-            <label class="field"><span>思考深度${opts.model ? '' : '（选了模型才生效）'}</span><select id="set-effort"${opts.model ? '' : ' disabled'}>${(me.efforts || []).map(e => `<option value="${esc(e[0])}"${(opts.effort || 'medium') === e[0] ? ' selected' : ''}>${esc(e[1])}</option>`).join('')}</select></label></div>` : ''}</div>
-
-    <div class="sheet-sec" id="set-data"><div class="sec-t">数据</div>
+            <label class="field"><span>思考深度${opts.model ? '' : '（选了模型才生效）'}</span><select id="set-effort"${opts.model ? '' : ' disabled'}>${(me.efforts || []).map(e => `<option value="${esc(e[0])}"${(opts.effort || 'medium') === e[0] ? ' selected' : ''}>${esc(e[1])}</option>`).join('')}</select></label></div>` : ''}</div>`;
+    G.data = `<div class="sheet-sec" id="set-data"><div class="sec-t">数据</div>
         <div class="btn-row"><button type="button" class="btn" data-act="export">导出备份</button><label class="btn file-btn">恢复备份<input type="file" accept=".json,application/json" id="set-import"></label><button type="button" class="btn" data-act="recovery">恢复副本</button></div>
         <p class="note">备份里有全部记录和这台设备上的照片。恢复之前，现在的记录会先另存一份恢复副本。</p>
         <div class="btn-row"><button type="button" class="btn-link quiet danger-link" data-act="reset" id="set-reset">${RESET.armed ? '再点一次：清空并从头开始' : '恢复出厂'}</button></div>
         ${RESET.armed ? `<p class="note" role="alert">会先下载一份备份，再清空${u ? '这个账号在所有设备上的' : '这台设备上的'}记录、货架和方案（照片留在这台设备上）。清空前的记录另存一份恢复副本，在「恢复副本」里能换回来。</p>` : ''}
-        <details class="fold" id="set-privacy"><summary><span class="fold-sum"><span class="lede">数据说明</span><span class="note">存在哪、发给谁</span></span></summary><div class="fold-body"><ul class="list note">${DATA_NOTE.concat(owner ? [DATA_NOTE_OWNER] : []).map(x => `<li>${esc(x)}</li>`).join('')}</ul></div></details></div>
-
-    <div class="sheet-sec set-end"><div class="btn-row"><button type="button" class="btn-link quiet" data-act="oobe">重新做引导</button><button type="button" class="btn-link quiet" data-act="whatsnew">这一版改了什么</button></div>
+        <details class="fold" id="set-privacy"><summary><span class="fold-sum"><span class="lede">数据说明</span><span class="note">存在哪、发给谁</span></span></summary><div class="fold-body"><ul class="list note">${DATA_NOTE.concat(owner ? [DATA_NOTE_OWNER] : []).map(x => `<li>${esc(x)}</li>`).join('')}</ul></div></details></div>`;
+    G.help = `<div class="sheet-sec set-end"><div class="btn-row"><button type="button" class="btn-link quiet" data-act="oobe">重新做引导</button><button type="button" class="btn-link quiet" data-act="whatsnew">这一版改了什么</button></div>
         <details class="fold" id="set-changelog"><summary><span class="fold-sum"><span class="meta" id="set-version">护肤计划 v${esc(VERSION)} (build ${BUILD})</span><span class="note">更新日志</span></span></summary><div class="fold-body">${CHANGELOG.map(([v, d, L]) => `<div class="set-sub"><div class="sec-t">v${esc(v)} · ${esc(d)}</div><ul class="list note">${L.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`).join('')}</div></details></div>`;
+    // 首页每行右边那句现状(DESIGN.md §4:不点进去也知道里面是什么状态)
+    G.sum = {
+        account: (u ? (u.displayName ? String(u.displayName).split(' ')[0] : '已登录') : '没登录') + ' · ' + (acc === 'on' ? '顾问已开通' : '顾问未开通'),
+        skin: (minimal ? '只看今晚' : '记录并看变化') + ((SKIN_BASE.find(x => x[0] === P.skinBase) || [])[1] ? ' · ' + SKIN_BASE.find(x => x[0] === P.skinBase)[1] + '皮' : ''),
+        look: (app.push && app.push.view().on ? '提醒开' : '提醒关') + ' · ' + (currentType() === 'sans' ? '无衬线' : '纸墨'),
+        data: '备份、恢复',
+        help: 'v' + VERSION
+    };
+    return G;
 }
+// ── 设置 = 一屏 + 5 个二级页(DESIGN.md §3)。洗澡 / 刮胡习惯和刷酸时机不在这里:全 App 只在「今晚 → 接下来 7 晚」改 ──
+export const id = 'settings';
+export const title = '设置';
+const PAGES = [['account', '账号与顾问'], ['skin', '你的皮肤'], ['look', '提醒与外观'], ['data', '数据'], ['help', '帮助']];
+export function render(app) {
+    const G = groups(app);
+    return `<nav class="grp nav-list" aria-label="设置">${PAGES.map(([k, l]) => navRow('#/settings/' + k, l, G.sum[k], 'set-go-' + k)).join('')}</nav>`;
+}
+export function mount(root, app) { probeMe(app); }
+function pageOf(k) {
+    return { title: PAGES.find(x => x[0] === k)[1], render: app => `<div class="set-page" id="set-page-${k}">${groups(app)[k]}</div>`, mount: (root, app) => { bind(root, app); if (k === 'account') probeMe(app); } };
+}
+export const pages = { account: pageOf('account'), skin: pageOf('skin'), look: pageOf('look'), data: pageOf('data'), help: pageOf('help') };
+// 「今晚 → 接下来 7 晚」用:每周洗澡 / 刮胡习惯 + 刷酸时机(id 照旧 set-habit / set-timing)。bindWeekSettings 只挂在包住这两段的那个元素上
+export function weekSettingsHtml(app) { return groups(app).week; }
+export function bindWeekSettings(el, app) { bind(el, app); }
+// 「→」行:整行可点 ≥52px,左主文案 + 右一句现状 + chevron(各屏共用)
+export function navRow(href, label, now, id) {
+    return `<a class="nav-row" href="${href}"${id ? ` id="${id}"` : ''}><span class="nav-l">${esc(label)}</span>${now ? `<span class="nav-now">${esc(now)}</span>` : ''}${ico('chev', 'nav-chev')}</a>`;
+}
+// 顾问状态还没核过:核完了把「顾问」那一段画对(模型 / 用量只有核过才有)
+function probeMe(app) { if (app.ai.access() === 'on' && !app.ai.state.me && !app.ai.state.down) app.ai.probe().then(() => paint(app), () => { }); }
 
 // ── 提醒(「主动找你」,ai/push.js):开关、安静时段、每天最多几条、这台设备的状态、iPhone 装到主屏的步骤 ──
 const hourOpts = v => Array.from({ length: 24 }, (_, h) => `<option value="${h}"${+v === h ? ' selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('');
@@ -203,11 +228,10 @@ function pushSec(app) {
         <p class="note faint">锁屏上只写今晚排什么，不写病名、用药。安静时段里不推，同一件事只推一次。</p></div>`;
 }
 
+// 重画:设置开着就重画设置那一页;今晚的「接下来 7 晚」开着时 app.renderAll() 已经重画了它
 function paint(app) {
-    const ov = document.getElementById('settings-sheet'); if (!ov) return;
-    const bd = ov.querySelector('.sheet-b'); if (!bd) return;
-    bd.innerHTML = body(app);
-    bind(ov, app);
+    const sec = document.getElementById('settings');
+    if (sec && sec.classList.contains('active')) app.renderScreen('settings');
 }
 function changed(app) { app.renderAll(); paint(app); }
 // 档案改了:模式 / 刮胡 / 刷酸时机 / 修护用法 / 酸的档位都可能改了今晚的前提 → 让今晚重排(tonight.js 签名没变就不调,改外观这类不花钱)
@@ -215,7 +239,7 @@ function setProfile(app, fn) { updateProfile(app.store, fn); changed(app); if (a
 
 function bind(ov, app) {
     const s = app.sync, t = () => app.today();
-    ov.querySelectorAll('.sheet-b [data-act]').forEach(b => b.addEventListener('click', () => {
+    ov.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
         const a = b.dataset.act;
         if (a === 'signin') app.signIn();
         else if (a === 'signout') app.signOut();
@@ -224,8 +248,8 @@ function bind(ov, app) {
         else if (a === 'export') exportBackup(app);
         else if (a === 'memory') memorySheet(app);
         else if (a === 'redeem') redeem(app, ov);
-        else if (a === 'oobe') { closeSheet('settings-sheet'); startOobe(app, { redo: true }); }
-        else if (a === 'whatsnew') { closeSheet('settings-sheet'); showWhatsNew(app, { force: true }); }
+        else if (a === 'oobe') startOobe(app, { redo: true });
+        else if (a === 'whatsnew') showWhatsNew(app, { force: true });
         else if (a === 'reset') factoryReset(app);
         else if (a === 'wptest') app.push.test();
         else if (a === 'wphere') app.push.here();
@@ -278,7 +302,7 @@ function bind(ov, app) {
         }
         changed(app);
     }));
-    bindSkinChips(ov.querySelector('.sheet-b'), app, () => paint(app));
+    bindSkinChips(ov, app, () => paint(app));
 }
 function saveOpts(app, ov) {
     const m = (ov.querySelector('#set-model') || {}).value || '', e = (ov.querySelector('#set-effort') || {}).value || 'medium';
@@ -339,7 +363,7 @@ async function factoryReset(app) {
         openSheet({ id: 'reset-bad', title: '没有清空', text: '先另存恢复副本没成功（这台设备存不下了），所以什么都没动。', actions: [{ label: '知道了', primary: true }] });
         paint(app); return;
     }
-    closeSheet('settings-sheet');
+    app.go('tonight', { replace: true });
     app.renderAll();
     toast('清空了。刚下载的备份和「恢复副本」都能换回来。', 4500);
     startOobe(app, {});
@@ -380,11 +404,7 @@ function importBackup(app, file) {
     rd.readAsText(file);
 }
 
-export function openSettings(app) {
-    watchTheme();   // 幂等;整合后 app.js 启动时也会调
-    openSheet({ id: 'settings-sheet', title: '设置', html: body(app), onMount: ov => bind(ov, app) });
-    // 顾问状态还没核过:核完了把「顾问」那一段画对(模型 / 用量只有核过才有)
-    if (app.ai.access() === 'on' && !app.ai.state.me && !app.ai.state.down) app.ai.probe().then(() => paint(app), () => { });
-}
+// 旧入口:打开设置 = 去设置页
+export function openSettings(app, page) { app.go('settings' + (page ? '/' + page : '')); }
 // 外面(sync 状态变化等)想刷新已打开的设置
 export function refreshSettings(app) { paint(app); }
