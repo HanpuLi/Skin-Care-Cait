@@ -1,7 +1,8 @@
 // ══ 产品 ══════════════════════════════════════════════════════════════════════════════
-// 一屏三块(样稿 Main.dc.html「产品」):顶上「拍成分表 / 手动添加」→ 读完的成分表(确认才入库,入库后能撤销)
-//   →「要不要买新的」(顾问在后台判断;离线退回 engine/needs)→ 货架(按角色排,一行一件:状态点、开封几周、保质期)
-//   → 不要了的 / 空瓶记录(折叠)。
+// 多页(DESIGN §3):#/products 首页 = 顶上「拍成分表 / 手动添加」→ 读完的成分表(确认才入库,入库后能撤销)→ 一行「要不要买」(→ 二级页,带一句现状)
+//   → 货架(按角色排,一行一件,是链接:状态点、开封几周、保质期)→ 不要了的 / 空瓶记录(折叠,放最下面:不是主事,恢复 / 买回来了要在货架旁边做)。
+//   #/products/shop = 要不要买新的(顾问在后台判断;离线退回 engine/needs);#/products/item/<id> = 单个产品(状态、为什么、用完 / 快用完 / 不要了 / 编辑)。
+//   编辑仍是弹层(openEditSheet:自成一体的小任务),折叠区里有「怎么排」四项,写回 p.schedule。
 // 【要紧】「用完了 / 买回来了 / 快用完了」只走 ai/apply.js 的 localMarkRunOut / localUnGone / localToggleLow
 //    (它们会让方案重出一版,并触发「要不要买」重判);添加 / 编辑 / 不要了 / 恢复 / 写成分特性走下面那组 local*(同样的两件事)。
 // 【要紧 · 要不要买】只在本机操作后防抖触发(onShopLocalChange 的监听方就在这里);同步来的 / 方案自动重出 / 第一次打开都不调,
@@ -21,6 +22,7 @@ import { safetyGate, gateBlocks } from '../engine/gate.js';
 import { isExcluded } from '../engine/util.js';
 import { mdOf } from '../clock.js';
 import { askAdvisor, probeOnce, dataNoticeSeen } from './advisor.js';
+import { navRow } from './settings.js';
 
 export const id = 'products';
 export const title = '产品';
@@ -42,6 +44,23 @@ export function defaultScheduleFor(role) {
     if (role === 'spf') return Object.assign(base, { type: 'daily', time: ['am'], maxPerWeek: 0 });
     return Object.assign(base, { type: 'base', maxPerWeek: 0, time: ['eye', 'moist', 'serum', 'cleanse'].indexOf(role) >= 0 ? ['am', 'pm'] : ['pm'] });
 }
+// 「怎么排」的取值就是 schedule.type 的真实取值(v1 showProdModal 同一组):前三种由引擎自动排到哪几晚,base 每晚固定出现,daily / none 不进晚间排班
+export const SCHED_TYPES = [['acid', '刷酸'], ['retinol', '维 A'], ['mask', '面膜'], ['base', '每晚固定'], ['daily', '日常'], ['none', '不排']];
+const AUTO_TYPES = ['acid', 'mask', 'retinol'];
+// 把编辑里改的排法(patch = {type, time[], maxPerWeek, minDaysBetween},都可缺)套到一份 schedule 上。
+//   换了「怎么排」:避开刮胡 / 刷酸 / 维 A 夜和自动排这几个开关跟着新类型的默认走(酸 / 面膜 / 维 A 要开自动排才会被排);没换类型就一个开关都不碰
+function applySchedulePatch(cur, patch) {
+    const s = Object.assign({}, cur), q = patch || {};
+    if (q.type && SCHED_TYPES.some(x => x[0] === q.type) && q.type !== s.type) {
+        const d = defaultScheduleFor(AUTO_TYPES.indexOf(q.type) >= 0 ? q.type : 'moist');
+        ['avoidShaveDay', 'avoidAcid', 'avoidRetinol', 'enableAutoSchedule'].forEach(k => { s[k] = d[k]; });
+        s.type = q.type;
+    }
+    if (Array.isArray(q.time)) { const t = ['am', 'pm'].filter(x => q.time.indexOf(x) >= 0); if (t.length) s.time = t; }
+    if (q.maxPerWeek !== undefined && isFinite(+q.maxPerWeek)) s.maxPerWeek = Math.max(0, Math.min(7, Math.round(+q.maxPerWeek)));
+    if (q.minDaysBetween !== undefined && isFinite(+q.minDaysBetween)) s.minDaysBetween = Math.max(0, Math.min(14, Math.round(+q.minDaysBetween)));
+    return s;
+}
 // 存档里的货架原样(没存过的老账号 = 内置种子;新账号 = 空)。注意别拿 loadPD() 的结果写回:它滤掉了用完的,买回来时就找不到定义了
 // 【和 v1 loadPD 同一条规则】种子货架(老账号)缺的内置产品从 DEFAULT_PD 补回来(不按「用完了」过滤,留着定义给「买回来」):
 //   v1 每次改货架写的是滤掉了用完的那份,v1 时代用完过的内置产品不在 sk_proddefs1 里;不补的话买回来后在 v2 改不了、拿不掉。
@@ -62,7 +81,7 @@ export function localAddProduct(store, o, today) {
     const name = String((o && o.name) || '').trim().slice(0, 80), role = (o && o.role) || '';
     if (!name || !role) return null;
     const list = rawDefs(store);
-    const schedule = defaultScheduleFor(role);
+    const schedule = applySchedulePatch(defaultScheduleFor(role), o.schedule);
     const np = { id: 'custom_' + store.now(), name, cat: ROLE_LABEL[role] || '', notes: (o.notes || []).map(String).filter(Boolean).slice(0, 8),
         journalTag: ['acid', 'mask', 'retinol'].indexOf(schedule.type) >= 0 ? name.slice(0, 16) : '',
         statuses: ['active', 'paused'], labels: { active: '正常使用', paused: '备用' }, pillCls: { active: 'active', paused: 'paused' },
@@ -75,7 +94,8 @@ export function localAddProduct(store, o, today) {
     after(store, '多了：' + name, '添加了「' + name + '」', today);
     return np;
 }
-// patch:{name, role, traits(null = 删掉自己标的,回到默认), notes[], paoMonths, opened('' = 清掉开封日)}
+// patch:{name, role, traits(null = 删掉自己标的,回到默认), notes[], paoMonths, opened('' = 清掉开封日), schedule{type, time[], maxPerWeek, minDaysBetween}}
+//   schedule 只在用户手动动过排法时才带:改了类别又没动排法 = 照新类别重置;动过 = 以他改的为准(其余开关按新类型默认);只改名字 / 开封日这些不碰排法
 export function localEditProduct(store, id, patch, today) {
     const list = rawDefs(store), p = list.find(x => x.id === id);
     if (!p) return null;
@@ -90,6 +110,7 @@ export function localEditProduct(store, id, patch, today) {
         p.role = patch.role; p.cat = ROLE_LABEL[patch.role] || p.cat;
         p.schedule = Object.assign(defaultScheduleFor(patch.role), { time: (p.schedule && p.schedule.time) || defaultScheduleFor(patch.role).time });
     }
+    if (patch.schedule) p.schedule = applySchedulePatch(p.schedule || defaultScheduleFor(p.role || eff), patch.schedule);
     if (patch.traits !== undefined) {
         const tr = cleanTraits(patch.traits || []), dflt = TRAIT_MAP[p.id] || [];
         if (patch.traits === null || (!tr.length && !Array.isArray(p.traits))) delete p.traits;
@@ -380,11 +401,25 @@ function bindShop(box, app) {
         try { navigator.clipboard.writeText(txt).then(() => toast('清单复制好了'), () => sysAlert(txt, '清单')); } catch (e) { sysAlert(txt, '清单'); }
     });
 }
+// 首页「要不要买」那一行的现状:只读本机现成的结果(shopRec / engine/needs),不发请求
+export function shopNowText(app, W) {
+    if (app.ai.access() !== 'on') {
+        const g = shopItems(W), now = g.filter(x => !x.soon).length;
+        return !g.length ? '没有要买的' : now ? '现在就缺 ' + now + ' 样' : g.length + ' 样快用完了';
+    }
+    const rec = shopRec(app);
+    if (!rec) return '还没判断';
+    const d = rec.data, now = d.items.filter(x => x.urgency === 'now').length;
+    const base = !d.items.length ? '没有要买的' : now ? '现在就缺 ' + now + ' 样' : d.items.length + ' 样可以备着';
+    return base + (rec.sig === shopSig(W) ? '' : ' · 可能过时');
+}
+function shopNavHtml(app, W) { return navRow('#/products/shop', '要不要买', shopNowText(app, W), 'pr-go-shop'); }
 function paintShop() {
-    const app = R.app, box = document.getElementById('pr-shop');
-    if (!app || !box) return;
-    box.innerHTML = shopHtml(app, app.world());
-    bindShop(box, app);
+    const app = R.app; if (!app) return;
+    const box = document.getElementById('pr-shop');
+    if (box) { box.innerHTML = shopHtml(app, app.world()); bindShop(box, app); }
+    const nav = document.getElementById('pr-go-shop');   // 在首页时,顾问判断完了把现状那一句也换掉
+    if (nav) nav.outerHTML = shopNavHtml(app, app.world());
 }
 
 // ══ 读成分表(/api/vision read_label)→ 让她确认 → 入库 → 能撤销 ═════════════════════════════
@@ -529,6 +564,8 @@ export function openEditSheet(app, pid, prefill, opts) {
     const name0 = prefill.name || (prod ? prod.name : '');
     const open0 = pid ? ((W.popen || {})[pid] || '') : W.today;
     const notes0 = prod ? visNotes(prod, W.profile).join('\n') : '';
+    const sch0 = (prod && prod.schedule) || defaultScheduleFor(role0 || 'moist');   // 怎么排:就是现在存着的;新加的 = 按类别的默认
+    const time0 = (sch0.time && sch0.time.length ? sch0.time : ['pm']);
     const html = `${prefill.note ? `<p class="note pr-pre">${esc(prefill.note)}</p>` : ''}
         <label class="field"><span>名字</span><input type="text" id="m-name" maxlength="80" value="${esc(name0)}" placeholder="比如：理肤泉 B5 修复霜" autocomplete="off"></label>
         <div class="field"><span>这是什么</span><div class="chips" id="m-role" role="radiogroup" aria-label="这是什么">${ADD_ROLES.map(([r, l]) => `<button type="button" class="chip" role="radio" data-v="${r}" aria-checked="${role0 === r}">${esc(l)}</button>`).join('')}</div></div>
@@ -538,7 +575,15 @@ export function openEditSheet(app, pid, prefill, opts) {
             <div class="chips" id="m-traits">${TRAIT_DEFS.map(t => `<button type="button" class="chip" data-v="${t.k}" aria-pressed="${tr0.indexOf(t.k) >= 0}">${esc(t.l)}</button>`).join('')}</div>
             <label class="field field-row"><span>保质期（开封后几个月，0 = 不提醒）</span><input type="text" inputmode="numeric" id="m-pao" value="${esc(prod ? prod.paoMonths || 0 : 0)}"></label>
             <label class="field"><span>备注（每行一条）</span><textarea id="m-notes" rows="2">${esc(notes0)}</textarea></label>
+            <div class="pr-sched" id="m-sched"><div class="sec-t">怎么排</div>
+                <div class="chips" id="m-stype" role="radiogroup" aria-label="怎么排">${SCHED_TYPES.map(([v, l]) => `<button type="button" class="chip" role="radio" data-v="${v}" aria-checked="${sch0.type === v}">${esc(l)}</button>`).join('')}</div>
+                <p class="note">刷酸、维 A、面膜由 App 排在哪几晚；每晚固定的每晚都出现；日常和不排不进晚间排班。</p>
+                <div class="field"><span>什么时候用</span><div class="chips" id="m-time"><button type="button" class="chip" data-v="am" aria-pressed="${time0.indexOf('am') >= 0}">早上用</button><button type="button" class="chip" data-v="pm" aria-pressed="${time0.indexOf('pm') >= 0}">晚上用</button></div></div>
+                <label class="field field-row"><span>每周最多几次（自动排的才看）</span><input type="text" inputmode="numeric" id="m-max" value="${esc(sch0.maxPerWeek ?? 1)}"></label>
+                <label class="field field-row"><span>至少隔几天</span><input type="text" inputmode="numeric" id="m-gap" value="${esc(sch0.minDaysBetween ?? 0)}"></label>
+            </div>
         </div></details>`;
+    let schedTouched = false;
     openSheet({ id: 'edit-sheet', title: pid ? '编辑产品' : (prefill.name ? '添加产品（按成分表预填）' : '添加产品'), html, focus: '#m-name',
         actions: [{ label: '取消' }, { label: '保存', primary: true, keep: true, fn: ov => {
             const name = ov.querySelector('#m-name').value.trim();
@@ -550,50 +595,94 @@ export function openEditSheet(app, pid, prefill, opts) {
             const pao = parseInt(ov.querySelector('#m-pao').value, 10) || 0;
             const opened = ov.querySelector('#m-open').value || '';
             const t = app.today();
-            const saved = pid ? localEditProduct(app.store, pid, { name, role, traits, notes, paoMonths: pao, opened }, t)
-                : localAddProduct(app.store, { name, role, traits, notes, paoMonths: pao, opened }, t);
+            // 排法只在她手动动过时才带:没动 = 改了类别就照新类别重置、只改名字不碰排法
+            let schedule;
+            if (schedTouched) {
+                const st = ov.querySelector('#m-stype [aria-checked="true"]'), tm = [...ov.querySelectorAll('#m-time [aria-pressed="true"]')].map(b => b.dataset.v);
+                schedule = { type: st ? st.dataset.v : undefined, time: tm.length ? tm : [role === 'spf' ? 'am' : 'pm'],
+                    maxPerWeek: parseInt(ov.querySelector('#m-max').value, 10) || 0, minDaysBetween: parseInt(ov.querySelector('#m-gap').value, 10) || 0 };
+            }
+            const saved = pid ? localEditProduct(app.store, pid, { name, role, traits, notes, paoMonths: pao, opened, schedule }, t)
+                : localAddProduct(app.store, { name, role, traits, notes, paoMonths: pao, opened, schedule }, t);
             if (!saved) { toast('没存上'); return; }
             closeSheet('edit-sheet');
             if (opts.onSaved) opts.onSaved(saved.id, !pid);
             app.renderAll();
         } }],
         onMount: ov => {
-            ov.querySelectorAll('#m-role .chip').forEach(b => b.addEventListener('click', () => ov.querySelectorAll('#m-role .chip').forEach(x => x.setAttribute('aria-checked', x === b ? 'true' : 'false'))));
+            // 排法的几个控件:动过就记下(schedTouched);没动过时,换「这是什么」会让下面几项跟着新类别的默认走(存下去的也是这个)
+            const setSched = (s, keepTime) => {
+                ov.querySelectorAll('#m-stype .chip').forEach(x => x.setAttribute('aria-checked', x.dataset.v === s.type ? 'true' : 'false'));
+                if (!keepTime) ov.querySelectorAll('#m-time .chip').forEach(x => x.setAttribute('aria-pressed', (s.time || ['pm']).indexOf(x.dataset.v) >= 0 ? 'true' : 'false'));
+                ov.querySelector('#m-max').value = s.maxPerWeek ?? 1; ov.querySelector('#m-gap').value = s.minDaysBetween ?? 0;
+            };
+            ov.querySelectorAll('#m-role .chip').forEach(b => b.addEventListener('click', () => {
+                ov.querySelectorAll('#m-role .chip').forEach(x => x.setAttribute('aria-checked', x === b ? 'true' : 'false'));
+                if (!schedTouched) setSched(prod && b.dataset.v === role0 ? sch0 : defaultScheduleFor(b.dataset.v), !!prod);   // 编辑时 localEditProduct 改类别会保留早 / 晚,这里一致
+            }));
+            ov.querySelectorAll('#m-stype .chip').forEach(b => b.addEventListener('click', () => { schedTouched = true; ov.querySelectorAll('#m-stype .chip').forEach(x => x.setAttribute('aria-checked', x === b ? 'true' : 'false')); }));
+            ov.querySelectorAll('#m-time .chip').forEach(b => b.addEventListener('click', () => { schedTouched = true; b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); }));
+            ['#m-max', '#m-gap'].forEach(q => ov.querySelector(q).addEventListener('input', () => { schedTouched = true; }));
             ov.querySelectorAll('#m-traits .chip').forEach(b => b.addEventListener('click', () => b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') === 'true' ? 'false' : 'true')));
         } });
 }
 
-// ══ 一件产品的 sheet:状态、为什么、动作 ════════════════════════════════════════════════════
-function openProdSheet(app, pid) {
-    const W = app.world(), p = (W.products || []).find(x => x.id === pid);
-    if (!p) return;
+// ══ 一件产品的页(#/products/item/<id>):状态、为什么、动作 ═══════════════════════════════════
+// 看东西是页,不是弹层(DESIGN §2);编辑仍是弹层(自成一体、做完或取消的小任务)
+const itemHref = id => '#/products/item/' + encodeURIComponent(id);
+const prodOf = (W, id) => (W.products || []).find(x => x.id === id);
+const itemTitle = (app, id) => { const p = prodOf(app.world(), id); return p ? p.name : '产品'; };
+function itemMissing() {
+    return `<section class="sec" id="pr-item-missing"><p class="lede">找不到这个产品。</p><p class="note">它可能已经用完、被删掉，或者链接是旧的。</p>
+        <div class="btn-row"><a class="btn" href="#/products" id="pr-item-shelf">回货架</a></div></section>`;
+}
+function itemHtml(app, pid) {
+    const W = app.world(), p = prodOf(W, pid);
+    if (!p) return itemMissing();
+    const dropped = isDropped(W, p);
     const pao = paoState(W, p), low = (W.low || []).indexOf(pid) >= 0, crit = criticalGaps(W, p);
     let lowTxt = '';
     if (low) {
         const ng = gapsIfGone(W, pid), rep = pickReplacement(W, p);
-        lowTxt = ng.length ? '它一没，' + ng.map(g => g.label).join('、') + '就断了。看「要不要买新的」，现在买来得及。'
+        lowTxt = ng.length ? '它一没，' + ng.map(g => g.label).join('、') + '就断了。看「要不要买」，现在买来得及。'
             : (rep && !rep.blocked ? '不用急着买：家里还有「' + rep.p.name + '」能接上' + (rep.needEnable ? '（它现在收在「不要了的」里，点「恢复」就接上）' : '') + '。' : '不用急着买：这一档没了也不影响整套方案。');
     }
     const notes = visNotes(p, W.profile).slice(0, 4);
     const tr = traitsOf(p);
-    const html = `<p class="note">${esc(ROLE_LABEL[p.role] || '还没选它是什么')}${W.popen[pid] ? ' · ' + esc(mdOf(W.popen[pid])) + ' 开封' : ' · 还没开封'}${tr.length ? ' · ' + esc(tr.map(traitLabel).join('、')) : ''}</p>
+    const [tone, state] = dropped ? ['hollow', p.hidden ? '不要了' : '备用'] : rowState(W, p);
+    const sc = p.schedule || {}, tname = (SCHED_TYPES.find(x => x[0] === sc.type) || [])[1];
+    const acts = dropped ? [['restore', '恢复', 'btn-primary']]
+        : [['low', low ? '还够用' : '快用完了', 'btn'], ['out', '用完了', 'btn'], ['edit', p.role ? '编辑' : '选一下它是什么', p.role ? 'btn' : 'btn-primary'], ['drop', '不要了', 'btn']];
+    if (app.ai.access() === 'on') acts.push(['ask', '问顾问', 'btn']);
+    return `<section class="sec pr-item" id="pr-item" data-id="${esc(pid)}">
+        <p class="note">${esc(ROLE_LABEL[p.role] || '还没选它是什么')}${W.popen[pid] ? ' · ' + esc(mdOf(W.popen[pid])) + ' 开封' : ' · 还没开封'}${tr.length ? ' · ' + esc(tr.map(traitLabel).join('、')) : ''}</p>
+        <p class="prod-state pr-item-state"><i class="dot ${tone}"></i>${esc(state)}</p>
+        ${tname ? `<p class="note" id="pr-item-sched">怎么排：${esc(tname)}${['am', 'pm'].filter(x => (sc.time || ['pm']).indexOf(x) >= 0).length === 2 ? ' · 早晚都用' : (sc.time || ['pm'])[0] === 'am' ? ' · 早上用' : ' · 晚上用'}${AUTO_TYPES.indexOf(sc.type) >= 0 ? ' · 每周最多 ' + (sc.maxPerWeek ?? 1) + ' 次 · 至少隔 ' + (sc.minDaysBetween ?? 0) + ' 天' : ''}</p>` : ''}
         ${pao ? `<div class="pr-warn"><span class="sec-t">保质期</span><p class="note ink">${esc(pao.msg)}</p></div>` : ''}
         ${crit.length && !low ? `<div class="pr-warn"><span class="sec-t">注意</span><p class="note ink">用完它就没有能顶替的了，「${esc(crit.map(g => g.label).join('、'))}」会断档，记得提前补。</p></div>` : ''}
         ${lowTxt ? `<p class="lede pr-low">${esc(lowTxt)}</p>` : ''}
-        ${notes.length ? `<ul class="list note pr-notes">${notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}`;
-    const t = app.today();
-    const acts = [
-        { label: low ? '还够用' : '快用完了', fn: () => { localToggleLow(app.store, pid, t); app.renderAll(); } },
-        { label: '用完了', fn: () => runOut(app, pid) },
-        { label: p.role ? '编辑' : '选一下它是什么', fn: () => openEditSheet(app, pid) },
-        { label: '不要了', fn: () => dropSheet(app, pid) }];
-    if (app.ai.access() === 'on') acts.push({ label: '问顾问', fn: () => askAdvisor(app, '关于「' + p.name + '」：') });
-    openSheet({ id: 'prod-sheet', title: p.name, html, actions: acts });
+        ${notes.length ? `<ul class="list note pr-notes">${notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
+        <div class="btn-row pr-item-acts">${acts.map(([a, l, c]) => `<button type="button" class="${c}" data-iact="${a}">${esc(l)}</button>`).join('')}</div></section>`;
 }
-function runOut(app, pid) {
+function itemMount(root, app, pid) {
+    ensureShopRunner(app);
+    const t = app.today();
+    root.querySelectorAll('[data-iact]').forEach(b => b.addEventListener('click', () => {
+        const a = b.dataset.iact;
+        if (a === 'low') { localToggleLow(app.store, pid, t); app.renderAll(); }
+        else if (a === 'out') runOut(app, pid, true);
+        else if (a === 'edit') openEditSheet(app, pid);   // 存完 → app.renderAll() 重画这一页
+        else if (a === 'drop') dropSheet(app, pid, true);
+        else if (a === 'restore') { localRestoreProduct(app.store, pid, t); app.renderAll(); }
+        else if (a === 'ask') { const p = prodOf(app.world(), pid); if (p) askAdvisor(app, '关于「' + p.name + '」：'); }
+    }));
+}
+// leave = 从详情页来的:用完了的产品页没了,回货架
+function runOut(app, pid, leave) {
     const r = localMarkRunOut(app.store, pid, app.today());
     if (!r) return;
     app.renderAll();
+    if (leave) app.back();
     const name = r.rec.name, gaps = (r.reg && r.reg.gaps) || [];
     const txt = '记了一笔空瓶' + (r.rec.weeks !== null && r.rec.weeks !== undefined ? '（开封 ' + r.rec.weeks + ' 周' + (r.rec.uses ? '，用过 ' + r.rec.uses + ' 次' : '') + '）' : '') + '。'
         + (gaps.length ? '方案缺了一环：' + gaps.map(g => g.label).join('、') + '，看「要不要买新的」。' : '方案照家里剩下的东西重排了' + (r.reg ? '，现在是 v' + r.reg.v : '') + '。');
@@ -601,16 +690,17 @@ function runOut(app, pid) {
         { label: '其实没用完', fn: () => { localUndoRunOut(app.store, r, app.today()); app.renderAll(); toast('「' + name + '」放回货架了，和用完之前一样'); } },
         { label: '知道了', primary: true }] });
 }
-function dropSheet(app, pid) {
+function dropSheet(app, pid, leave) {
     const W = app.world(), p = (W.products || []).find(x => x.id === pid); if (!p) return;
     const why = ['不适合我', '太刺激', '送人了', '只是暂时不想用'];
     const go = w => {
         closeSheet('drop-sheet');
         const r = localDropProduct(app.store, pid, w, app.today());
         app.renderAll();
+        if (leave && r) app.back();   // 不要了 → 回货架
         toast(r ? '「' + p.name + '」收进了「不要了的」' : '「' + p.name + '」没拿掉：货架记录里找不到它，刷新一下再试');
     };
-    openSheet({ id: 'drop-sheet', title: '「' + p.name + '」不要了？', html: `<p class="note">它不会再排进流程，收在产品页最下面「不要了的」，随时能恢复。为什么？（选填）</p>
+    openSheet({ id: 'drop-sheet', title: '「' + p.name + '」不要了？', html: `<p class="note">它不会再排进流程，收在货架页最下面「不要了的」，随时能恢复。为什么？（选填）</p>
         <div class="chips pr-why">${why.map(w => `<button type="button" class="chip" data-why="${esc(w)}">${esc(w)}</button>`).join('')}</div>`,
         actions: [{ label: '取消' }, { label: '直接拿掉', primary: true, keep: true, fn: () => go('') }],
         onMount: ov => ov.querySelectorAll('[data-why]').forEach(b => b.addEventListener('click', () => go(b.dataset.why))) });
@@ -625,15 +715,15 @@ export function render(app) {
     const canPhoto = app.ai.access() === 'on';
     const row = p => {
         const [tone, state] = rowState(W, p);
-        return `<button type="button" class="prod" data-id="${esc(p.id)}"><span class="prod-role">${esc(p.role ? (hasTrait(p, 'scrub') ? '磨砂' : (ROLE_SHORT[p.role] || '')) : '未定')}</span>
+        return `<a class="prod" href="${itemHref(p.id)}" data-id="${esc(p.id)}"><span class="prod-role">${esc(p.role ? (hasTrait(p, 'scrub') ? '磨砂' : (ROLE_SHORT[p.role] || '')) : '未定')}</span>
             <span class="prod-main"><span class="prod-name">${esc(p.name)}</span>
-                <span class="prod-sub"><span class="prod-state"><i class="dot ${tone}"></i>${esc(state)}</span><span class="meta nowrap">${esc(rowMeta(W, p))}</span></span></span></button>`;
+                <span class="prod-sub"><span class="prod-state"><i class="dot ${tone}"></i>${esc(state)}</span><span class="meta nowrap">${esc(rowMeta(W, p))}</span></span></span></a>`;
     };
     return `<div class="title-row"><h1 class="page-title" id="products-h">${esc(title)}</h1><span class="meta" id="pr-count">${live.length ? live.length + ' 支' : ''}</span></div>
         <div class="pr-top btn-row">${canPhoto ? `<label class="btn file-btn" id="pr-scan">${ico('camera')}拍成分表<input type="file" accept="image/*" id="pr-scan-in"></label>` : ''}
             <button type="button" class="${canPhoto ? 'btn-link quiet' : 'btn'}" id="pr-add">${canPhoto ? '手动添加' : ico('plus') + '添加产品'}</button></div>
         <div id="pr-label-box">${labelHtml(app, W)}</div>
-        <section class="sec" id="pr-shop" aria-live="polite">${shopHtml(app, W)}</section>
+        <nav class="grp nav-list" aria-label="产品">${shopNavHtml(app, W)}</nav>
         <section class="sec" id="pr-shelf">
             <div class="sec-h"><h2 class="pr-h">货架</h2><span class="meta">${live.length ? '按在流程里的位置排' : ''}</span></div>
             ${live.length ? `<div class="prods">${live.map(row).join('')}</div>` : `<div class="empty" id="pr-empty-shelf"><p class="lede">货架还是空的。</p><p class="note">先放一支洁面和一支保湿，今晚就能排。</p><div class="btn-row"><button type="button" class="btn" data-go="add">添加</button></div></div>`}
@@ -651,7 +741,6 @@ export function mount(root, app) {
     root.querySelectorAll('[data-go="add"]').forEach(b => b.addEventListener('click', add));
     const sc = root.querySelector('#pr-scan-in');
     if (sc) sc.addEventListener('change', () => { const f = sc.files && sc.files[0]; sc.value = ''; readLabelFromFile(app, f); });
-    root.querySelectorAll('.prod[data-id]').forEach(b => b.addEventListener('click', () => openProdSheet(app, b.dataset.id)));
     root.querySelectorAll('[data-restore]').forEach(b => b.addEventListener('click', () => { localRestoreProduct(app.store, b.dataset.restore, t()); app.renderAll(); }));
     root.querySelectorAll('[data-ungone]').forEach(b => b.addEventListener('click', () => {
         const r = localUnGone(app.store, b.dataset.ungone, t());
@@ -660,7 +749,17 @@ export function mount(root, app) {
     }));
     const lb = root.querySelector('#pr-label-box');
     if (lb) lb.querySelectorAll('[data-lbl]').forEach(b => b.addEventListener('click', () => labelAct(app, b.dataset.lbl)));
-    const shop = root.querySelector('#pr-shop'); if (shop) bindShop(shop, app);
-    // 顾问开通状态还没核过:核完了再画一遍「要不要买」这一块(不打断她)
+    // 顾问开通状态还没核过:核完了再画一遍「要不要买」那一行的现状(不打断她)
     probeOnce(app, () => paintShop());
 }
+// ── 要不要买(#/products/shop):shopHtml 原样,复制清单 / 重新判断 / 局部重画都在这一页 ──
+function shopPageRender(app) { return `<section class="sec" id="pr-shop" aria-live="polite">${shopHtml(app, app.world())}</section>`; }
+function shopPageMount(root, app) {
+    ensureShopRunner(app);
+    const shop = root.querySelector('#pr-shop'); if (shop) bindShop(shop, app);
+    probeOnce(app, () => paintShop());
+}
+export const pages = {
+    shop: { title: '要不要买', render: shopPageRender, mount: shopPageMount },
+    item: { title: itemTitle, render: (app, id) => itemHtml(app, id), mount: itemMount }
+};

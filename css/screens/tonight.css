@@ -130,3 +130,13 @@
 .qk-a{margin-top:var(--sp-2);font:16px/var(--lh-body) var(--serif);color:var(--ink);overflow-wrap:anywhere;white-space:pre-wrap}
 .qk-a.err{color:var(--muted)}
 .qk-a:empty{display:none}
+
+/* ── 今晚 → 接下来 7 晚(#/tonight/week):7 晚下面接每周洗澡 / 刮胡习惯 + 刷酸时机(settings.js 的 weekSettingsHtml)──
+   这两段的控件样式原来挂在 #settings-sheet 下,搬进二级页后在这里照着补一份(只管 .wk-set 里面) */
+.wk-set{margin-top:var(--sp-2)}
+.wk-set .set-seg{margin-top:var(--sp-1)}
+.wk-set .set-seg[data-seg="timing"]{grid-auto-flow:row;grid-template-columns:repeat(2,minmax(0,1fr))}
+.wk-set .set-seg>button{padding:0 var(--sp-1);font-size:14px}
+.wk-set .sheet-sec>.note{margin-top:var(--sp-2)}
+.wk-set select{width:100%;min-height:44px;font:16px/22px var(--serif);color:var(--ink);background:transparent;border:0;border-bottom:1px solid var(--line-ctl);border-radius:0;padding:0}
+.wk-set select:focus{outline:none;border-bottom:1.5px solid var(--ink)}

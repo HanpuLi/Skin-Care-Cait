@@ -19,7 +19,9 @@ const SCREENS = [
     ['tonight', ''], ['advisor', ''], ['record', ''], ['products', ''],
     ['tonight', `document.getElementById('btn-settings').click()`, '设置'],
     ['products', `document.getElementById('pr-add').click()`, '添加产品'],
-    ['products', `document.querySelector('#products .prod[data-id]').click()`, '产品菜单'],
+    ['products', `document.querySelector('#products .prod[data-id]').click()`, '产品详情页'],   // 货架行是链接:进 #/products/item/<id>
+    ['products', `document.getElementById('pr-go-shop').click()`, '要不要买'],
+    ['products', `document.querySelector('#products .prod[data-id]').click();${W8(250)}document.querySelector('#pr-item [data-iact=edit]').click();${W8(250)}document.querySelector('#edit-sheet .pr-adv').open=true`, '编辑产品 · 展开(含怎么排)'],
     ['products', `document.getElementById('pr-add').click();${W8(200)}document.querySelector('#add-sheet [data-role="acid"]').click()`, '编辑产品 · 刷酸'],
     // 某天的记录:历史里有那一天就点那一行;没有(极简模式的推定记录)就走「补记某一天」挑前天
     ['record', `const d=document.querySelector('#record [data-act="day"]');if(d)d.click();else{document.querySelector('#record [data-act="day-pick"]').click();${W8(200)}document.querySelector('#day-pick [data-d="'+__d(-2)+'"]').click()}`, '某天的记录'],

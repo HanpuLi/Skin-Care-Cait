@@ -137,6 +137,21 @@ await run('v2-a-tonight', [
             p.done(); await sleep(200);
         }
     }],
+    ['今晚首页的「→」行:接下来 7 晚(现状一句 + 点进去 + 返回)', async ({ S, open }) => {
+        const p = await open({ seed: 'full' });
+        const r = await p.eval(`const a=document.getElementById('tn-go-week');return {href:a&&a.getAttribute('href'),now:a?(a.querySelector('.nav-now')||{}).textContent:'',n7:!!document.getElementById('adv-n7'),habit:!!document.getElementById('set-habit'),h:location.hash}`);
+        S.ok(r.href === '#/tonight/week' && /^(下次刷酸 周.|这 7 晚没排酸)$/.test(r.now) && !r.n7 && !r.habit, '今晚首页:一条「接下来 7 晚」→ 行,右边写下次刷酸是哪晚;首页本身没有 7 晚和习惯', r);
+        await click(p, '#tn-go-week', 400);
+        const w = await p.eval(`return {h:location.hash,t:(document.querySelector('#tonight .pg-t')||{}).textContent,n7:document.querySelectorAll('#adv-n7 .n7-d').length,habit:!!document.getElementById('set-habit'),timing:!!document.getElementById('set-timing'),steps:!!document.getElementById('tn-plan')}`);
+        S.ok(w.h === '#/tonight/week' && w.t === '接下来 7 晚' && w.n7 === 7 && w.habit && w.timing && !w.steps, '点进去:#/tonight/week,h1「接下来 7 晚」,7 晚 + set-habit + set-timing,今晚的步骤不在这一页', w);
+        // 在这一页改刷酸时机:写进档案,不退出这一页
+        await click(p, '#set-timing [data-v="avoid"]', 300);
+        const t1 = await p.eval(`return {h:location.hash,tm:${ENV}.sk_profile1.acidTiming,n7:document.querySelectorAll('#adv-n7 .n7-d').length}`);
+        S.ok(t1.tm === 'avoid' && t1.h === '#/tonight/week' && t1.n7 === 7, '在 7 晚页改「刷酸时机」:写进档案(acidTiming),重画后还停在这一页', t1);
+        await click(p, '#tonight .pg-back', 400);
+        S.ok(await p.eval(`return location.hash==='#/tonight' && !!document.getElementById('tn-plan') && !document.getElementById('adv-n7')`), '返回键:回到今晚首页');
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
     ['极简 + 开了刮胡:今晚页只问「今晚刮胡吗」(洗澡不问)', async ({ S, open }) => {
         const p = await open({ seed: 'minimal', seedArg: `{profile:{shaving:true}}` });
         const r = await p.eval(`return {shave:!!document.getElementById('tn-q-shave'),shower:!!document.getElementById('tn-q-shower')}`);
@@ -144,8 +159,9 @@ await run('v2-a-tonight', [
         await click(p, '#tn-shave-y', 300);
         const v = await view(p);
         S.ok(v.h1 === '今晚 · 刮胡夜' && !v.steps.includes(ACID), '点「刮」:刮胡夜,酸不上', v.steps);
-        const set = await p.eval(`document.getElementById('btn-settings').click();await new Promise(r=>setTimeout(r,200));return (document.querySelector('#set-habit .note')||{}).textContent||''`);
-        S.ok(!/今晚在今晚页改/.test(set) && /未来 7 晚/.test(set) && /今晚刮胡在今晚页点/.test(set), '设置里的说明按极简 + 刮胡写(不指向不存在的开关)', set);
+        // 洗澡 / 刮胡习惯只在 #/tonight/week 改:那一页底下的说明按极简 + 刮胡写(不指向不存在的开关,也不指向顾问页 / 设置)
+        const set = await p.eval(`location.hash='#/tonight/week';await new Promise(r=>setTimeout(r,300));return (document.querySelector('#tonight #set-habit .note')||{}).textContent||''`);
+        S.ok(!/今晚在今晚页改/.test(set) && /7 晚/.test(set) && /今晚刮胡在今晚页点/.test(set) && !/顾问|设置/.test(set), '7 晚页里的习惯说明按极简 + 刮胡写(不指向不存在的开关)', set);
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
     ['安全提示(没有保湿)任何模式都在', async ({ S, open }) => {

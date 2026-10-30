@@ -66,3 +66,11 @@
 #edit-sheet .field input:focus,#edit-sheet .field textarea:focus{outline:none;border-bottom:1.5px solid var(--ink)}
 #edit-sheet .field input::placeholder,#edit-sheet .field textarea::placeholder{color:var(--faint)}
 #edit-sheet .field-row input{margin-top:0}
+
+/* ── 多页:货架行是链接;单个产品页 ── */
+a.prod{text-decoration:none;color:var(--ink)}
+.pr-item-state{margin-top:var(--sp-1)}
+.pr-item-acts{margin-top:var(--sp-4)}
+.pr-sched{margin-top:var(--sp-4)}
+.pr-sched .chips{margin-top:var(--sp-2)}
+.pr-sched .field{margin-top:var(--sp-3)}

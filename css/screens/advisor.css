@@ -6,12 +6,7 @@
 #advisor .dot.ink{background:var(--ink)}
 #advisor .rev{color:var(--rev)}
 
-/* ── 极简模式:方案和未来 7 晚收成顶上一行折叠(样稿 Cici 版这一屏以对话为主)── */
-.adv-minfold{margin-top:var(--sp-3)}
-.adv-minfold>summary .note{display:block}
-.adv-minfold .adv-plan{margin-top:0}
-
-/* ── 现在的方案 ── */
+/* ── 方案页(#/advisor/plan)/ 常识页(#/advisor/guide)/ 7 晚(今晚 → 接下来 7 晚,样式也在这里)── */
 .adv-plan{margin-top:var(--sp-4)}
 .adv-line{margin-top:var(--sp-1);font:16px/var(--lh-body) var(--serif);color:var(--ink)}
 .adv-why{margin-top:var(--sp-1)}

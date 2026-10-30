@@ -10,13 +10,14 @@
 import { K } from '../store.js';
 import { addDays, mdOf, dowOf } from '../clock.js';
 import { tagLabel, TREND_TAGS, SYMPTOM_TAGS, trendOf, FACE_ZONES, FACE_ZONE_NAMES, SPOT_TYPES, FM_TRIGGER, cleanSpots,
-         jrnlEntry, saveJrnl, setTrend, toggleSym, setSpots, setNote, deleteEntry } from '../model/journal.js';
+         jrnlEntry, saveJrnl, setTrend, toggleSym, setSpots, setNote, deleteEntry, toggleDayProduct } from '../model/journal.js';
 import { dayState } from '../model/week.js';
-import { acidTags } from '../engine/util.js';
+import { acidTags, retinolTags, maskTags } from '../engine/util.js';
 import { safetyGate } from '../engine/gate.js';
 import { buildSkincareContext } from '../ai/context.js';
 import { openSheet, closeSheet, toast, esc, ico, sysConfirm } from './sheets.js';
-import { dataNoticeSeen, openDataNotice, invalidateChatCtx } from './advisor.js';
+import { dataNoticeSeen, openDataNotice, invalidateChatCtx, askAdvisor } from './advisor.js';
+import { navRow } from './settings.js';
 import { faceHtml, bindFace, spotsByZone, heatData, heatTone } from './facemap.js';
 import { openCapture, canAnalyze, analyzeBlocked, photoAnalysisOn, addSimplePhoto, loadDayPhoto, applySuggest, suggestText, suggestOf } from './capture.js';
 
@@ -53,6 +54,31 @@ function tagsHtml(en) {
     if (tr) out.push(`<span class="tag"><i class="dot ${TREND_TONE[tr]}"></i>${esc(tagLabel(TREND_TAGS[tr]))}</span>`);
     SYMPTOM_TAGS.filter(t => st.indexOf(t) >= 0).forEach(t => out.push(`<span class="tag">${esc(tagLabel(t))}</span>`));
     return out.join('');
+}
+// 缩略图读到了才显示(外面的 button 也一起显示,不然留一个空的 44px 按钮)
+function showThumb(img, url) { img.src = url; img.hidden = false; const b = img.closest && img.closest('.thumb-b'); if (b) b.hidden = false; }
+// 看大图(❌3):全宽一张;这天这台设备上正 / 左 / 右有不止一张就给切换(按钮 ≥44px),只有一张就单张
+const PH_VIEWS = [['front', '正脸'], ['left', '左脸'], ['right', '右脸']];
+async function openPhotoView(app, date) {
+    const got = [];
+    for (const [v, name] of PH_VIEWS) {
+        let u = null;
+        try { u = (await app.photos.get(date, v)) || (v === 'front' ? await app.photos.get(date) : null); } catch (e) { u = null; }
+        if (u) got.push({ v, name, u });
+    }
+    if (!got.length) { toast('这张照片读不出来'); return null; }
+    const alt = d => mdOf(date) + '的' + d + '照片';
+    const ov = openSheet({ id: 'photo-view', title: mdOf(date) + '的照片', actions: [{ label: '好', primary: true }],
+        html: `<img class="photo-full" id="ph-img" alt="${esc(alt(got[0].name))}">${got.length > 1 ? `<div class="seg ph-seg" role="group" aria-label="看哪一张">${got.map((g, i) =>
+            `<button type="button" data-ph="${i}" aria-pressed="${i === 0}" id="ph-v-${g.v}">${esc(g.name)}</button>`).join('')}</div>` : ''}` });
+    const img = ov.querySelector('#ph-img'); img.src = got[0].u;
+    ov.addEventListener('click', e => {
+        const b = e.target && e.target.closest && e.target.closest('[data-ph]'); if (!b) return;
+        const g = got[+b.dataset.ph]; if (!g) return;
+        img.src = g.u; img.alt = alt(g.name);
+        ov.querySelectorAll('[data-ph]').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+    });
+    return ov;
 }
 function spotsText(spots) { const by = spotsByZone(spots); return Object.keys(by).map(z => z + '：' + by[z].join('、')).join('；'); }
 
@@ -127,6 +153,7 @@ export function feedbackHtml(app, date) {
     const added = !!(f.note_add && (f.noteSaved || noteOf(en).indexOf(f.note_add) >= 0));
     return `<div class="fb"><span class="fb-who">顾问${f.at ? ' · ' + esc(hm(f.at)) : ''}</span><p class="fb-text">${esc(f.text)}</p>`
         + (adj.length ? `<ul class="list note fb-adj">${adj.map(x => `<li>${esc(x.item || '')}${x.change ? '：' + esc(x.change) : ''}${x.why ? '<span class="faint">。' + esc(x.why) + '</span>' : ''}</li>`).join('')}</ul>` : '')
+        + (adj.length ? `<button type="button" class="btn-link sm" data-fb-act="adjust">照这个调</button>` : '')
         + (f.note_add && !added ? `<button type="button" class="btn-link sm quiet" data-fb-act="note">把「${esc(f.note_add)}」加进今天的记录</button>` : '')
         + '</div>';
 }
@@ -143,6 +170,14 @@ function bindFeedback(app) {
         const box = b.closest('[data-fb-date]'); if (!box) return;
         const date = box.dataset.fbDate;
         if (b.dataset.fbAct === 'retry') requestFeedback(app, date, { force: true });
+        else if (b.dataset.fbAct === 'adjust') {
+            // 和 v1 一样:关掉记皮肤的 sheet,把「按打卡反馈调一下：…」预填进顾问对话(不自动发)
+            const f = feedbackOf(app.world(), date); if (!f || !(f.next_adjust || []).length) return;
+            const txt = f.next_adjust.map(x => (x.item || '') + (x.change ? '：' + x.change : '') + (x.why ? '（' + x.why + '）' : '')).filter(Boolean).join('；');
+            const x = document.querySelector('#skin-sheet .sheet-x');
+            if (x) x.click();
+            askAdvisor(app, '按打卡反馈调一下：' + txt);
+        }
         else if (b.dataset.fbAct === 'note') {
             const f = feedbackOf(app.world(), date); if (!f || !f.note_add) return;
             const en = entryOf(app.world(), date), cur = noteOf(en);
@@ -225,7 +260,10 @@ export function openSkinSheet(app, opts) {
     const showFb = date === t && aiOn(app);
     // 还没看过「顾问会看到什么」:反馈不会自动发 —— 在顾问那一格里给「先看一下」,看完再要这一次反馈(和今晚页同一套)
     const fbNotice = showFb && !dataNoticeSeen(app);
-    const html = `${lead ? `<p class="note sk-lead">${esc(lead)}</p>` : ''}<div id="sk-top"></div>
+    // 以前的某一天:顶上一行只读「那晚:做了 …;没做 …」(stepsDone / skipped 是今晚页打勾时记下的;都没有就不出)
+    const dn = date !== t ? (en0.stepsDone || []) : [], sk0 = date !== t ? (en0.skipped || []) : [];
+    const nightLine = dn.length || sk0.length ? '那晚：' + [dn.length ? '做了 ' + dn.join('、') : '', sk0.length ? '没做 ' + sk0.join('、') : ''].filter(Boolean).join('；') : '';
+    const html = `${lead ? `<p class="note sk-lead">${esc(lead)}</p>` : ''}${nightLine ? `<p class="note sk-night" id="sk-night">${esc(nightLine)}</p>` : ''}<div id="sk-top"></div>
         ${P.hrt ? `<label class="field feat-hrt"><span>HRT 阶段</span><input type="text" id="sk-phase" value="${esc(en0.phase || '')}" placeholder="比如：第 3 个月、剂量调整" autocomplete="off"></label>` : ''}
         <label class="field"><span>备注（选填）</span><textarea id="sk-note" rows="2" placeholder="今天有什么特别的？" data-date="${esc(date)}" data-n0="${esc(noteOf(en0))}">${esc(noteOf(en0))}</textarea></label>
         ${showFb ? `<div class="sk-sec"><div class="sec-t">顾问</div>${fbNotice ? `<p class="note" id="sk-fb-notice">顾问看了会回一句；先看一下它会看到什么。 <button type="button" class="btn-link sm" id="sk-fb-notice-b">先看一下</button></p>` : ''}<div class="fb-box" data-fb-date="${esc(date)}"></div></div>` : ''}
@@ -291,23 +329,34 @@ export function openSkinSheet(app, opts) {
             }
             h += '</div>';
         }
+        // 那晚用了哪些活性(补记 / 修正用,极简模式也给):货架上刷酸 / 维 A / 面膜的 journalTag(没有就取名字)。今天那晚不出 —— 今晚页打勾负责
+        if (date !== t) {
+            const tags = [].concat(acidTags(W), retinolTags(W), maskTags(W)).filter((x, i, a) => x && a.indexOf(x) === i);
+            if (tags.length) {
+                h += `<div class="sk-sec sk-used"><div class="sec-t" id="sk-used-t">那晚用了哪些活性</div>
+                    <div class="chips" role="group" aria-labelledby="sk-used-t">${tags.map((tg, i) => {
+                        const on = (en.products || []).indexOf(tg) >= 0;
+                        return `<button type="button" class="chip" aria-pressed="${on}" data-sk="prod" data-t="${esc(tg)}" id="sk-prod-${i}">${on ? ico('check', 'sm') : ''}${esc(tg)}</button>`;
+                    }).join('')}</div>${en.auto ? '<p class="note">现在这一天是按计划推定的；点一下就改成你说了算。</p>' : ''}</div>`;
+            }
+        }
         if (date === t) {
             const analyze = canAnalyze(app, W.profile);
-            h += `<div class="sk-sec sk-photo"><div class="sk-photo-row"><img class="sk-thumb" id="sk-thumb" alt="今天的照片" hidden>
+            h += `<div class="sk-sec sk-photo"><div class="sk-photo-row"><button type="button" class="thumb-b" data-sk="photo" aria-label="看大图：今天的照片" hidden><img class="sk-thumb" id="sk-thumb" alt="今天的照片" hidden></button>
                 ${analyze ? `<button type="button" class="btn" data-sk="capture">${ico('camera')}拍照分析</button>`
                     : `<label class="btn file-btn">${ico('camera')}加一张照片<input type="file" accept="image/*" id="sk-file" aria-label="加一张照片"></label>`}</div>
                 ${en.photoAssess && en.photoAssess.usable !== false ? `<p class="note">照片分析：${esc(en.photoAssess.overall || '')}</p>` : ''}
                 <p class="meta">照片只存在这台设备上 <button type="button" class="btn-link sm quiet" data-sk="delphoto" id="sk-delphoto" hidden>删掉照片</button></p></div>`;
         } else {
             // 以前的某一天:这台设备上有那天的照片才显示(能单独删掉照片,下次分析也就不会再拿它当「上一次」发出去)
-            h += `<div class="sk-sec sk-photo" id="sk-photo-past" hidden><div class="sk-photo-row"><img class="sk-thumb" id="sk-thumb" alt="这天的照片" hidden></div>
+            h += `<div class="sk-sec sk-photo" id="sk-photo-past" hidden><div class="sk-photo-row"><button type="button" class="thumb-b" data-sk="photo" aria-label="看大图：这天的照片" hidden><img class="sk-thumb" id="sk-thumb" alt="这天的照片" hidden></button></div>
                 <p class="meta">照片只存在这台设备上 <button type="button" class="btn-link sm quiet" data-sk="delphoto" id="sk-delphoto" hidden>删掉照片</button></p></div>`;
         }
         const fid = document.activeElement && document.activeElement.id;
         top.innerHTML = h;
         if (fid) { const el = document.getElementById(fid); if (el) try { el.focus({ preventScroll: true }); } catch (e) { } }
         const img = top.querySelector('#sk-thumb');
-        if (img) loadDayPhoto(app, date).then(u => { if (u && img.isConnected) { img.src = u; img.hidden = false; ['#sk-delphoto', '#sk-photo-past'].forEach(q => { const el = top.querySelector(q); if (el) el.hidden = false; }); } });
+        if (img) loadDayPhoto(app, date).then(u => { if (u && img.isConnected) { showThumb(img, u); ['#sk-delphoto', '#sk-photo-past'].forEach(q => { const el = top.querySelector(q); if (el) el.hidden = false; }); } });
         const box = ov.querySelector(`[data-fb-date="${date}"]`); if (box) box.innerHTML = feedbackHtml(app, date);
     };
     const after = () => { app.renderAll(); paint(); };
@@ -317,6 +366,8 @@ export function openSkinSheet(app, opts) {
         const a = b.dataset.sk, store = app.store;
         if (a === 'trend') { setTrend(store, date, b.dataset.k, t); after(); }
         else if (a === 'sym') { toggleSym(store, date, b.dataset.t, t); after(); }
+        else if (a === 'prod') { toggleDayProduct(store, date, b.dataset.t, t, minimal); after(); }
+        else if (a === 'photo') openPhotoView(app, date);
         else if (a === 'fm') { ui.fmOpen[key] = b.getAttribute('aria-expanded') !== 'true'; if (!ui.fmOpen[key]) ui.fmSel[key] = ''; paint(); }
         else if (a === 'spot' || a === 'clearzone') {
             const zone = ui.fmSel[key]; if (!zone) return;
@@ -388,11 +439,10 @@ export function monthSummary(journal, today, acidList, minimal) {
     return out;
 }
 
-export function render(app) {
-    const W = app.world(), t = W.today, P = W.profile || {};
-    const en = entryOf(W, t);
-    const analyze = canAnalyze(app, P);
-    let h = `<h1 class="page-title" id="record-h">${esc(title)}</h1>`;
+// 首页 / 二级页共用的几块(每块返回一段 HTML)
+function quickHtml(app, W, P, analyze) {
+    const t = W.today;
+    let h = '';
     // ① 随时记一笔
     h += `<section class="rec-quick" aria-labelledby="rec-q-l"><label for="rec-q" id="rec-q-l" class="rec-q-l">今天皮肤怎么样？</label>
         <textarea id="rec-q" rows="2" placeholder="一句话就行，比如：下巴两颗红痘，T 区干净了点">${esc(ui.draft)}</textarea>
@@ -404,6 +454,11 @@ export function render(app) {
             <div class="btn-row"><button type="button" class="btn" data-act="parse-ok">就这样记上</button><button type="button" class="btn-link sm" data-act="parse-edit">改一下</button><button type="button" class="btn-link sm quiet" data-act="parse-no">不用</button></div></div>`;
     }
     h += `<button type="button" class="btn-link sm quiet" data-act="sheet" id="rec-more">加状态和位置</button></section>`;
+    return h;
+}
+function todayHtml(app, W, P) {
+    const t = W.today, en = entryOf(W, t);
+    let h = '';
     // ② 今天记下的
     h += `<section class="sec" id="rec-today"><div class="sec-h"><span class="sec-t">今天记下的</span>${hasLog(en) ? '<button type="button" class="btn-link sm quiet" data-act="sheet">改一下</button>' : ''}</div>`;
     // 照片(只存本机)哪怕只拍了一张、没记别的也要看得到:缩略图一直占位,读到了才显示
@@ -411,11 +466,61 @@ export function render(app) {
         const tg = tagsHtml(en), sp = spotsText(en.spots), nt = noteOf(en);
         h += `<div class="rec-day"><div class="rec-day-main">${tg ? `<div class="tags">${tg}</div>` : ''}${sp ? `<p class="note">${esc(sp)}</p>` : ''}${nt ? `<p class="lede">${esc(nt)}</p>` : ''}
             ${en.photoAssess && en.photoAssess.usable !== false ? `<p class="note">照片分析：${esc(en.photoAssess.overall || '')}</p>` : ''}</div>
-            <img class="rec-thumb" id="rec-thumb" alt="今天的照片" hidden></div>`;
-    } else h += `<div class="rec-day"><div class="rec-day-main"><p class="note">${P.minimalMode ? '想记的时候，在上面写一句或拍一张就行。' : '今天还没记。'}</p></div><img class="rec-thumb" id="rec-thumb" alt="今天的照片" hidden></div>`;   // 极简从不催:不标「没记」
+            <button type="button" class="thumb-b" data-act="photo" data-date="${esc(t)}" aria-label="看大图：今天的照片" hidden><img class="rec-thumb" id="rec-thumb" alt="今天的照片" hidden></button></div>`;
+    } else h += `<div class="rec-day"><div class="rec-day-main"><p class="note">${P.minimalMode ? '想记的时候，在上面写一句或拍一张就行。' : '今天还没记。'}</p></div><button type="button" class="thumb-b" data-act="photo" data-date="${esc(t)}" aria-label="看大图：今天的照片" hidden><img class="rec-thumb" id="rec-thumb" alt="今天的照片" hidden></button></div>`;   // 极简从不催:不标「没记」
     h += `<div class="fb-box" data-fb-date="${esc(t)}">${feedbackHtml(app, t)}</div></section>`;
+    return h;
+}
+function photosHtml(app, W, P, analyze) {
+    const t = W.today;
+    let h = '';
+    // ⑦ 照片分析
+    const pa = (W.journal || []).filter(e => e && e.photoAssess && e.photoAssess.usable !== false && e.date <= t).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4);
+    h += `<section class="sec" id="rec-photos"><div class="sec-h"><span class="sec-t">拍照分析</span>${analyze ? '<button type="button" class="btn-link sm" data-act="capture">拍三张</button>' : ''}</div>`;
+    if (pa.length) h += `<ul class="rows pa-rows">${pa.map(e => `<li class="row"><span class="row-main"><span class="meta">${esc(dayLabel(e.date, t))}</span><span class="lede">${esc(e.photoAssess.overall || '')}</span>${e.photoAssess.vs_last ? `<span class="note">和上次比：${esc(e.photoAssess.vs_last)}</span>` : ''}</span>`
+        + `<button type="button" class="thumb-b" data-act="photo" data-date="${esc(e.date)}" aria-label="看大图：${esc(dayLabel(e.date, t))}的照片" hidden><img class="pa-thumb" data-pa-date="${esc(e.date)}" alt="${esc(dayLabel(e.date, t))}的正脸照片" hidden></button></li>`).join('')}</ul>`;
+    // 分析时关了那一页(可以关):今天的结果已经记上,建议的状态和位置在这里一键填(填过状态的就不再提)
+    const paT = (W.journal || []).find(e => e && e.date === t && e.photoAssess && e.photoAssess.usable !== false);
+    const paSug = paT && !(paT.status || []).length ? suggestText(suggestOf(paT.photoAssess)) : '';
+    if (paSug) h += `<div class="rec-parse" id="rec-pa-fill"><span class="sec-t">今天的照片分析建议记上</span><p class="lede">${esc(paSug)}</p><div class="btn-row"><button type="button" class="btn" data-act="pa-fill">填上</button></div></div>`;
+    const blocked = !analyze && photoAnalysisOn(app, P) ? analyzeBlocked(app) : '';
+    h += `<p class="note">${analyze ? '正脸、左脸、右脸各一张，顾问逐区看、和上次比。隔两三天拍一次就够；变差那天可以加拍。照片只存在这台设备上。'
+        : blocked ? blocked + '照片只存在这台设备上。'
+        : photoAnalysisOn(app, P) ? '照片分析要登录并开通顾问才能用。现在拍的照片只存在这台设备上。' : '照片分析没打开，要本人在设置里打开才会用。现在拍的照片只存在这台设备上。'}</p></section>`;
+    return h;
+}
+const histOf = (W, t) => (W.journal || []).filter(e => e && e.date && e.date <= t && (hasLog(e) || e.done || (e.products || []).length)).sort((a, b) => b.date.localeCompare(a.date));
+function historyHtml(app) {
+    const W = app.world(), t = W.today;
+    let h = '';
+    // ⑧ 历史(点一行补记或改那一天)
+    const hist = (W.journal || []).filter(e => e && e.date && e.date <= t && (hasLog(e) || e.done || (e.products || []).length)).sort((a, b) => b.date.localeCompare(a.date));
+    h += `<section class="sec" id="rec-hist"><div class="sec-h"><span class="sec-t">历史</span><button type="button" class="btn-link sm quiet" data-act="day-pick">补记某一天</button></div>`;
+    if (!hist.length) h += `<p class="note">还没有记录。</p>`;
+    else {
+        h += `<ul class="rows hist">${hist.slice(0, ui.histN).map(e => {
+            const tg = [trendOf(e) ? tagLabel(TREND_TAGS[trendOf(e)]) : ''].concat(SYMPTOM_TAGS.filter(x => (e.status || []).indexOf(x) >= 0).map(tagLabel)).filter(Boolean).join('、');
+            const bits = [tg, cleanSpots(e.spots).length ? '标了位置' : '', e.photoAssess ? '照片分析' : '', e.done ? '做完了' : '', e.auto ? '按计划推定' : ''].filter(Boolean).join(' · ');
+            return `<li><button type="button" class="row" data-act="day" data-date="${esc(e.date)}"><span class="row-main"><span class="lede">${esc(dayLabel(e.date, t))}</span>${bits ? `<span class="note">${esc(bits)}</span>` : ''}${noteOf(e) ? `<span class="note faint">${esc(noteOf(e).slice(0, 40))}</span>` : ''}</span>${ico('chev', 'sm')}</button></li>`;
+        }).join('')}</ul>`;
+        if (hist.length > ui.histN) h += `<button type="button" class="btn-link sm quiet" data-act="hist-more">再看早一些</button>`;
+    }
+    h += '</section>';
+    return h;
+}
+function changesHtml(app) {
+    const W = app.world(), t = W.today, P = W.profile || {};
+    let h = '';
+    const aT = acidTags(W);
+    // ⑤½ 本月
+    const ms = monthSummary(W.journal, t, aT, !!P.minimalMode);
+    const msRows = (ms.done !== undefined ? [['完成今晚', ms.done + ' 晚', '本月过了 ' + ms.days + ' 天']] : [])
+        .concat([['刷了酸', ms.acid + ' 晚', ''], ['记了皮肤', ms.skin + ' 天', '']])
+        .concat(ms.streak !== undefined ? [['连续完成', ms.streak + ' 晚', ms.streak ? '今晚做完接着算' : '']] : []);
+    h += `<section class="sec" id="rec-month"><div class="sec-h"><span class="sec-t">本月 · ${ms.month} 月</span></div><ul class="rows">${msRows.map(([k, v, n]) =>
+        `<li class="row"><span class="row-main"><span class="lede">${esc(k)}</span>${n ? `<span class="note">${esc(n)}</span>` : ''}</span><span class="note">${esc(v)}</span></li>`).join('')}</ul></section>`;
     // ③ 近 14 天(刷酸 / 洗澡 / 刮胡标记)
-    const aT = acidTags(W), shaving = !!P.shaving;
+    const shaving = !!P.shaving;
     const days = Array.from({ length: 14 }, (_, i) => addDays(t, i - 13)).map(d => {
         const e = entryOf(W, d), ds = dayState(W, d);
         return { d, e, tr: trendOf(e), acid: !!(e && (e.products || []).some(x => aT.indexOf(x) >= 0)), shower: !!ds.shower, shave: shaving && !!ds.shave };
@@ -431,7 +536,7 @@ export function render(app) {
             return `<div class="d14-c${x.d === t ? ' today' : ''}" role="listitem" aria-label="${esc(aria)}"><i class="dot ${x.tr ? TREND_TONE[x.tr] : hasLog(x.e) ? 'faint' : 'none'}"></i>
                 <span class="d14-n">${Number(x.d.slice(8, 10))}</span>${MK.map(([k, m]) => `<span class="d14-m">${x[k] ? m : '&nbsp;'}</span>`).join('')}</div>`;
         }).join('')}</div>
-        <p class="note">${MK.length ? MK.map(m => m[2]).join('，') + '。' : ''}点下面的历史能补记或改某一天。</p></section>`;
+        <p class="note">${MK.length ? MK.map(m => m[2]).join('，') + '。' : ''}改某一天或补记，到「历史」里点那一天。</p></section>`;
     // ④ 脸部热度
     const hz = heatData(W.journal, t, addDays(t, -13));
     h += `<section class="sec" id="rec-heat"><div class="sec-h"><span class="sec-t">近 14 天常出现的位置</span></div>`;
@@ -458,50 +563,35 @@ export function render(app) {
     h += rows.length ? `<ul class="trend-rows">${rows.map(r => `<li><span class="lede">${esc(tagLabel(r.tag))}</span><span class="meta">${r.b} 天</span><span class="trend-arr" aria-hidden="true">${ico('arrow', 'sm')}</span><span class="meta">${r.a} 天</span><span class="note">${r.a < r.b ? '少了' : r.a > r.b ? '多了' : '一样'}</span></li>`).join('')}</ul>`
         : `<p class="note">记了几天之后，这里会显示每样情况是多了还是少了。</p>`;
     h += '</section>';
-    // ⑤½ 本月
-    const ms = monthSummary(W.journal, t, aT, !!P.minimalMode);
-    const msRows = (ms.done !== undefined ? [['完成今晚', ms.done + ' 晚', '本月过了 ' + ms.days + ' 天']] : [])
-        .concat([['刷了酸', ms.acid + ' 晚', ''], ['记了皮肤', ms.skin + ' 天', '']])
-        .concat(ms.streak !== undefined ? [['连续完成', ms.streak + ' 晚', ms.streak ? '今晚做完接着算' : '']] : []);
-    h += `<section class="sec" id="rec-month"><div class="sec-h"><span class="sec-t">本月 · ${ms.month} 月</span></div><ul class="rows">${msRows.map(([k, v, n]) =>
-        `<li class="row"><span class="row-main"><span class="lede">${esc(k)}</span>${n ? `<span class="note">${esc(n)}</span>` : ''}</span><span class="note">${esc(v)}</span></li>`).join('')}</ul></section>`;
     // ⑥ HRT(只在本人开了 HRT 时)
-    if (P.hrt) {
-        const ph = (W.journal || []).filter(e => e && e.phase && e.date >= wk1a && e.date <= t).sort((a, b) => b.date.localeCompare(a.date));
+    // 最近 12 条有阶段的记录(不限 14 天);极简不出
+    if (P.hrt && !P.minimalMode) {
+        const ph = (W.journal || []).filter(e => e && e.phase && e.date <= t).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 12);
         const g = safetyGate(W);
-        h += `<section class="sec feat-hrt" id="rec-hrt"><div class="sec-h"><span class="sec-t">HRT</span></div>`
+        h += `<section class="sec feat-hrt" id="rec-hrt"><div class="sec-h"><span class="sec-t">HRT · 最近 12 条</span></div>`
             + (g.hrtFlare ? `<p class="note">最近记了 HRT 变化：酸最多每周 1 次，面油先停。</p>` : '')
-            + (ph.length ? `<ul class="list note">${ph.map(e => `<li>${esc(dayLabel(e.date, t))}：${esc(e.phase)}</li>`).join('')}</ul>` : `<p class="note">近两周没记 HRT 阶段。记皮肤时可以顺手写一句（比如剂量调整）。</p>`)
+            + (ph.length ? `<ul class="list note">${ph.map(e => `<li>${esc(dayLabel(e.date, t))}：${esc(e.phase)}</li>`).join('')}</ul>` : `<p class="note">还没记过 HRT 阶段。记皮肤时可以顺手写一句（比如剂量调整）。</p>`)
             + '</section>';
     }
-    // ⑦ 照片分析
-    const pa = (W.journal || []).filter(e => e && e.photoAssess && e.photoAssess.usable !== false && e.date <= t).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4);
-    h += `<section class="sec" id="rec-photos"><div class="sec-h"><span class="sec-t">拍照分析</span>${analyze ? '<button type="button" class="btn-link sm" data-act="capture">拍三张</button>' : ''}</div>`;
-    if (pa.length) h += `<ul class="rows pa-rows">${pa.map(e => `<li class="row"><span class="row-main"><span class="meta">${esc(dayLabel(e.date, t))}</span><span class="lede">${esc(e.photoAssess.overall || '')}</span>${e.photoAssess.vs_last ? `<span class="note">和上次比：${esc(e.photoAssess.vs_last)}</span>` : ''}</span>`
-        + `<img class="pa-thumb" data-pa-date="${esc(e.date)}" alt="${esc(dayLabel(e.date, t))}的正脸照片" hidden></li>`).join('')}</ul>`;
-    // 分析时关了那一页(可以关):今天的结果已经记上,建议的状态和位置在这里一键填(填过状态的就不再提)
-    const paT = (W.journal || []).find(e => e && e.date === t && e.photoAssess && e.photoAssess.usable !== false);
-    const paSug = paT && !(paT.status || []).length ? suggestText(suggestOf(paT.photoAssess)) : '';
-    if (paSug) h += `<div class="rec-parse" id="rec-pa-fill"><span class="sec-t">今天的照片分析建议记上</span><p class="lede">${esc(paSug)}</p><div class="btn-row"><button type="button" class="btn" data-act="pa-fill">填上</button></div></div>`;
-    const blocked = !analyze && photoAnalysisOn(app, P) ? analyzeBlocked(app) : '';
-    h += `<p class="note">${analyze ? '正脸、左脸、右脸各一张，顾问逐区看、和上次比。隔两三天拍一次就够；变差那天可以加拍。照片只存在这台设备上。'
-        : blocked ? blocked + '照片只存在这台设备上。'
-        : photoAnalysisOn(app, P) ? '照片分析要登录并开通顾问才能用。现在拍的照片只存在这台设备上。' : '照片分析没打开，要本人在设置里打开才会用。现在拍的照片只存在这台设备上。'}</p></section>`;
-    // ⑧ 历史(点一行补记或改那一天)
-    const hist = (W.journal || []).filter(e => e && e.date && e.date <= t && (hasLog(e) || e.done || (e.products || []).length)).sort((a, b) => b.date.localeCompare(a.date));
-    h += `<section class="sec" id="rec-hist"><div class="sec-h"><span class="sec-t">历史</span><button type="button" class="btn-link sm quiet" data-act="day-pick">补记某一天</button></div>`;
-    if (!hist.length) h += `<p class="note">还没有记录。</p>`;
-    else {
-        h += `<ul class="rows hist">${hist.slice(0, ui.histN).map(e => {
-            const tg = [trendOf(e) ? tagLabel(TREND_TAGS[trendOf(e)]) : ''].concat(SYMPTOM_TAGS.filter(x => (e.status || []).indexOf(x) >= 0).map(tagLabel)).filter(Boolean).join('、');
-            const bits = [tg, cleanSpots(e.spots).length ? '标了位置' : '', e.photoAssess ? '照片分析' : '', e.done ? '做完了' : '', e.auto ? '按计划推定' : ''].filter(Boolean).join(' · ');
-            return `<li><button type="button" class="row" data-act="day" data-date="${esc(e.date)}"><span class="row-main"><span class="lede">${esc(dayLabel(e.date, t))}</span>${bits ? `<span class="note">${esc(bits)}</span>` : ''}${noteOf(e) ? `<span class="note faint">${esc(noteOf(e).slice(0, 40))}</span>` : ''}</span>${ico('chev', 'sm')}</button></li>`;
-        }).join('')}</ul>`;
-        if (hist.length > ui.histN) h += `<button type="button" class="btn-link sm quiet" data-act="hist-more">再看早一些</button>`;
-    }
-    h += '</section>';
     return h;
 }
+// 首页:记一下 · 拍照分析 · 今天记下的,再两条「→」行(变化 / 历史),每条写着现状
+export function render(app) {
+    const W = app.world(), t = W.today, P = W.profile || {};
+    const analyze = canAnalyze(app, P);
+    const aT = acidTags(W), ms = monthSummary(W.journal, t, aT, !!P.minimalMode), hist = histOf(W, t);
+    let h = `<h1 class="page-title" id="record-h">${esc(title)}</h1>`;
+    h += quickHtml(app, W, P, analyze) + photosHtml(app, W, P, analyze) + todayHtml(app, W, P);
+    h += `<nav class="grp nav-list" aria-label="记录">`
+        + navRow('#/record/changes', '变化', ms.done !== undefined ? '本月完成 ' + ms.done + ' 晚' : '本月记了 ' + ms.skin + ' 天皮肤', 'rec-go-changes')
+        + navRow('#/record/history', '历史', hist.length ? '最近 ' + mdOf(hist[0].date) : '还没有记录', 'rec-go-history') + `</nav>`;
+    return h;
+}
+// 二级页:正文由 app.js 套页头;点击都冒泡到 #record 这个 section,委托在 bindRoot 里挂一次
+export const pages = {
+    changes: { title: '变化', render: app => changesHtml(app), mount: (el, app) => { bindFeedback(app); bindRoot(el.closest('section') || el, app); } },
+    history: { title: '历史', render: app => historyHtml(app), mount: (el, app) => { bindFeedback(app); bindRoot(el.closest('section') || el, app); } }
+};
 
 const _bound = new WeakSet();
 export function mount(root, app) {
@@ -509,9 +599,12 @@ export function mount(root, app) {
     const q = root.querySelector('#rec-q');
     if (q) q.addEventListener('input', () => { ui.draft = q.value; });
     const img = root.querySelector('#rec-thumb');
-    if (img) loadDayPhoto(app, app.today()).then(u => { if (u && img.isConnected) { img.src = u; img.hidden = false; } });
-    root.querySelectorAll('img[data-pa-date]').forEach(im => loadDayPhoto(app, im.dataset.paDate).then(u => { if (u && im.isConnected) { im.src = u; im.hidden = false; } }));
-    // 挂载点每次重画都是同一个 <section>:委托只挂一次,处理时现查元素
+    if (img) loadDayPhoto(app, app.today()).then(u => { if (u && img.isConnected) showThumb(img, u); });
+    root.querySelectorAll('img[data-pa-date]').forEach(im => loadDayPhoto(app, im.dataset.paDate).then(u => { if (u && im.isConnected) showThumb(im, u); }));
+    bindRoot(root, app);
+}
+// 首页和二级页(变化 / 历史)共用 #record 这一个 <section>:点击 / 选文件 / 脸部热度的委托只挂一次,处理时现查元素
+function bindRoot(root, app) {
     if (_bound.has(root)) return;
     _bound.add(root);
     root.addEventListener('click', e => {
@@ -548,6 +641,7 @@ export function mount(root, app) {
             if (en) { applySuggest(app, t, suggestOf(en.photoAssess)); app.renderAll(); toast('记上了'); requestFeedback(app, t); }
         }
         else if (a === 'day') openSkinSheet(app, { date: b.dataset.date });
+        else if (a === 'photo') openPhotoView(app, b.dataset.date || t);
         else if (a === 'hist-more') { ui.histN += 20; app.renderScreen('record'); }
         else if (a === 'day-pick') openDayPicker(app);
     });

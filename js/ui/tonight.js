@@ -33,7 +33,8 @@ import { buildSkincareContext } from '../ai/context.js';
 import { esc, ico, toast, openSheet } from './sheets.js';
 import { openSkinSheet, feedbackHtml, hasLog, feedbackOn } from './record.js';
 import { openStepSheet, quickHtml, askQuick, resetStep, setQuickDraft } from './tonight-step.js';
-import { lastTonightRec, lastRegimenRec, revAct, dataNoticeSeen, openDataNotice } from './advisor.js';
+import { lastTonightRec, lastRegimenRec, revAct, dataNoticeSeen, openDataNotice, weekHtml, bindWeek } from './advisor.js';
+import { navRow, weekSettingsHtml, bindWeekSettings } from './settings.js';
 
 export const id = 'tonight';
 export const title = '今晚';
@@ -231,7 +232,7 @@ function effectText(W, k, on, b, a) {
         const nxt = kg.indexOf('酸') >= 0 ? nextAcidNight(W) : '';
         parts.push(joinCn(kg) + '今晚不上' + why + (nxt ? '，下次刷酸在' + nxt : ''));
     }
-    if (kc.length) parts.push(joinCn(kc) + '今晚排上' + (k === 'shower' && on && acidTiming(W) === 'prefer' && kc.indexOf('酸') >= 0 ? '（设置里选了洗澡夜优先）' : ''));
+    if (kc.length) parts.push(joinCn(kc) + '今晚排上' + (k === 'shower' && on && acidTiming(W) === 'prefer' && kc.indexOf('酸') >= 0 ? '（刷酸时机选了洗澡夜优先）' : ''));
     const pOf = x => x && prodByName(W, x.p);
     const isCl = x => { const q = pOf(x); return !!q && (q.role === 'cleanse' || q.role === 'precleanse'); };
     const cb = b[0], ca = a[0], swapped = isCl(cb) && isCl(ca) && cb.p !== ca.p;
@@ -448,7 +449,7 @@ export function render(app) {
     if (!hasShelf) {
         h += rev;
         h += `<div class="empty" id="tn-empty"><p class="lede">货架还是空的。</p><p class="note">先放一支洁面和一支保湿，今晚就能排。</p><div class="btn-row"><button type="button" class="btn" data-act="products">去「产品」添加</button></div></div>`;
-        return h;
+        return h + weekRow(W);
     }
     const s = stepState(W);
     const doneN = minimal ? 0 : steps.filter(x => s.done.has(x.key)).length;
@@ -495,8 +496,26 @@ export function render(app) {
         h += `<div class="tn-finish" id="tn-finish"><button type="button" class="btn btn-primary btn-block" data-act="finish" id="tn-finish-b">完成今晚</button>
             <p class="note faint tn-finish-n">没点的步骤记成「没做」${aiOn ? '，顾问会看到' : ''}。</p><button type="button" class="btn-link sm quiet" data-act="skin">只记皮肤</button></div>`;
     }
-    return h;
+    return h + weekRow(W);
 }
+// 「→」行:接下来 7 晚(右边一句现状:下次刷酸是哪晚)。主事之后、页尾
+function weekRow(W) {
+    const nxt = (W.products || []).some(p => !p.hidden) ? nextAcidNight(W) : '';
+    return `<nav class="grp nav-list" aria-label="今晚以外">${navRow('#/tonight/week', '接下来 7 晚', nxt ? '下次刷酸 ' + nxt : '这 7 晚没排酸', 'tn-go-week')}</nav>`;
+}
+// 二级页 #/tonight/week:接下来 7 晚 + 每周洗澡 / 刮胡习惯 + 刷酸时机(这些全 App 只在这里改;设置里不再有)
+function weekPageHtml(app) {
+    const W = app.world();
+    const wk = weekHtml(W, app) || `<section class="sec" id="adv-week"><div class="empty"><p class="lede">还没有产品，排不出 7 晚。</p><p class="note">先在「产品」里加一支洁面和一支保湿。习惯可以先在下面选好。</p></div></section>`;
+    return wk + `<div class="wk-set" id="wk-set">${weekSettingsHtml(app)}</div>`;
+}
+export const pages = {
+    week: {
+        title: '接下来 7 晚',
+        render: app => weekPageHtml(app),
+        mount: (body, app) => { bindWeek(body, app); const el = body.querySelector('#wk-set'); if (el) bindWeekSettings(el, app); }
+    }
+};
 
 // ══ 事件 ══════════════════════════════════════════════════════════════════════════════
 const _bound = new WeakSet();

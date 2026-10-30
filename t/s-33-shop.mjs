@@ -1,5 +1,6 @@
 // 「要不要买新的」· 复制清单:有顾问结果时复制顾问版(分组、型号、价钱和店、链接、接班、不用买的);verdict=none 复制也说「现在不用买」;
 //   顾问用不了 / 没登录时复制离线那份。clipboard 换成假的接住文本。
+// 多页:「要不要买」在 #/products/shop,首页那一行(#pr-go-shop)点进去再复制。
 // v2 迁移(P3):v1 这个文件的其余断言都已有新家,不重复(见 t/run.mjs 的退役说明):
 //   后台判断(防抖、签名不变不重调、第一次打开 / 同步来的 / 方案自动重出不调)、顾问版渲染、跑着 / 过时、出错退回离线、换账号不串、深色 → t/v2-b-products.mjs;
 //   「加载 / 同步 / 自动重出方案路径碰不到 shopLocalChange」静态检查 + 行为计数 → engine-unit;「ai.js 没加载」→ v2 没有单独的 ai.js,退役。
@@ -13,7 +14,7 @@ export default async function ({ origin, S }) {
     for (const [label, o] of [['没登录', { seed: 'full' }], ['顾问连不上', { seed: 'full', mode: 'down', login: true }]]) {
         const p = await fresh(origin, o);
         try {
-            const c = await p.eval(`document.getElementById('tab-products').click();${W8(300)}${COPY}`);
+            const c = await p.eval(`document.getElementById('tab-products').click();${W8(300)}document.getElementById('pr-go-shop').click();${W8(300)}${COPY}`);
             S.ok(/护肤要买的（按方案缺口）|暂时不用买/.test(c || '') && !/顾问/.test(c || ''), `${label}:复制清单 = 离线那份`, c);
             S.ok(!p.errors.length, `${label}:0 报错`, p.errors);
         } finally { p.done(); }
@@ -22,7 +23,7 @@ export default async function ({ origin, S }) {
     {
         const p = await fresh(origin, { seed: 'full', mode: 'on', login: true });
         try {
-            await p.eval(`localStorage.setItem('sk_aiprivacy1',JSON.stringify({uid:'u-test',at:1}));document.getElementById('tab-products').click();${W8(300)}
+            await p.eval(`localStorage.setItem('sk_aiprivacy1',JSON.stringify({uid:'u-test',at:1}));document.getElementById('tab-products').click();${W8(300)}document.getElementById('pr-go-shop').click();${W8(300)}
                 document.getElementById('pr-shop-redo').click();for(let i=0;i<40&&!(__AIF.log||[]).some(x=>x.p==='/api/shop');i++)${W8(100)}${W8(400)}return 1`);
             const t = await p.eval(COPY);
             S.ok(/^护肤要买的（顾问 /.test(t || '') && /现在就缺/.test(t) && /快用完前备上/.test(t)

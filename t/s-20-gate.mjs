@@ -17,14 +17,14 @@ export default async function ({ origin, S, open }) {
         S.ok(r.steps.indexOf('Sunday Riley Good Genes') < 0 && r.steps.length >= 3, '今晚的步骤里没有猛酸', r.steps);
         S.ok(!p.errors.length, '爆痘场景 0 报错', p.errors);
     }
-    // ── 极简:刷了很多次也停在每周 1 次,顾问页的刷酸节奏写明「不会自己加」──
+    // ── 极简:刷了很多次也停在每周 1 次,顾问「现在的方案」页(#/advisor/plan)的刷酸节奏写明「不会自己加」──
     {
         const p = await open();
         await p.nav(origin + '/index.html', 200);
         const uses = '[-30,-26,-22,-18,-14,-10,-6]';
         await p.eval(`const j=[];for(let i=-1;i>=-40;i--)j.push({date:__d(i),status:[],products:${uses}.includes(i)?['PC酸']:[],note:'',phase:'',auto:true});return __seed.minimal({jrnl:j})`);
         await p.reload(800);
-        const r = await p.eval(`document.getElementById('tab-advisor').click();${W8(250)}const f=document.getElementById('adv-minfold');if(f)f.open=true;${W8(50)}
+        const r = await p.eval(`document.getElementById('tab-advisor').click();${W8(250)}location.hash='#/advisor/plan';${W8(300)}
             const b=document.getElementById('adv-ladder-btn');const box=document.getElementById('adv-ladder');if(box&&box.hidden&&b)b.click();${W8(50)}
             return {lad:(document.getElementById('adv-ladder')||{}).innerText||'',line:(document.getElementById('adv-line')||{}).textContent||''}`);
         S.ok(/不会自己加/.test(r.lad) && /每周 1 次/.test(r.lad + r.line), '极简:阶梯说明里写着不会自己加(停在每周 1 次)', r);

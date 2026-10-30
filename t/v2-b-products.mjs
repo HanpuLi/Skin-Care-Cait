@@ -11,6 +11,13 @@ const rows = p => p.eval(`return [...document.querySelectorAll('#pr-shelf .prod'
     dot:(b.querySelector('.dot').className.split(' ')[1]||''),state:b.querySelector('.prod-state').textContent,meta:b.querySelector('.meta').textContent}))`);
 const row = async (p, id) => (await rows(p)).find(r => r.id === id) || null;
 const sheetBtn = (p, id, label) => p.eval(`const b=[...document.querySelectorAll('#${id} button')].find(x=>x.textContent===${JSON.stringify(label)});if(!b)return false;b.click();return true`);
+// 详情是页(#/products/item/<id>),不是弹层:页上的按钮 / 回货架
+const itemBtn = (p, label) => p.eval(`const b=[...document.querySelectorAll('#pr-item button')].find(x=>x.textContent===${JSON.stringify(label)});if(!b)return false;b.click();return true`);
+const hashOf = p => p.eval(`return location.hash`);
+const back = async p => { await p.eval(`const b=document.querySelector('#products [data-back]');if(b)b.click();return 1`); await sleep(350); };
+// 在某件产品的详情页点一个按钮,再回产品首页(点当前 tab = 回首页)
+const itemDo = async (p, id, label, ms = 120) => { await tab(p, 'products', 150); await click(p, `#pr-shelf .prod[data-id=${id}]`, 150); await itemBtn(p, label); await sleep(ms); await tab(p, 'products', 150); };
+const goShop = async p => { await click(p, '#pr-go-shop', 300); };   // 首页「要不要买」那一行 → #/products/shop
 const shopView = p => p.eval(`const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];return {st:(q('#pr-shop-st')||{}).textContent||'',redo:(q('#pr-shop-redo')||{}).textContent||'',
     off:!!q('#pr-shop-off'),groups:qa('#pr-shop-list .shop-g').map(g=>g.dataset.urg+':'+g.querySelectorAll('.shop-it').length),links:qa('#pr-shop-list .picks a').map(a=>a.getAttribute('href')),
     skip:(q('#pr-shop-skip')||{}).innerText||'',sum:(q('.pr-shop-sum')||{}).textContent||'',meta:(q('#pr-shop-meta')||{}).textContent||''}`);
@@ -33,10 +40,15 @@ await run('v2-b-products', [
         const lc = await row(p, 'lacura');
         S.ok(lc && /开封 9 周/.test(lc.meta) && lc.dot === 'ok', '在用的:ok 点 + 开封几周', lc);
         S.ok(r.every(x => ['ok', 'caution', 'hollow'].indexOf(x.dot) >= 0), '状态点只用 ok / caution / 空心(不用红)', r.map(x => x.dot));
-        const sv = await shopView(p);
-        S.ok(sv.off && !sv.redo && /离线判断/.test(sv.st), '没登录:要不要买 = 离线清单(engine/needs),没有「让顾问判断」', sv);
         const pr = await design(p, '#products');
         S.ok(!pr.emoji.length && pr.minFs >= 12 && !pr.lowCr.length && !pr.smallN && !pr.styleAttrs.length && pr.red === 0, '纸墨:0 emoji、字号、对比度、触控 ≥44、没有 style=、不用红', pr);
+        S.ok(await p.eval(`const a=document.querySelector('#pr-go-shop');return !!a&&a.tagName==='A'&&a.getAttribute('href')==='#/products/shop'&&!document.getElementById('pr-shop')`) && /缺|没有要买|快用完/.test(await text(p, '#pr-go-shop')), '首页只有一行「要不要买」(→ 二级页,带现状一句),没有整块清单', await text(p, '#pr-go-shop'));
+        S.ok(await p.eval(`return [...document.querySelectorAll('#pr-shelf a.prod')].length===document.querySelectorAll('#pr-shelf .prod').length&&[...document.querySelectorAll('#pr-shelf .prod')].every(a=>/^#\\/products\\/item\\/./.test(a.getAttribute('href')))`), '货架每一行都是链接(#/products/item/<id>)');
+        await goShop(p);
+        const sv = await shopView(p);
+        S.ok(sv.off && !sv.redo && /离线判断/.test(sv.st) && /#\/products\/shop$/.test(await hashOf(p)), '没登录:要不要买(#/products/shop)= 离线清单(engine/needs),没有「让顾问判断」', sv);
+        const ps = await design(p, '#products');
+        S.ok(!ps.emoji.length && !ps.lowCr.length && !ps.smallN && !ps.styleAttrs.length && ps.red === 0, '「要不要买」页:对比度、触控 ≥44、没有 style=、不用红', ps);
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
     ['用完了 / 买回来了 / 快用完了 / 不要了 / 恢复', async ({ S, open }) => {
@@ -44,12 +56,12 @@ await run('v2-b-products', [
         await tab(p, 'products', 300);
         const v0 = await p.eval(`return (${DATA}.sk_regimen1||[]).length`);
         await click(p, '#pr-shelf .prod[data-id=cicaplast]', 200);
-        S.ok(await has(p, '#prod-sheet') && /开封/.test(await text(p, '#prod-sheet')), '点一件:sheet 里写开封日期、特性');
-        await sheetBtn(p, 'prod-sheet', '用完了'); await sleep(300);
+        S.ok(await has(p, '#pr-item') && /开封/.test(await text(p, '#pr-item')) && /#\/products\/item\/cicaplast$/.test(await hashOf(p)), '点一件:进详情页,页上写开封日期、特性');
+        await itemBtn(p, '用完了'); await sleep(500);
         const d = await p.eval(`const d=${DATA};return {em:d.sk_empty1,gone:d.sk_gone1,reg:d.sk_regimen1,rev:${ENV}.rev,sheet:(document.getElementById('runout-sheet')||{}).innerText||''}`);
         S.ok(d.em.cicaplast && d.em.cicaplast[0].weeks === 20 && d.gone.indexOf('cicaplast') >= 0, '用完了:记一笔空瓶(开封 20 周)、从货架拿掉', d.em);
         S.ok(d.reg.length === v0 + 1 && /用完了：Cicaplast/.test(d.reg[d.reg.length - 1].reason), '方案照剩下的东西重出一版(localMarkRunOut)', d.reg.slice(-1)[0].reason);
-        S.ok(/记了一笔空瓶/.test(d.sheet) && !(await row(p, 'cicaplast')), 'sheet 说清楚记了什么、方案怎么变;货架上没了它', d.sheet);
+        S.ok(/记了一笔空瓶/.test(d.sheet) && !(await row(p, 'cicaplast')), 'sheet 说清楚记了什么、方案怎么变;货架上没了它(用完了 → 回货架)', d.sheet);
         await sheetBtn(p, 'runout-sheet', '知道了'); await sleep(200);
         await p.eval(`document.getElementById('pr-empties').open=true;return 1`);
         S.ok(/Cicaplast/.test(await text(p, '#pr-empties')) && await has(p, '#pr-empties [data-ungone=cicaplast]'), '空瓶记录里有它 +「买回来了」');
@@ -58,16 +70,19 @@ await run('v2-b-products', [
         S.ok(d2.gone.indexOf('cicaplast') < 0 && d2.open === d2.today && !!(await row(p, 'cicaplast')), '买回来了:回到货架,开封日记今天(localUnGone)', d2);
         // 快用完了 / 还够用
         await click(p, '#pr-shelf .prod[data-id=lacura]', 200);
-        await sheetBtn(p, 'prod-sheet', '快用完了'); await sleep(200);
+        await itemBtn(p, '快用完了'); await sleep(200);
+        await back(p);
         S.ok((await p.eval(`return ${DATA}.sk_low1`)).indexOf('lacura') >= 0 && (await row(p, 'lacura')).state === '快用完', '快用完了:sk_low1 + 行上「快用完」(localToggleLow)');
         await click(p, '#pr-shelf .prod[data-id=lacura]', 200);
-        S.ok(/不用急着买|就断了/.test(await text(p, '#prod-sheet')), '快用完的那件:sheet 里说要不要急着补(家里有没有能接班的)');
-        await sheetBtn(p, 'prod-sheet', '还够用'); await sleep(200);
+        S.ok(/不用急着买|就断了/.test(await text(p, '#pr-item')), '快用完的那件:详情页里说要不要急着补(家里有没有能接班的)');
+        await itemBtn(p, '还够用'); await sleep(200);
         S.ok((await p.eval(`return ${DATA}.sk_low1`)).indexOf('lacura') < 0, '还够用:撤掉快用完');
         // 不要了 → 恢复
+        await back(p);
         await click(p, '#pr-shelf .prod[data-id=sebagh]', 200);
-        await sheetBtn(p, 'prod-sheet', '不要了'); await sleep(200);
-        await p.eval(`document.querySelector('#drop-sheet [data-why="太刺激"]').click();return 1`); await sleep(300);
+        await itemBtn(p, '不要了'); await sleep(200);
+        await p.eval(`document.querySelector('#drop-sheet [data-why="太刺激"]').click();return 1`); await sleep(500);
+        S.ok(await has(p, '#pr-shelf') && !(await has(p, '#pr-item')) && /#\/products$/.test(await hashOf(p)), '不要了 → 回货架(不停在已经不在货架上的那页)');
         const dr = await p.eval(`const x=(${DATA}.sk_proddefs1||[]).find(p=>p.id==='sebagh');const f=document.getElementById('pr-dropped');if(f)f.open=true;return {hidden:x&&x.hidden,why:x&&x.dropped&&x.dropped.why,txt:f?f.innerText:''}`);
         S.ok(dr.hidden && dr.why === '太刺激' && /Sebagh/.test(dr.txt) && /太刺激/.test(dr.txt) && !(await row(p, 'sebagh')), '不要了:收进「不要了的」,原因(选填)记下给顾问看', dr);
         await p.eval(`document.getElementById('pr-dropped').open=true;document.querySelector('#pr-dropped [data-restore=sebagh]').click();return 1`); await sleep(300);
@@ -141,8 +156,10 @@ await run('v2-b-products', [
     }],
     ['要不要买新的 · 顾问在后台判断', async ({ S, open }) => {
         const p = await open({ seed: 'full', mode: 'on', login: true });
-        await p.eval(`(await import('/js/ui/products.js')).SHOP.delay=400;return 1`);
+        await p.eval(`(await import('/js/ui/products.js')).SHOP.delay=1500;return 1`);   // 要在产品页和详情页之间来回点,防抖放宽一点
         await tab(p, 'products', 500);
+        S.ok(/还没判断/.test(await text(p, '#pr-go-shop')), '首页「要不要买」那一行:还没判断');
+        await goShop(p);
         let v = await shopView(p);
         S.ok((await log(p, '/api/shop')) === 0 && v.off && v.redo === '让顾问判断', '第一次打开:不自动调,先给离线清单 +「让顾问判断」', v);
         await click(p, '#pr-shop-redo', 100);
@@ -156,26 +173,27 @@ await run('v2-b-products', [
         const rec = await p.eval(`return {local:JSON.parse(localStorage.getItem('sk_ai_shop1')||'null'),cloud:'sk_ai_shop1' in ${DATA}}`);
         S.ok(rec.local && rec.local.uid === 'u-test' && rec.local.sig && !rec.cloud, '结果按账号存本机 sk_ai_shop1(带 uid / 签名),不进云', { uid: rec.local && rec.local.uid, cloud: rec.cloud });
         await tab(p, 'advisor', 200); await tab(p, 'products', 300);
-        S.ok((await log(p, '/api/shop')) === 1, '切页重画:签名没变不重调');
+        S.ok((await log(p, '/api/shop')) === 1 && /现在就缺 1 样/.test(await text(p, '#pr-go-shop')), '切页重画:签名没变不重调;首页那一行写「现在就缺 1 样」');
         // 本机标快用完 → 防抖后判断一次
-        await click(p, '#pr-shelf .prod[data-id=lacura]', 200);
-        await sheetBtn(p, 'prod-sheet', '快用完了'); await sleep(150);
+        await itemDo(p, 'lacura', '快用完了', 100);
+        await goShop(p);
         v = await shopView(p);
         S.ok(/货架变了/.test(v.st), '本机改了:先标「货架变了，结果可能过时，过几秒重判」', v.st);
         await p.waitFor(`(__AIF.log||[]).filter(x=>x.p==='/api/shop').length===2 && !document.querySelector('#pr-shop-redo[disabled]')`, 4000);
         const c2 = await p.eval(`const l=(__AIF.log||[]).filter(x=>x.p==='/api/shop').pop();return {t:l.body.trigger,low:l.body.context.low}`);
         S.ok(/Lacura.*快用完了/.test(c2.t) && c2.low.indexOf('Lacura 温和洗面奶') >= 0, '防抖后判断一次:trigger「标了「…」快用完了」,context.low 带上它', c2);
         // 连着两次本机操作只调一次;标了又撤回(签名回到上次判断)不调
-        await click(p, '#pr-shelf .prod[data-id=lacura]', 150); await sheetBtn(p, 'prod-sheet', '还够用'); await sleep(80);
-        await click(p, '#pr-shelf .prod[data-id=lacura]', 150); await sheetBtn(p, 'prod-sheet', '快用完了'); await sleep(900);
+        await itemDo(p, 'lacura', '还够用', 50);
+        await itemDo(p, 'lacura', '快用完了', 50); await sleep(2000);
         S.ok((await log(p, '/api/shop')) === 2, '标了又撤回(签名回到上次判断时):不调');
-        await click(p, '#pr-shelf .prod[data-id=sunscreen]', 150); await sheetBtn(p, 'prod-sheet', '快用完了'); await sleep(80);
-        await click(p, '#pr-shelf .prod[data-id=wildsource]', 150); await sheetBtn(p, 'prod-sheet', '快用完了');
+        await itemDo(p, 'sunscreen', '快用完了', 50);
+        await itemDo(p, 'wildsource', '快用完了', 50);
         await p.waitFor(`(__AIF.log||[]).filter(x=>x.p==='/api/shop').length>=3`, 4000); await sleep(700);
         const c3 = await p.eval(`return (__AIF.log||[]).filter(x=>x.p==='/api/shop').map(x=>x.body.trigger)`);
         S.ok(c3.length === 3 && /Lancaster/.test(c3[2]) && /Wild Source/.test(c3[2]), '连着两次本机操作:只调一次,两件都写进 trigger', c3);
         // 同步来的改动:不调,只标可能过时
-        await p.eval(`const d=${DATA};d.sk_low1=(d.sk_low1||[]).concat(['votary']);fakeCloud.emit(d);return 1`); await sleep(900);
+        await p.eval(`const d=${DATA};d.sk_low1=(d.sk_low1||[]).concat(['votary']);fakeCloud.emit(d);return 1`); await sleep(1800);
+        await goShop(p);
         v = await shopView(p);
         S.ok((await log(p, '/api/shop')) === 3 && /可能过时/.test(v.st) && v.groups.length === 3, '云端同步来的「快用完」:不调,留着上次结果并标「可能过时」', v.st);
         S.ok(!p.errors.length, '0 console error', p.errors);
@@ -183,6 +201,7 @@ await run('v2-b-products', [
     ['要不要买新的 · 出错 / 不用买 / 跑着 / 换账号', async ({ S, open }) => {
         const p = await open({ seed: 'full', mode: 'on', login: true, aif: `{shopErr:'后端超时'}` });
         await tab(p, 'products', 400);
+        await goShop(p);
         await click(p, '#pr-shop-redo', 100);
         await p.waitFor(`/没查成/.test((document.getElementById('pr-shop-st')||{}).textContent||'')`, 4000);
         let v = await shopView(p);
@@ -198,13 +217,96 @@ await run('v2-b-products', [
         const n = await log(p, '/api/shop');
         await p.eval(`fakeCloud.auth({uid:'u-other',email:'o@example.com',displayName:'Other',getIdToken:async()=>'t2'});return 1`); await sleep(900);
         await tab(p, 'advisor', 200); await tab(p, 'products', 400);
+        await goShop(p);
         v = await shopView(p);
         S.ok(v.off && !v.groups.length && !/家里的够用/.test(v.sum) && (await log(p, '/api/shop')) === n, '换了账号:看不到上一个人的结果,退回离线,不自动调', v);
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
+    ['多页 · 直达详情 / 找不到 / 返回 / 要不要买', async ({ S, open }) => {
+        const p = await open({ seed: 'full', hash: '#/products/item/lacura' });
+        await sleep(300);
+        const h = await p.eval(`return {id:(document.getElementById('pr-item')||{dataset:{}}).dataset.id,h1:(document.querySelector('#products .pg-t')||{}).textContent,back:!!document.querySelector('#products [data-back]'),acts:[...document.querySelectorAll('#pr-item [data-iact]')].map(b=>b.textContent),sheet:!!document.getElementById('prod-sheet')}`);
+        S.ok(h.id === 'lacura' && /Lacura/.test(h.h1) && h.back && !h.sheet, '直达 #/products/item/<id>:画出详情页,h1 = 产品名,有返回,不是弹层', h);
+        S.ok(['快用完了', '用完了', '编辑', '不要了'].every(x => h.acts.indexOf(x) >= 0), '详情页上的动作:快用完了 / 用完了 / 编辑 / 不要了', h.acts);
+        await p.eval(`document.querySelector('#products [data-back]').click();return 1`); await sleep(300);
+        S.ok(await has(p, '#pr-shelf') && /#\/products$/.test(await hashOf(p)), '直达的详情页:返回 = 换成货架(没有站内来路)');
+        await p.eval(`location.hash='#/products/item/nope-not-here';return 1`); await sleep(300);
+        const m = await p.eval(`return {miss:!!document.getElementById('pr-item-missing'),txt:(document.getElementById('pr-item-missing')||{}).innerText||'',href:(document.getElementById('pr-item-shelf')||{getAttribute(){}}).getAttribute('href')}`);
+        S.ok(m.miss && /找不到这个产品/.test(m.txt) && m.href === '#/products', 'id 不存在:一句「找不到这个产品」+ 回货架链接', m);
+        await click(p, '#pr-item-shelf', 300);
+        S.ok(await has(p, '#pr-shelf'), '点「回货架」回到货架');
+        // 编辑仍是弹层:存完重画这一页
+        await click(p, '#pr-shelf .prod[data-id=lacura]', 250);
+        await itemBtn(p, '编辑'); await sleep(250);
+        S.ok(await has(p, '#edit-sheet'), '编辑还是弹层(自成一体的小任务)');
+        await p.eval(`document.getElementById('m-name').value='Lacura 改过名';[...document.querySelectorAll('#edit-sheet .sheet-actions .btn-primary')][0].click();return 1`); await sleep(350);
+        const e = await p.eval(`return {id:(document.getElementById('pr-item')||{dataset:{}}).dataset.id,h1:(document.querySelector('#products .pg-t')||{}).textContent,hash:location.hash}`);
+        S.ok(e.id === 'lacura' && e.h1 === 'Lacura 改过名' && /#\/products\/item\/lacura$/.test(e.hash), '编辑存完:还在这一页,标题是新名字', e);
+        // 要不要买:直达
+        await p.eval(`location.hash='#/products/shop';return 1`); await sleep(300);
+        const sh = await p.eval(`return {box:!!document.getElementById('pr-shop'),h1:(document.querySelector('#products .pg-t')||{}).textContent,copy:!!document.getElementById('pr-shop-copy'),back:(document.querySelector('#products [data-back]')||{}).textContent}`);
+        S.ok(sh.box && sh.copy && sh.h1 === '要不要买' && /产品/.test(sh.back), '直达 #/products/shop:画出要不要买(复制清单在),h1「要不要买」,返回「产品」', sh);
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
+    ['编辑 · 怎么排(❌2)', async ({ S, open }) => {
+        const p = await open({ seed: 'full' });
+        await tab(p, 'products', 300);
+        const sched = id => p.eval(`return ((${DATA}.sk_proddefs1||[]).find(x=>x.id===${JSON.stringify(id)})||{}).schedule`);
+        const openEdit = async id => { await tab(p, 'products', 150); await click(p, `#pr-shelf .prod[data-id=${id}]`, 200); await itemBtn(p, '编辑'); await sleep(250); await p.eval(`document.querySelector('#edit-sheet .pr-adv').open=true;return 1`); };
+        const save = async () => { await p.eval(`[...document.querySelectorAll('#edit-sheet .sheet-actions .btn-primary')][0].click();return 1`); await sleep(350); };
+        const setVal = (sel, v) => p.eval(`const e=document.querySelector(${JSON.stringify(sel)});e.value=${JSON.stringify(String(v))};e.dispatchEvent(new Event('input',{bubbles:true}));return 1`);
+        await openEdit('votary');
+        const u = await p.eval(`const on=s=>[...document.querySelectorAll(s)].map(b=>b.dataset.v);return {types:[...document.querySelectorAll('#m-stype .chip')].map(b=>b.textContent),type:on('#m-stype [aria-checked=true]'),time:on('#m-time [aria-pressed=true]'),max:document.getElementById('m-max').value,gap:document.getElementById('m-gap').value}`);
+        S.ok(JSON.stringify(u.types) === JSON.stringify(['刷酸', '维 A', '面膜', '每晚固定', '日常', '不排']) && u.type[0] === 'acid' && u.time.join() === 'pm' && u.max === '1' && u.gap === '2', '编辑里的「怎么排」四项:怎么排(六个取值)/ 早晚 / 每周最多 / 至少隔几天,显示现在存着的', u);
+        await setVal('#m-max', 3); await setVal('#m-gap', 5);
+        await p.eval(`document.querySelector('#m-time [data-v=am]').click();return 1`);
+        await save();
+        const s1 = await sched('votary');
+        S.ok(s1.maxPerWeek === 3 && s1.minDaysBetween === 5 && s1.type === 'acid' && s1.time.join() === 'am,pm' && s1.enableAutoSchedule === true && s1.avoidShaveDay === true, '改每周最多 / 隔几天 / 早上也用:写进 p.schedule,其余开关不碰', s1);
+        await openEdit('votary');
+        const u2 = await p.eval(`return {max:document.getElementById('m-max').value,gap:document.getElementById('m-gap').value,time:[...document.querySelectorAll('#m-time [aria-pressed=true]')].map(b=>b.dataset.v).join()}`);
+        S.ok(u2.max === '3' && u2.gap === '5' && u2.time === 'am,pm', '再打开:排法保持', u2);
+        // 只改名字:不碰排法
+        await p.eval(`document.getElementById('m-name').value='Votary 改名';return 1`); await save();
+        const s2 = await sched('votary');
+        S.ok(JSON.stringify(s2) === JSON.stringify(s1), '改了排法后再改名字:排法不会被重置', s2);
+        // 改了类别、排法没动:照新类别重置
+        await openEdit('votary');
+        await p.eval(`document.querySelector('#m-role [data-v=mask]').click();return 1`);
+        const u3 = await p.eval(`return {type:document.querySelector('#m-stype [aria-checked=true]').dataset.v,max:document.getElementById('m-max').value}`);
+        await save();
+        const s3 = await sched('votary');
+        S.ok(u3.type === 'mask' && s3.type === 'mask' && s3.minDaysBetween === 6 && s3.maxPerWeek === 1, '改了类别、排法没手动动过:排法跟着新类别重置(表单里也跟着变)', { u3, s3 });
+        // 改了类别、排法手动动过:保住手动改的
+        await openEdit('votary');
+        await setVal('#m-gap', 4);
+        await p.eval(`document.querySelector('#m-role [data-v=retinol]').click();return 1`);
+        await save();
+        const s4 = await sched('votary');
+        S.ok(s4.minDaysBetween === 4 && s4.type === 'mask' && ((await p.eval(`return (${DATA}.sk_proddefs1||[]).find(x=>x.id==='votary').role`)) === 'retinol'), '改了类别、排法手动动过:以手动改的为准,不重置', s4);
+        // 换「怎么排」= 换类型:自动排的几个开关跟着类型走;journalTag 自动取名、不暴露
+        await openEdit('lacura');
+        S.ok(!(await has(p, '#m-jtag')), 'journalTag 不暴露');
+        await p.eval(`document.querySelector('#m-stype [data-v=retinol]').click();return 1`); await save();
+        const s5 = await sched('lacura');
+        const jt = await p.eval(`return (${DATA}.sk_proddefs1||[]).find(x=>x.id==='lacura').journalTag`);
+        S.ok(s5.type === 'retinol' && s5.enableAutoSchedule === true && !!jt, '换成「维 A」:自动排开关跟着打开,记录用的名字自动取', { s5, jt });
+        // 新加的:改了排法也带进去
+        await tab(p, 'products', 150);
+        await click(p, '#pr-add', 200); await click(p, '#add-sheet [data-role=moist]', 200);
+        await p.eval(`document.querySelector('#edit-sheet .pr-adv').open=true;document.getElementById('m-name').value='排法测试乳';return 1`);
+        await setVal('#m-max', 2);
+        await save();
+        const sn = await p.eval(`return (${DATA}.sk_proddefs1||[]).find(x=>x.name==='排法测试乳').schedule`);
+        S.ok(sn.maxPerWeek === 2 && sn.type === 'base', '新加产品:排法默认按类别,手动改了的也带进去', sn);
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
     ['深色 · 产品页(顾问版)', async ({ S, open }) => {
         const p = await open({ seed: 'full', mode: 'on', login: true, scheme: 'dark' });
         await tab(p, 'products', 400);
+        const ph = await design(p, '#products');
+        S.ok(!ph.emoji.length && !ph.lowCr.length && !ph.brightN && !ph.smallN && ph.red === 0 && !ph.styleAttrs.length, '深色 · 货架首页:对比度、不刺眼、触控 ≥44、不用红、没有 style=', ph);
+        await goShop(p);
         await click(p, '#pr-shop-redo', 100);
         await p.waitFor(`!!document.getElementById('pr-shop-list')`, 4000);
         const pr = await design(p, '#products');

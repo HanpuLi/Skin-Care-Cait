@@ -118,6 +118,20 @@ export function writeTnSteps(store, today, done) {
     const d = Array.isArray(done) ? done : (cur.date === today ? (cur.done || []) : []);
     return store.ls(K.tnsteps, { date: today, done: [...d], skipped: [...((en && en.skipped) || [])] });
 }
+// 补记某一天「那晚用了哪些活性」:点一下增 / 删 products 里的那个 journalTag(或产品名),并清掉 auto(她动过了,就不再是「按计划推定」)。
+// 今天不走这里(今晚页打勾负责)。加上 → 同时从 skipped 里拿掉(她说用了);极简模式下删掉 → 记进 skipped,
+// 不然 absorbPrescribedHistory 下次又按计划把它推定回去。auto 条目里只剩推定的占位备注时一并清掉(不然会被数成「记了皮肤」)。
+export function toggleDayProduct(store, date, tag, today, minimal) {
+    if (!tag || (today && date >= today)) return false;
+    const { list, en } = jrnlEntry(store, date, true);
+    const has = en.products.indexOf(tag) >= 0;
+    const sk = new Set(en.skipped || []);
+    if (has) { en.products = en.products.filter(x => x !== tag); if (minimal) sk.add(tag); }
+    else { en.products = en.products.concat([tag]); sk.delete(tag); }
+    if (sk.size) en.skipped = [...sk]; else delete en.skipped;
+    if (en.auto) { delete en.auto; if (en.note === '（按当天计划推定）') en.note = ''; }
+    return saveJrnl(store, list);
+}
 // 删掉某一天的记录(本机照片由调用方用 photos.remove 一起删)
 export function deleteEntry(store, date) {
     return saveJrnl(store, journal(store).filter(x => !(x && x.date === date)));

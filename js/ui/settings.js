@@ -40,7 +40,7 @@ export function applyTheme(v) {
     const d = themeIsDark(v || currentTheme()), y = currentType(), r = document.documentElement;
     r.setAttribute('data-theme', d ? 'dark' : 'light');
     r.setAttribute('data-type', y);
-    const m = document.querySelector('meta[name=theme-color]'); if (m) m.setAttribute('content', y === 'sans' ? (d ? '#0e0e10' : '#f7f7f5') : (d ? '#161412' : '#f4f1ea'));
+    const m = document.querySelector('meta[name=theme-color]'); if (m) m.setAttribute('content', y === 'sans' ? (d ? '#000000' : '#f2f2f7') : (d ? '#161412' : '#f4f1ea'));
 }
 // 系统切深浅色 / 跨过 21 点:跟着变(整合时 app.js 启动调一次)
 let _watching = false;
@@ -144,7 +144,7 @@ function groups(app) {
         ${P.shaving ? '<div class="set-days-l">洗澡</div>' : ''}
         <div class="chips set-days" id="set-shower" role="group" aria-label="洗澡">${WEEK_ORDER.map(d => chip(!!(hp.find(x => x.dow === d) || {}).shower, WD[d], `data-hd="${d}" data-hk="shower" aria-label="周${WD[d]}洗澡"`)).join('')}</div>
         ${P.shaving ? `<div class="set-days-l">刮胡</div><div class="chips set-days" id="set-shavedays" role="group" aria-label="刮胡">${WEEK_ORDER.map(d => chip(!!(hp.find(x => x.dow === d) || {}).shave, WD[d], `data-hd="${d}" data-hk="shave" aria-label="周${WD[d]}刮胡"`)).join('')}</div>` : ''}
-        <p class="note">和顾问页「未来 7 晚」的「存成每周习惯」是同一份。改了以后，明天起两周按新习惯排；${minimal ? (P.shaving ? '今晚洗澡在「顾问」页的未来 7 晚里点，今晚刮胡在今晚页点。' : '今晚的在「顾问」页的未来 7 晚里点。') : '今晚在今晚页改。'}</p></div>
+        <p class="note">和上面 7 晚里的「存成每周习惯」是同一份。改了以后，明天起两周按新习惯排；${minimal ? (P.shaving ? '今晚洗澡在上面的 7 晚里点，今晚刮胡在今晚页点。' : '今晚的在上面的 7 晚里点。') : '今晚在今晚页改。'}</p></div>
 
     <div class="sheet-sec" id="set-timing"><div class="sec-t">刷酸时机</div>
         ${seg('timing', P.acidTiming || '', [['', '交给方案'], ['avoid', '避开刚洗完澡'], ['prefer', '洗澡夜优先'], ['neutral', '无所谓']], '刷酸时机')}

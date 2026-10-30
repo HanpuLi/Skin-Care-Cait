@@ -10,6 +10,7 @@
 import { K, LOCAL_KEYS } from '../store.js';
 import { esc, ico, openSheet, closeSheet, toast, sysConfirm } from './sheets.js';
 import { renderGuide, bindGuide } from './guide.js';
+import { navRow } from './settings.js';
 import { ensureShopRunner, readLabelFromFile, imageToDataURL } from './products.js';
 import { regimenRules, maxAcidPerWeek, repairUse, repairReason, zonesAvoiding, acidTiming, currentRegimen } from '../engine/rules.js';
 import { safetyGate } from '../engine/gate.js';
@@ -27,10 +28,10 @@ export const title = '顾问';
 const CHAT_MAX = 40, CHAT_SEND = 24;
 const DOW = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 // 这一屏自己的界面状态(不进存储)
-const ST = { draft: '', img: null, busy: false, stream: '', ladderOpen: true, n7Prev: null, planBusy: '', reviewBusy: false, focus: false, minOpen: false };
+const ST = { draft: '', img: null, busy: false, stream: '', ladderOpen: true, n7Prev: null, planBusy: '', reviewBusy: false, focus: false };
 // 换账号:上一个人的草稿、没发的照片、未来 7 晚的对比基准、流式半截都清掉(app.js clearLocalExtras 调;进行中的请求回来时按 owner 丢弃)
 export function resetForUser() {
-    Object.assign(ST, { draft: '', img: null, busy: false, stream: '', n7Prev: null, planBusy: '', reviewBusy: false, focus: false, minOpen: false });
+    Object.assign(ST, { draft: '', img: null, busy: false, stream: '', n7Prev: null, planBusy: '', reviewBusy: false, focus: false });
     PROBE.busy = false;
 }
 const ownerOf = app => (app.store && app.store.state && app.store.state.owner) || '';
@@ -220,7 +221,7 @@ function ladderHtml(W) {
     const level = ai ? Math.max(0, Math.round(+rr.acidCap || 0)) : L.level;
     const gentle = acids.filter(p => !hasTrait(p, 'strong-exfo')), strong = acids.filter(p => hasTrait(p, 'strong-exfo'));
     const gname = shortName(rr.acidName || (gentle[0] && gentle[0].name) || '温和酸');
-    const nextNote = ai ? '看前两周的反应，顾问再定' : L.minimal ? '极简模式不会自己加；想加跟顾问说，或在设置里改' : '再干净 ' + (LADDER_STEP_N - (L.streak || 0)) + ' 次（刷完两天内记了状态、没泛红没新痘）就加';
+    const nextNote = ai ? '看前两周的反应，顾问再定' : L.minimal ? '极简模式不会自己加；想加跟顾问说，或到今晚页「接下来 7 晚」底下的「高级」里改' : '再干净 ' + (LADDER_STEP_N - (L.streak || 0)) + ' 次（刷完两天内记了状态、没泛红没新痘）就加';
     const stages = [
         { when: '第一档', what: '每周 1 次 ' + gname, n: 1 },
         { when: '第二档', what: '每周 2 次', n: 2 },
@@ -270,8 +271,7 @@ function planHtml(app, W) {
     const talk = canTalk(app);
     const planBtn = !reg || reg.source !== 'ai' ? '让顾问出方案' : reg.stale ? '让顾问按新货架重排' : '让顾问重排';
     const acts = talk ? `<div class="btn-row adv-plan-acts"><button type="button" class="btn-link sm" data-act="ask-plan">问顾问这版方案</button>
-        <button type="button" class="btn-link sm quiet" data-act="plan"${ST.planBusy || ST.busy ? ' disabled' : ''}>${ST.planBusy ? '在排…' : planBtn}</button>
-        <button type="button" class="btn-link sm quiet" data-act="review"${ST.reviewBusy || ST.busy ? ' disabled' : ''}>${ST.reviewBusy ? '复盘中…' : '复盘这周'}</button></div>` : '';
+        <button type="button" class="btn-link sm quiet" data-act="plan"${ST.planBusy || ST.busy ? ' disabled' : ''}>${ST.planBusy ? '在排…' : planBtn}</button></div>` : '';
     return `<section class="adv-plan" id="adv-plan">
         <div class="sec-h"><h2 class="sec-t">现在的方案</h2><span class="meta" id="adv-ver">${reg ? esc('v' + reg.v + ' · ' + (mdAt(reg.at) || mdShort(reg.date)) + ' · ' + (ai ? '顾问' : '离线规则')) : ''}</span></div>
         <p class="adv-line" id="adv-line">${esc(planLine(W))}</p>
@@ -285,7 +285,7 @@ function planHtml(app, W) {
     </section>`;
 }
 
-// ── 未来 7 晚 ──
+// ── 接下来 7 晚(今晚 → 接下来 7 晚 那一页用;tonight.js 的 pages.week 调 weekHtml / bindWeek)──
 function nightLabel(d) {
     const it = d.items || [];
     if (it.some(i => i.type === 'acid')) return '酸';
@@ -318,7 +318,7 @@ function n7Note(W, days) {
 }
 // 未来 7 晚:今晚那格按她眼前那份今晚(顾问版有酸就标「酸」),其余按离线排班
 const days7 = (app, W) => next7Shown(W, shownOf(app, W));
-function weekHtml(W, app) {
+export function weekHtml(W, app) {
     if (!(W.products || []).some(p => !p.hidden)) return '';
     const P = W.profile || {}, days = days7(app, W);
     const preset = presetOk(W.preset) ? W.preset : null;
@@ -328,7 +328,7 @@ function weekHtml(W, app) {
     // 日期只在第一格和跨月那格写「月/日」,其余只写几号(像日历;12px 的小字少一半,整页 <14px 的字不超 15%)
     const moved = ST.n7Prev ? days.filter(d => ST.n7Prev[d.date] !== undefined && ST.n7Prev[d.date] !== nightKey(d)).map(d => d.date) : [];
     return `<section class="sec adv-week" id="adv-week">
-        <div class="sec-h"><h2 class="sec-t">未来 7 晚</h2><span class="note faint">点「澡」${P.shaving ? '「刮」' : ''}直接改</span></div>
+        <div class="sec-h"><h2 class="sec-t">每晚排什么</h2><span class="note faint">点「澡」${P.shaving ? '「刮」' : ''}直接改</span></div>
         <div class="n7" id="adv-n7" role="group" aria-label="未来 7 晚">${days.map((d, i) => `<div class="n7-d${d.date === W.today ? ' today' : ''}${moved.indexOf(d.date) >= 0 ? ' moved' : ''}" data-day="${esc(d.date)}">
             <button type="button" class="n7-go" data-night="${esc(d.date)}" aria-label="${esc((d.date === W.today ? '今晚' : d.dayName) + '：' + nightLabel(d) + '，看那晚的步骤')}"><span class="n7-date">${esc(i === 0 || d.date.slice(8) === '01' ? mdShort(d.date) : String(Number(d.date.slice(8, 10))))}</span><span class="n7-dow">${esc(d.date === W.today ? '今晚' : d.dayName)}</span><span class="n7-type${nightLabel(d) === '修' ? '' : ' act'}">${esc(nightLabel(d))}</span></button>
             ${tg(d, 'shower', !!d.shower, '洗澡')}${P.shaving ? tg(d, 'shave', !!d.shave, '刮胡') : ''}</div>`).join('')}</div>
@@ -359,7 +359,7 @@ function toggleNight(app, date, k) {
     if (date === t) toggleTn(app.store, k, !d[k], t);
     else setDayState(app.store, date, k === 'shower' ? !d.shower : d.shower, k === 'shave' ? !d.shave : d.shave, t);
     app.renderAll();
-    if (date === t && app.tonightChanged) app.tonightChanged('今晚' + (k === 'shower' ? '洗澡' : '刮胡') + '在顾问页改了');   // 今晚的前提变了:顾问重排(签名变了才调)
+    if (date === t && app.tonightChanged) app.tonightChanged('今晚' + (k === 'shower' ? '洗澡' : '刮胡') + '在「接下来 7 晚」改了');   // 今晚的前提变了:顾问重排(签名变了才调)
     const b = document.querySelector(`#adv-n7 .n7-b[data-date="${date}"][data-k="${k}"]`);
     if (b) try { b.focus({ preventScroll: true }); } catch (e) { }
 }
@@ -374,7 +374,7 @@ function saveWeekHabit(app) {
 function fillWeekHabit(app) {
     const W = app.world(), P = W.profile || {};
     if (!presetOk(W.preset)) {
-        openSheet({ id: 'habit-none', title: '还没存过习惯', text: '先把这 7 晚哪晚洗澡' + (P.shaving ? '、刮胡' : '') + '点好，再点「存成每周习惯」。设置里的「通常哪几天洗澡」也是同一份。', actions: [{ label: '好', primary: true }] });
+        openSheet({ id: 'habit-none', title: '还没存过习惯', text: '先把这 7 晚哪晚洗澡' + (P.shaving ? '、刮胡' : '') + '点好，再点「存成每周习惯」；也可以直接在下面的「通常哪几天洗澡」里选。', actions: [{ label: '好', primary: true }] });
         return;
     }
     sysConfirm('接下来 7 晚（含今晚）的' + (P.shaving ? '洗澡和刮胡' : '洗澡') + '按存过的习惯重填，现在点过的会被盖掉。酸和面膜跟着重排。', () => {
@@ -437,7 +437,7 @@ function chatHtml(app, W) {
     const minimal = !!(W.profile || {}).minimalMode;
     const quick = (minimal ? ['今晚要换什么吗？', '这块干皮怎么办？'] : ['今晚能刷酸吗？', '这颗痘怎么办？', '这周怎么样？']);
     return `<section class="sec adv-chat" id="adv-chat">
-        <div class="sec-h"><h2 class="sec-t">问顾问</h2><span class="btn-row">${status ? `<span class="meta" id="adv-status">${esc(status)}</span>` : ''}${st.chat.length && !ST.busy ? '<button type="button" class="btn-link sm quiet" data-act="newchat">新对话</button>' : ''}</span></div>
+        <div class="sec-h"><h2 class="sec-t">问顾问</h2><span class="btn-row">${status ? `<span class="meta" id="adv-status">${esc(status)}</span>` : ''}${talk ? `<button type="button" class="btn-link sm quiet" data-act="review"${ST.reviewBusy || ST.busy ? ' disabled' : ''}>${ST.reviewBusy ? '复盘中…' : '复盘这周'}</button>` : ''}${st.chat.length && !ST.busy ? '<button type="button" class="btn-link sm quiet" data-act="newchat">新对话</button>' : ''}</span></div>
         ${acc}
         ${reviewHtml(app, W)}
         <div class="adv-log" id="adv-log" aria-live="polite">${msgs || (talk ? '<p class="note adv-hello">问今晚能不能刷酸、某颗痘怎么办、要不要换产品都行。顾问改了今晚或方案会直接生效，每条都能撤销。</p>' : '')}</div>
@@ -658,7 +658,9 @@ export function lastRegimenRec(app) {
 export function askAdvisor(app, text) {
     ST.draft = String(text || '');
     ST.focus = true;
-    if (app.show) app.show('advisor'); else app.renderScreen('advisor');
+    // 在方案 / 常识那样的二级页里问:入栈回到对话首页(返回键能回到刚才那页)
+    if (app.go && /^#\/advisor\/./.test(location.hash)) app.go('advisor', { replace: false });
+    else if (app.show) app.show('advisor'); else app.renderScreen('advisor');
 }
 
 // ── 拍照:拍成分表(去产品页认)/ 随这条消息发一张 ──
@@ -680,24 +682,23 @@ function photoMenu(app) {
 }
 
 // ══ 渲染 ═══════════════════════════════════════════════════════════════════════════════
+// 现在的方案那条 navRow 的右边一句:v几 · 日期(没方案时说还没有)
+function planNow(W) {
+    if (!(W.products || []).some(p => !p.hidden)) return '还没有方案';
+    const reg = currentRegimen(W);
+    return reg ? 'v' + reg.v + ' · ' + (mdAt(reg.at) || mdShort(reg.date)) : '';
+}
+// 顾问首页 = 对话(复盘卡、「复盘这周」在对话区)+ 两条「→」行;方案、常识各自一页(pages)
 export function render(app) {
-    const W = app.world(), P = W.profile || {};
-    const shelf = (W.products || []).some(p => !p.hidden);
-    // 极简模式(样稿 Cici 版):这一屏以对话为主;方案和未来 7 晚收成顶上一行折叠,点开照样全有(离线可看、能撤销、能排洗澡)
-    const top = P.minimalMode && shelf
-        ? `<details class="fold adv-minfold" id="adv-minfold"${ST.minOpen ? ' open' : ''}><summary><span class="fold-sum"><span class="lede">现在的方案和未来 7 晚</span><span class="note">${esc(planLine(W))}</span></span></summary>
-            <div class="fold-body">${planHtml(app, W)}${weekHtml(W, app)}</div></details>`
-        : planHtml(app, W) + weekHtml(W, app);
+    const W = app.world();
     return `<h1 class="page-title" id="advisor-h">${esc(title)}</h1>
-        ${top}
         ${chatHtml(app, W)}
-        <section class="sec adv-guide-sec">${renderGuide(P, { canAsk: canTalk(app) })}</section>
+        <nav class="grp nav-list" aria-label="顾问">${navRow('#/advisor/plan', '现在的方案', planNow(W), 'adv-go-plan')}${navRow('#/advisor/guide', '护肤常识', '', 'adv-go-guide')}</nav>
         ${dockHtml(app)}`;
 }
-export function mount(root, app) {
-    ensureShopRunner(app);
+// 方案页:阶梯、这一版的细则、版本与撤销、重排(原来在顾问首页顶上,极简模式收在 adv-minfold 里)
+function bindPlan(root, app) {
     const t = () => app.today();
-    const mf = root.querySelector('#adv-minfold'); if (mf) mf.addEventListener('toggle', () => { ST.minOpen = mf.open; });
     root.querySelectorAll('[data-go="products"]').forEach(b => b.addEventListener('click', () => app.show('products')));
     const lb = root.querySelector('#adv-ladder-btn');
     if (lb) lb.addEventListener('click', () => {
@@ -718,16 +719,32 @@ export function mount(root, app) {
             app.renderAll();
         }, { ok: '回到这一版' });
     }));
+    root.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
+        if (b.dataset.act === 'ask-plan') askAdvisor(app, '关于现在这版方案：');
+        else if (b.dataset.act === 'plan') askPlan(app);
+    }));
+}
+// 接下来 7 晚:点「澡」「刮」直接改、点日期看那晚的步骤、存成每周习惯 / 按习惯重填
+export function bindWeek(root, app) {
     root.querySelectorAll('.n7-b').forEach(b => b.addEventListener('click', () => toggleNight(app, b.dataset.date, b.dataset.k)));
     root.querySelectorAll('[data-night]').forEach(b => b.addEventListener('click', () => nightSheet(app, b.dataset.night)));
     const hs = root.querySelector('#adv-habit-save'); if (hs) hs.addEventListener('click', () => saveWeekHabit(app));
     const hf = root.querySelector('#adv-habit-fill'); if (hf) hf.addEventListener('click', () => fillWeekHabit(app));
+}
+export const pages = {
+    plan: { title: '现在的方案', render: app => planHtml(app, app.world()), mount: (body, app) => bindPlan(body, app) },
+    guide: {
+        title: '护肤常识',
+        render: app => `<section class="sec adv-guide-sec">${renderGuide(app.world().profile || {}, { canAsk: canTalk(app) })}</section>`,
+        mount: (body, app) => bindGuide(body, app.world().profile, txt => askAdvisor(app, txt))
+    }
+};
+export function mount(root, app) {
+    ensureShopRunner(app);
     root.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', async () => {
         const a = b.dataset.act;
         if (a === 'signin') app.signIn();
         else if (a === 'retry') { b.disabled = true; await app.ai.probe(true); app.renderScreen('advisor'); }
-        else if (a === 'ask-plan') askAdvisor(app, '关于现在这版方案：');
-        else if (a === 'plan') askPlan(app);
         else if (a === 'review') runReview(app, false);
         else if (a === 'unimg') { const ta = document.getElementById('adv-text'); if (ta) ST.draft = ta.value; ST.img = null; app.renderScreen('advisor'); }
         else if (a === 'stop') {   // 排着队的也马上停(client.js);什么都没停到 = 状态是旧的,直接收起「在想…」
@@ -768,7 +785,6 @@ export function mount(root, app) {
     }
     const sb = root.querySelector('#adv-send'); if (sb) sb.addEventListener('click', () => send(app));
     const cam = root.querySelector('#adv-cam'); if (cam) cam.addEventListener('click', () => photoMenu(app));
-    bindGuide(root, (app.world().profile), txt => askAdvisor(app, txt));
     // 开通状态还没核过:核完了重画这一屏(只核一次,别和别处的重画互相触发)
     probeOnce(app, () => { const sec = document.getElementById('advisor'); if (sec && sec.classList.contains('active')) app.renderScreen('advisor'); });
     maybeDataNotice(app);

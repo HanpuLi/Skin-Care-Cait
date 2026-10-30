@@ -41,7 +41,7 @@ export function acidLadder(W) {
         });
         const last = events[events.length - 1];
         let why;
-        if (minimal) why = manual ? `你设的 ${manual} 次/周；极简模式不会自己加，想加跟顾问说或在设置里改` : '起步 1 次/周；极简模式不记录，不会自己往上加';
+        if (minimal) why = manual ? `你设的 ${manual} 次/周；极简模式不会自己加，想加跟顾问说，或到今晚页「接下来 7 晚」底下的「高级」里改` : '起步 1 次/周；极简模式不记录，不会自己往上加';
         else if (!uses.length) why = manual ? `你设的 ${manual} 次/周，还没有刷酸记录` : '起步：每周 1 次温和酸，盯两天反应';
         else if (last && last.kind === 'up') why = `连续 ${LADDER_STEP_N} 次刷酸后两天内都没泛红、新痘，升到每周 ${level} 次`;
         else if (last && last.kind === 'react') why = `${last.date} 刷酸后两天内记到刺激，回到每周 ${level} 次`;
