@@ -5,7 +5,8 @@ export const ICON = {
     check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', x: '<path d="M6 6l12 12M18 6L6 18"/>',
     clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>', camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
     chev: '<path d="M10 6l6 6-6 6"/>', undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
-    plus: '<path d="M12 5v14M5 12h14"/>', send: '<path d="M5 12h13M13 6l6 6-6 6"/>', arrow: '<path d="M5 12h13M13 6l6 6-6 6"/>'
+    plus: '<path d="M12 5v14M5 12h14"/>', send: '<path d="M5 12h13M13 6l6 6-6 6"/>', arrow: '<path d="M5 12h13M13 6l6 6-6 6"/>',
+    more: '<path d="M6 12h.01M12 12h.01M18 12h.01" stroke-width="3"/>'
 };
 export function ico(n, cls) { return `<svg class="ico${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" aria-hidden="true">${ICON[n] || ''}</svg>`; }
 export function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }

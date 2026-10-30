@@ -28,10 +28,11 @@ import { safetyGate } from '../engine/gate.js';
 import { shelfSignature } from '../engine/regimen.js';
 import { prodByName } from '../engine/util.js';
 import { acidTiming, tonightOverride, repairUse } from '../engine/rules.js';
-import { tonightPlan, TONIGHT_TXT, applyTonight, undoTonightChange, shownTonight, tonightTicks } from '../ai/apply.js';
+import { tonightPlan, TONIGHT_TXT, applyTonight, undoTonightChange, shownTonight, tonightTicks, tonightBy } from '../ai/apply.js';
 import { buildSkincareContext } from '../ai/context.js';
 import { esc, ico, toast, openSheet } from './sheets.js';
 import { openSkinSheet, feedbackHtml, hasLog, feedbackOn } from './record.js';
+import { openStepSheet, quickHtml, askQuick, resetStep, setQuickDraft } from './tonight-step.js';
 import { lastTonightRec, lastRegimenRec, revAct, dataNoticeSeen, openDataNotice } from './advisor.js';
 
 export const id = 'tonight';
@@ -45,6 +46,7 @@ const st = { more: false, busy: false, pending: '', timer: null, tried: {}, last
 export function resetForUser() {
     clearTimeout(st.timer);
     Object.assign(st, { more: false, pending: '', timer: null, tried: {}, lastProbe: 0, redo: null, fx: null, medUndo: null });
+    resetStep();   // 单步面板、「问一句」的草稿和答案
 }
 const ownerOf = app => (app.store && app.store.state && app.store.state.owner) || '';
 
@@ -280,10 +282,12 @@ function model(app) {
     if (!plan) plan = Object.assign(tonightPlan(W, null), { changed: new Set(), fellBack: false });
     const changed = plan.changed || new Set(), fellBack = !!plan.fellBack;
     const isAi = plan.source === 'ai';
+    // 她自己在今晚页改的(by:'user')那几步:竖线用中性色,不冒充顾问的 --rev(§3.6)
+    const mine = new Set(ov ? ov.ops.filter(o => o.by === 'user' && o.op !== 'skip').map(o => o.to || o.product) : []);
     const steps = plan.steps.map(s => {
         const name = s.product || s.how, p = s.product ? prodByName(W, s.product) : null;
         return { key: name, name, role: p ? (ROLE_LABEL[p.role] || '') : '', how: s.product ? s.how : '', kind: s.kind || 'base',
-                 why: (isAi && s.why) || offlineWhy(W, name, s.kind, off), chg: !!s.chg || changed.has(s.product),
+                 why: (isAi && s.why) || offlineWhy(W, name, s.kind, off), chg: !!s.chg || changed.has(s.product), you: mine.has(s.product),
                  low: !!(p && (W.low || []).indexOf(p.id) >= 0), product: !!s.product };
     });
     const skips = plan.skips.map(x => isAi ? x : Object.assign({}, x, splitWhy(x.product)));
@@ -384,12 +388,13 @@ function revHtml(m, app) {
     // 今晚页自己的「重做」只认:同一个账号、同一天、而且之后没有更新的改动(有了新的,旧的重做作废,和对话那条对得上)
     if (st.redo && (ov || st.redo.date !== m.t || st.redo.owner !== ownerOf(app) || (lr && (+new Date(lr.rec.at) || 0) > st.redo.at))) st.redo = null;
     // 一行:「顾问 · 时:分 · 改了今晚」+ 改了什么(太长就截断,整句在 title 里)+ 撤销;贴在「今晚的步骤」下面,被改的步骤自带 --rev 竖线
-    const bar = (id, who, what, btn) => `<div class="revbar" id="${id}"><span class="who">${esc(who)}</span><span class="what" title="${esc(what)}">${esc(what)}</span>${btn}</div>`;
+    const bar = (id, who, what, btn, you) => `<div class="revbar${you ? ' you' : ''}" id="${id}"><span class="who">${esc(who)}</span><span class="what" title="${esc(what)}">${esc(what)}</span>${btn}</div>`;
     let out = '';
     if (ov) {
         const txt = ov.ops.map(c => (TONIGHT_TXT[c.op] ? TONIGHT_TXT[c.op](c) : c.op) + (c.why ? '：' + c.why : '')).join('；');
-        out = bar('tn-rev', '顾问' + (ov.at ? ' ' + hm(ov.at) : '') + ' · 改了今晚', txt, '<button type="button" class="btn-link" data-act="undo">撤销</button>');
-    } else if (st.redo) out = bar('tn-rev', '顾问 · 改了今晚', '已撤销，今晚恢复成上一版。', '<button type="button" class="btn-link" data-act="redo">重做</button>');
+        const you = tonightBy(ov.ops) === 'user';   // 全是她自己在步骤里点的:标「你改了今晚」;有顾问的(含「让顾问挑」)标顾问
+        out = bar('tn-rev', you ? '你改了今晚' + (ov.at ? ' ' + hm(ov.at) : '') : '顾问' + (ov.at ? ' ' + hm(ov.at) : '') + ' · 改了今晚', txt, '<button type="button" class="btn-link" data-act="undo">撤销</button>', you);
+    } else if (st.redo) { const you = tonightBy(st.redo.rec.ops) === 'user'; out = bar('tn-rev', you ? '你改了今晚' : '顾问 · 改了今晚', '已撤销，今晚恢复成上一版。', '<button type="button" class="btn-link" data-act="redo">重做</button>', you); }
     // 在对话里撤的:今晚页也给「已撤销 · 重做」,点了走顾问页同一个 recAct(两边状态一定对得上)
     else if (lr && lr.state === 'undone') out = bar('tn-rev', '顾问 · 改了今晚', '已撤销，今晚恢复成上一版。', `<button type="button" class="btn-link" data-act="redo-chat" data-key="${esc(lr.key)}">重做</button>`);
     // 顾问今天在对话 / 复盘 / 出方案里改了方案:和对话里那条同源(撤销 / 重做走顾问页的 recAct)
@@ -402,6 +407,10 @@ function revHtml(m, app) {
     return out;
 }
 
+// 每个有产品的步骤右边一个「调整」(换 / 划掉 / 让顾问挑 / 问顾问);整行还是 checkbox(打卡不变),所以另放一个 44×44 的按钮
+function opsBtn(x) {
+    return x.product ? `<button type="button" class="step-ops" data-act="step-ops" data-name="${esc(x.key)}" aria-label="调整「${esc(x.name)}」" aria-haspopup="dialog">${ico('more')}</button>` : '<span></span>';
+}
 export function render(app) {
     const m = model(app);
     const { W, P, t, minimal, hasShelf, off, g, steps, skips, cards } = m;
@@ -455,20 +464,21 @@ export function render(app) {
         const why = x.why ? `<span class="step-why">${esc(x.why)}</span>` : '';
         if (minimal) {
             const act = ACTIVE.indexOf(x.kind) >= 0, ms = missed(x.key);
-            return `<li class="step-li"><div class="step mini${ms ? ' missed' : ''}${x.chg ? ' changed' : ''}" data-kind="${x.kind}"><span class="step-idx">${idx}<span class="step-role">${esc(x.role)}</span></span>
+            return `<li class="step-li"><div class="step mini${ms ? ' missed' : ''}${x.chg ? ' changed' : ''}${x.you ? ' you' : ''}" data-kind="${x.kind}"><span class="step-idx">${idx}<span class="step-role">${esc(x.role)}</span></span>
                 <span class="step-body"><span class="step-name">${esc(x.name)}</span>${how}${why}</span>
-                ${act ? `<button type="button" class="btn-link sm step-miss" data-miss="${esc(x.key)}" aria-pressed="${ms}">${ms ? '撤回' : '今晚没做'}</button>` : '<span></span>'}</div></li>`;
+                ${act ? `<button type="button" class="btn-link sm step-miss" data-miss="${esc(x.key)}" aria-pressed="${ms}">${ms ? '撤回' : '今晚没做'}</button>` : '<span></span>'}</div>${opsBtn(x)}</li>`;
         }
         const dn = s.done.has(x.key);
-        return `<li class="step-li"><button type="button" class="step${dn ? ' done' : ''}${x.chg ? ' changed' : ''}" role="checkbox" aria-checked="${dn}" data-step="${esc(x.key)}" data-kind="${x.kind}" id="tn-step-${i}">
+        return `<li class="step-li"><button type="button" class="step${dn ? ' done' : ''}${x.chg ? ' changed' : ''}${x.you ? ' you' : ''}" role="checkbox" aria-checked="${dn}" data-step="${esc(x.key)}" data-kind="${x.kind}" id="tn-step-${i}">
             <span class="step-idx">${dn ? ico('check', 'sm') : idx}<span class="step-role">${esc(x.role)}</span></span>
-            <span class="step-body"><span class="step-name">${esc(x.name)}</span>${how}${why}</span><span class="step-box" aria-hidden="true">${ico('check', 'sm')}</span></button></li>`;
+            <span class="step-body"><span class="step-name">${esc(x.name)}</span>${how}${why}</span><span class="step-box" aria-hidden="true">${ico('check', 'sm')}</span></button>${opsBtn(x)}</li>`;
     }).join('')}</ol>`;
     if (skips.length) {
         h += `<details class="skips" id="tn-skips"><summary><span>今晚不用的 ${skips.length} 样</span></summary><ul class="rows">${skips.map(x =>
             `<li class="row"><span class="row-main"><span class="lede skip-name">${esc(x.product)}</span>${x.why ? `<span class="note">${esc(x.why)}</span>` : ''}</span><span class="note">今晚不用</span></li>`).join('')}</ul></details>`;
     }
     h += '</section>';
+    h += quickHtml(app, t);   // 问一句(没登录 / 没开通顾问时是空串)
     // 完成今晚 / 记一下皮肤
     const en = entryOf(W, t);
     const aiOn = feedbackOn(app);   // 顾问用不了 / 还没看过「顾问会看到什么」(反馈不会自动发)就别承诺「会回你 / 会看到」
@@ -502,6 +512,9 @@ export function mount(root, app) {
         if (c && c.err && c.down && c.retryAt) writeCache(app, Object.assign({}, c, { retryAt: app.store.now() }));
         if (root.classList.contains('active')) maybeAuto(app);
     });
+    // 「问一句」输入框按回车 = 发(输入法选字时的回车不算)
+    root.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing && e.target && e.target.id === 'qk-q') { e.preventDefault(); askQuick(app); } });
+    root.addEventListener('input', e => { if (e.target && e.target.id === 'qk-q') setQuickDraft(e.target.value); });
     root.addEventListener('click', e => {
         const tg = e.target && e.target.closest && e.target.closest('[data-act],[data-step],[data-miss],[data-sit],[data-med]');
         if (!tg || !root.contains(tg)) return;
@@ -523,6 +536,8 @@ export function mount(root, app) {
         if (tg.dataset.med) { medicalAct(app, tg.dataset.med); return; }
         const a = tg.dataset.act;
         if (a === 'more') { st.more = !st.more; app.renderScreen('tonight'); }
+        else if (a === 'step-ops') { const x = model(app).steps.find(y => y.key === tg.dataset.name); if (x && x.product) openStepSheet(app, x); }
+        else if (a === 'qk-go') askQuick(app);
         else if (a === 'ask') { if (dataNoticeSeen(app)) fetchTonight(app, 'manual'); else openDataNotice(app, () => fetchTonight(app, 'manual')); }
         else if (a === 'notice') openDataNotice(app, () => { repaint(app); maybeAuto(app); });
         else if (a === 'swapin') {   // 换上顾问新排的那份(打过勾的照样留在列表里,ai/apply.js keepDone)
@@ -545,7 +560,7 @@ export function mount(root, app) {
         } else if (a === 'redo') {
             const r0 = st.redo, r = r0 && r0.rec; st.redo = null;
             if (r && r.date === t && r0.owner === ownerOf(app)) {
-                const res = applyTonight(store, { id: r.id, changes: (r.ops || []).map(o => ({ op: o.op, product: o.product, to: o.to, level: o.level, why: o.why })) }, t, { aiData: aiTonightData(app) });
+                const res = applyTonight(store, { id: r.id, changes: (r.ops || []).map(o => ({ op: o.op, product: o.product, to: o.to, level: o.level, why: o.why, by: o.by })) }, t, { aiData: aiTonightData(app) });
                 if (res && res.state === 'failed') toast('这次重做没生效：' + (res.result || []).filter(Boolean).join('；'));
             }
             app.renderAll();

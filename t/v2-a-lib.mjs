@@ -20,6 +20,16 @@ const EXTRA = `(function(){
     if (u.startsWith('http://127.0.0.1:8808')) {
       const F = window.__AIF || { mode: 'down' };
       const p = new URL(u).pathname;
+      // /api/quick(今晚页「问一句」):SSE,F.quick = [[事件, 数据],…],事件之间隔 F.quickMs(默认 5ms)毫秒,测得出「边到边显示」
+      if (p === '/api/quick' && F.mode === 'on') {
+        let body = null; try { body = JSON.parse(init.body); } catch (e) { }
+        (F.log = F.log || []).push({ p, body });
+        const evs = F.quick || [['delta', { t: '好。' }], ['done', { text: '好。', model: 'claude-test', effort: 'low', cost: 0.001 }]], enc = new TextEncoder();
+        return new Response(new ReadableStream({ async start(c) {
+          for (const [ev, d] of evs) { await new Promise(r => setTimeout(r, F.quickMs || 5)); c.enqueue(enc.encode('event: ' + ev + '\\ndata: ' + JSON.stringify(d) + '\\n\\n')); }
+          c.close();
+        } }), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+      }
       const key = p === '/api/tonight' ? 'tonight' : p === '/api/assess' ? 'assess' : '';
       if (key && F.mode === 'on') {
         let body = null; try { body = JSON.parse(init.body); } catch (e) { }

@@ -315,15 +315,15 @@ export function buildNightSteps(W, shower, shave, slot) {
         ovApplied = true;
         const roleIdx = n => { const q = prodByName(W, n); return q ? ROLE_ORDER.indexOf(q.role) : -1; };
         ov.ops.forEach(c => {
-            const why = c.why ? '：' + c.why : '';
+            const why = c.why ? '：' + c.why : '', who = c.by === 'user' ? '你' : '顾问';   // 她自己在今晚页划掉 / 换的(by:'user')不冒充顾问
             if (c.op === 'skip') {
                 const i = steps.findIndex(x => x.p === c.product);
-                if (i >= 0) { steps.splice(i, 1); skips.push(c.product + '（顾问：今晚先跳过' + why + '）'); warnings.forEach(w => { if (w.after >= i) w.after = Math.max(-1, w.after - 1); }); }
+                if (i >= 0) { steps.splice(i, 1); skips.push(c.product + '（' + who + '：今晚先跳过' + why + '）'); warnings.forEach(w => { if (w.after >= i) w.after = Math.max(-1, w.after - 1); }); }
             } else if (c.op === 'swap') {
                 const s = steps.find(x => x.p === c.product), np = prodByName(W, c.to);
                 const ty = np && np.schedule && np.schedule.type;
                 // 活性不在这里换进来:活性只走 computePlan 的 applyTonightOverride(同类互换),planday 才对得上
-                if (s && np && !['acid', 'mask', 'retinol'].includes(ty) && np.role !== 'acid' && !gb(np)) { s.p = np.name; s.h = (hint(np) || '') + '（顾问今晚换的' + why + '）'; s.chg = true; }
+                if (s && np && !['acid', 'mask', 'retinol'].includes(ty) && np.role !== 'acid' && !gb(np)) { s.p = np.name; s.h = (hint(np) || '') + '（' + who + '今晚换的' + why + '）'; s.chg = true; }
             } else if (c.op === 'add') {
                 const np = prodByName(W, c.product);
                 const ty = np && np.schedule && np.schedule.type;
@@ -331,7 +331,7 @@ export function buildNightSteps(W, shower, shave, slot) {
                 const ri = ROLE_ORDER.indexOf(np.role);
                 let at = steps.findIndex(x => roleIdx(x.p) > ri);
                 if (at < 0) at = steps.length;
-                steps.splice(at, 0, { p: np.name, h: (hint(np) || '') + '（顾问今晚加的' + why + '）', kind: 'base', chg: true });
+                steps.splice(at, 0, { p: np.name, h: (hint(np) || '') + '（' + who + '今晚加的' + why + '）', kind: 'base', chg: true });
                 warnings.forEach(w => { if (w.after >= at) w.after++; });
             }
         });

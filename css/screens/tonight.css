@@ -16,6 +16,9 @@
 /* 她自己点的(「看过医生了」的撤销):不是顾问的改动,不用 --rev(§3.6)*/
 .revbar.mine{margin-top:var(--sp-4);border-left-color:var(--line-ctl)}
 .revbar.mine .who{font:14px/22px var(--serif);color:var(--muted)}
+/* 她自己在步骤里点的(划掉 / 换一支):标「你改了今晚」,中性竖线,不用 --rev(那是顾问的) */
+.revbar.you{border-left-color:var(--muted)}
+.revbar.you .who{font:14px/22px var(--serif);color:var(--muted)}
 .med-unbook{margin-top:var(--sp-2)}
 
 /* ② 今晚的情况:问句 + 两个选项;下面一行说影响 */
@@ -63,7 +66,11 @@
 .tn-mini-hint{margin-top:var(--sp-1)}
 .steps{margin-top:var(--sp-2)}
 .step{position:relative;display:grid;grid-template-columns:2.5em minmax(0,1fr) 32px;column-gap:var(--sp-3);align-items:start;width:100%;
-  min-height:64px;padding:var(--sp-4) 0;border-top:1px solid var(--line);text-align:left;color:var(--ink)}
+  min-height:64px;padding:var(--sp-4) 0;text-align:left;color:var(--ink)}
+/* 一步 = 整行 checkbox(打卡)+ 右边 44×44 的「调整」;分隔线画在 li 上 */
+.step-li{display:grid;grid-template-columns:minmax(0,1fr) 44px;align-items:start;border-top:1px solid var(--line)}
+.step-ops{width:44px;min-height:44px;margin-top:var(--sp-3);display:grid;place-items:center;border-radius:var(--r-ctl);color:var(--muted)}
+.step-ops:active{background:var(--tint)}
 .step.mini{grid-template-columns:2.5em minmax(0,1fr) auto}
 .step-idx{display:flex;flex-direction:column;padding-top:var(--sp-1);font:12px/var(--lh-meta) var(--mono);color:var(--faint)}
 .step-role{font:14px/22px var(--serif);color:var(--muted)}
@@ -79,6 +86,7 @@
 .step[aria-checked="true"] .step-name{color:var(--faint);text-decoration:line-through;text-decoration-thickness:1px}
 .step[aria-checked="true"] .step-idx{color:var(--ok)}
 .step.changed::before{content:"";position:absolute;left:calc(-1 * var(--sp-3));top:var(--sp-4);bottom:var(--sp-4);width:2px;background:var(--rev)}
+.step.changed.you::before{background:var(--muted)}
 .step.missed .step-name{color:var(--muted)}
 .step-miss{white-space:nowrap;align-self:center}
 .step-miss[aria-pressed="true"]{color:var(--ink)}
@@ -93,3 +101,32 @@
 .tn-done-at{color:var(--ok)}
 .tn-finish .fb-box:empty{display:none}
 #tn-empty{padding-top:var(--sp-5)}
+
+/* 单步 sheet(调整这一步):怎么用 / 为什么 → 今晚不用 / 换成货架上的 / 让顾问挑 / 问顾问 */
+.sa-role{margin:0}
+.sa-info{margin-top:var(--sp-2)}
+.sa-i{display:flex;flex-direction:column;padding:var(--sp-2) 0}
+.sa-k{font:14px/22px var(--serif);color:var(--muted)}
+.sa-v{font:16px/var(--lh-body) var(--serif);color:var(--ink);overflow-wrap:anywhere}
+.sa-lock{margin-top:var(--sp-4)}
+.sa-acts{display:flex;flex-direction:column;gap:var(--sp-2);margin-top:var(--sp-4)}
+.sa-list{display:flex;flex-direction:column;gap:var(--sp-2)}
+.sa-cand{justify-content:space-between;text-align:left;height:auto;padding-top:var(--sp-2);padding-bottom:var(--sp-2)}
+.sa-cn{overflow-wrap:anywhere}
+.sa-pick{display:flex;flex-direction:column;gap:var(--sp-2);border-top:1px solid var(--line);padding-top:var(--sp-3)}
+.sa-pick .field{margin-top:var(--sp-1)}
+.sa-chat{margin-top:var(--sp-2)}
+.sa-msg{margin-top:var(--sp-2)}
+.sa-msg:empty{display:none}
+#sa-note,#qk-q{display:block;width:100%;min-height:44px;border:0;border-bottom:1px solid var(--line-ctl);border-radius:0;background:transparent;
+  font:16px/24px var(--serif);color:var(--ink);padding:10px 0}
+#sa-note::placeholder,#qk-q::placeholder{color:var(--faint)}
+#sa-note:focus-visible,#qk-q:focus-visible{outline:none;border-bottom-color:var(--ink)}
+
+/* 问一句:步骤下面一个就地小面板;答案边到边显示(≤60 字是后端管的) */
+.tn-quick{margin-top:var(--sp-4);border-top:1px solid var(--line);padding-top:var(--sp-3)}
+.qk-l{display:block;font:14px/22px var(--serif);color:var(--muted)}
+.qk-row{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:var(--sp-3);align-items:end}
+.qk-a{margin-top:var(--sp-2);font:16px/var(--lh-body) var(--serif);color:var(--ink);overflow-wrap:anywhere;white-space:pre-wrap}
+.qk-a.err{color:var(--muted)}
+.qk-a:empty{display:none}

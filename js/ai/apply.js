@@ -274,24 +274,24 @@ export function withOverride(W, data, ov) {
     const kindOf = n => kindOfP(prodByName(W, n));
     const roleIdx = n => { const p = prodByName(W, n); return p ? ROLE_ORDER.indexOf(p.role) : -1; };
     ov.ops.forEach(c => {
-        const why = c.why ? '：' + c.why : '';
+        const why = c.why ? '：' + c.why : '', who = c.by === 'user' ? '你' : '顾问';   // by:'user' = 她自己在今晚页改的
         if (c.op === 'skip') {
             const i = d.steps.findIndex(s => s && s.product === c.product);
-            if (i >= 0) { d.steps.splice(i, 1); d.skips.push({ product: c.product, why: '顾问：今晚先跳过' + why }); } else missed.push(c);
+            if (i >= 0) { d.steps.splice(i, 1); d.skips.push({ product: c.product, why: who + '：今晚先跳过' + why }); } else missed.push(c);
         } else if (c.op === 'swap') {
             const s = d.steps.find(x => x && x.product === c.product);
-            if (s && c.to) { s.product = c.to; s.why = '顾问今晚换的' + why; changed.add(c.to); } else missed.push(c);
+            if (s && c.to) { s.product = c.to; s.why = who + '今晚换的' + why; changed.add(c.to); } else missed.push(c);
         } else if (c.op === 'add') {
             if (!c.product || d.steps.some(x => x && x.product === c.product)) return;
             const ri = roleIdx(c.product);
             let at = d.steps.findIndex(x => x && x.product && roleIdx(x.product) > ri);
             if (at < 0) at = d.steps.length;
-            d.steps.splice(at, 0, { product: c.product, how: '', why: '顾问今晚加的' + why });
+            d.steps.splice(at, 0, { product: c.product, how: '', why: who + '今晚加的' + why });
             changed.add(c.product);
         } else if (c.op === 'acid') {
             const i = d.steps.findIndex(x => x && x.product && kindOf(x.product) === 'acid');
             if (i < 0) { missed.push(c); return; }
-            if (c.level === 'stop') { const p = d.steps[i].product; d.steps.splice(i, 1); d.skips.push({ product: p, why: '顾问：今晚的酸停掉' + why }); }
+            if (c.level === 'stop') { const p = d.steps[i].product; d.steps.splice(i, 1); d.skips.push({ product: p, why: who + '：今晚的酸停掉' + why }); }
             else { const s = d.steps[i]; s.how = (s.how || '') + '（今晚降一档：只薄涂一层、时间减半，刺痛马上洗掉）'; changed.add(s.product); }
         }
     });
@@ -434,7 +434,9 @@ export function applyTonight(store, j, today, opts) {
             return;
         }
         if (c.op === 'acid') cur.ops = cur.ops.filter(o => o.op !== 'acid');
-        cur.ops.push({ op: c.op, product: c.product || '', to: c.to || '', level: c.level || '', why: c.why || '' });
+        const o = { op: c.op, product: c.product || '', to: c.to || '', level: c.level || '', why: c.why || '' };
+        if (c.by === 'user') o.by = 'user';   // 她自己在今晚页划掉 / 换的:修订条标「你改了今晚」,不冒充顾问
+        cur.ops.push(o);
     });
     const id = String(j.id || ('t' + store.now())).slice(0, 80);
     if (n) {
@@ -447,6 +449,8 @@ export function applyTonight(store, j, today, opts) {
     }
     return { kind: 'tonight', id, changes, result, dropped: (j.dropped || []).slice(0, 6), state: n ? 'applied' : 'failed', applied: n };
 }
+// 修订线上这一条是谁改的:全是她自己在今晚页点的 → 'user';有顾问的 → 'ai'(撤销 / 重做 / 颜色都按这个分)
+export const tonightBy = ops => ((ops || []).length && (ops || []).every(o => o && o.by === 'user')) ? 'user' : 'ai';
 // 撤销今晚的小改 = 回到改之前那一份(顾问追加的备注一起退)。返回 '' = 撤了
 export function undoTonightChange(store, id, today) {
     const cur = store.lg(K.tnai);
