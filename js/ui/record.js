@@ -464,7 +464,7 @@ export function render(app) {
         .concat([['刷了酸', ms.acid + ' 晚', ''], ['记了皮肤', ms.skin + ' 天', '']])
         .concat(ms.streak !== undefined ? [['连续完成', ms.streak + ' 晚', ms.streak ? '今晚做完接着算' : '']] : []);
     h += `<section class="sec" id="rec-month"><div class="sec-h"><span class="sec-t">本月 · ${ms.month} 月</span></div><ul class="rows">${msRows.map(([k, v, n]) =>
-        `<li class="row"><span class="row-main"><span class="lede">${esc(k)}</span>${n ? `<span class="note">${esc(n)}</span>` : ''}</span><span class="meta">${esc(v)}</span></li>`).join('')}</ul></section>`;
+        `<li class="row"><span class="row-main"><span class="lede">${esc(k)}</span>${n ? `<span class="note">${esc(n)}</span>` : ''}</span><span class="note">${esc(v)}</span></li>`).join('')}</ul></section>`;
     // ⑥ HRT(只在本人开了 HRT 时)
     if (P.hrt) {
         const ph = (W.journal || []).filter(e => e && e.phase && e.date >= wk1a && e.date <= t).sort((a, b) => b.date.localeCompare(a.date));

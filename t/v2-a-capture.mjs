@@ -144,18 +144,23 @@ await run('v2-a-capture', [
         S.ok(await p.eval(`return !!document.getElementById('tn-med')`), '她确认了泛红(第 5 天):就医红线亮(红线只数她确认过的状态)');
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
-    ['分析中不让关:结果页(确认记上 / 改一下)不会丢', async ({ S, open }) => {
+    ['分析中可以关:结果照样记进今天,记录页一键填建议', async ({ S, open }) => {
         const p = await open({ seed: 'full', seedArg: SEED, after: AFTER, mode: 'on', aif: `{assess:${JSON.stringify(ASSESS)},assessMs:1500}`, login: true, hash: '#/record' });
         await openCap(p);
         await shootThree(p);
         await click(p, '#cap-go', 200);
-        const b = await p.eval(CAP + `const ov=q('#capture-sheet');const x=ov.querySelector('.sheet-x');const txt=q('#cap-body').innerText;
-            ov.dispatchEvent(new MouseEvent('click',{bubbles:true}));document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));await new Promise(r=>setTimeout(r,100));
-            return {xHidden:!x||x.hidden,still:!!q('#capture-sheet'),txt}`);
-        S.ok(b.xHidden && b.still && /先别关/.test(b.txt) && !/先去做别的/.test(b.txt), '分析中:关闭按钮藏起来,点背景 / Esc 都不关,写明「先别关」', b);
-        await p.waitFor(`!!document.querySelector('#capture-sheet .cap-overall')`, 8000);
-        const a = await p.eval(CAP + `const x=q('#capture-sheet .sheet-x');return {x:!!x&&!x.hidden,ok:!!q('#cap-fill-ok')}`);
-        S.ok(a.x && a.ok, '看完:结果页在,能「确认记上」,关闭按钮回来了', a);
+        const b = await p.eval(CAP + `const x=q('#capture-sheet .sheet-x');return {x:!!x&&!x.hidden,txt:q('#cap-body').innerText}`);
+        S.ok(b.x && /可以先关掉/.test(b.txt) && !/先别关/.test(b.txt), '分析中:关闭按钮在,写明可以先关、结果到「记录」里定', b);
+        await click(p, '#capture-sheet .sheet-x', 200);
+        S.ok(!(await p.eval(`return !!document.getElementById('capture-sheet')`)), '点关闭:真关了');
+        await p.waitFor(`!!(${TODAY_EN}.photoAssess)`, 8000);
+        S.ok(true, '关了之后结果照样记进今天(photoAssess)');
+        await tab(p, 'tonight', 200); await tab(p, 'record', 400);
+        const f = await p.eval(`const el=document.getElementById('rec-pa-fill');return {on:!!el,txt:el?el.innerText:''}`);
+        S.ok(f.on, '记录页出「今天的照片分析建议记上」', f);
+        await click(p, '#rec-pa-fill [data-act=pa-fill]', 400);
+        const en = await p.eval(`return ${TODAY_EN}`);
+        S.ok((en.status || []).length > 0 && !(await p.eval(`return !!document.getElementById('rec-pa-fill')`)), '点「填上」:状态写进今天,提示消失', en.status);
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
     ['不能用 → 说为什么、重拍;不存结果、不存照片', async ({ S, open }) => {

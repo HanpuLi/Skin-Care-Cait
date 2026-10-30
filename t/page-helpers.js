@@ -1,5 +1,7 @@
 // 注入到每个测试页面(Page.addScriptToEvaluateOnNewDocument)。只在 t/ 的无头测试里用,线上页面不加载这个文件。
 (function () {
+    // 无头 Chrome = Mac UA + 触屏模拟,会被 needsInstallHint 当成 iPad 出「装到主屏」那行,挤掉首屏断言;测试里默认关掉
+    try { localStorage.setItem('sk_install_off', '1'); } catch (e) { }
     // ── 日期工具(和 App 的 today() 一样:凌晨 3 点前算前一天)──
     function d(n) { const x = new Date(); if (x.getHours() < 3) x.setDate(x.getDate() - 1); x.setDate(x.getDate() + n); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); }
     const S = (k, v) => localStorage.setItem(k, JSON.stringify(v));
