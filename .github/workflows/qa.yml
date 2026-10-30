@@ -71,9 +71,9 @@ jobs:
             "js/model/journal.js": ["export function absorbPrescribedHistory", "export function cleanPhotoAssess"],
             "js/model/regimen.js": ["export function commitAiRegimen", "export function undoRegimen"],
             "js/ai/context.js": ["export function buildSkincareContext"],
-            "js/ai/apply.js": ["export function applyTonight", "export function applyRegimen", "export function gateTonightPlan", "export function shopLocalChange"],
+            "js/ai/apply.js": ["export function applyTonight", "export function applyRegimen", "export function gateTonightPlan", "export function shownTonight", "export function shopLocalChange"],
             "js/ai/client.js": ["export function stripEmoji", "export function createAiClient"],
-            "js/ui/tonight.js": ["gateTonightPlan(", "document.hidden", "toggleSkipped(", "note-medical", "data-safety"],
+            "js/ui/tonight.js": ["shownTonight(", "document.hidden", "toggleSkipped(", "note-medical", "data-safety"],
             "js/ui/products.js": ["export function ensureShopRunner", "onShopLocalChange(", "export function holdShop"],
             "js/ui/capture.js": ["export function photoAnalysisOn", "setPhotoAssess"],
             "js/ui/advisor.js": ["export function maybeDataNotice", "export function lastTonightRec"]
