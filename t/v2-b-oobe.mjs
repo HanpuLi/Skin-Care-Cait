@@ -119,16 +119,16 @@ await run('v2-b-oobe', [
         await p.send('Page.reload', {}); await sleep(2400);
         S.ok(!(await has(p, '#whatsnew')), '再打开:不弹');
         // 设置里能再看
-        await p.eval(`document.getElementById('btn-settings').click();return 1`); await sleep(300);
-        await p.eval(`document.querySelector('#settings-sheet [data-act=whatsnew]').click();return 1`); await sleep(300);
+        await p.eval(`location.hash='#/settings/help';return 1`); await sleep(400);
+        await p.eval(`document.querySelector('#settings [data-act=whatsnew]').click();return 1`); await sleep(300);
         S.ok(await has(p, '#whatsnew'), '设置里「这一版改了什么」能再看');
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
     ['重新做引导:皮肤步点「没有」不抹掉今天记的泛红,做完不凭空多一版方案', async ({ S, open }) => {
         const p = await open({ seed: 'full', seedArg: `{today:true,status:i=>i===0?['泛红']:['出油']}` });
         const before = await p.eval(`const d=${DATA};return {st:((d.sk_jrnl1||[]).find(e=>e.date===__d(0))||{}).status||[],n:(d.sk_regimen1||[]).length}`);
-        await p.eval(`document.getElementById('btn-settings').click();return 1`); await sleep(300);
-        await p.eval(`document.querySelector('#settings-sheet [data-act=oobe]').click();return 1`); await sleep(400);
+        await p.eval(`location.hash='#/settings/help';return 1`); await sleep(400);
+        await p.eval(`document.querySelector('#settings [data-act=oobe]').click();return 1`); await sleep(400);
         await ob(p, 'mode-full');
         if (await step(p) === 'shelf') await ob(p, 'next');
         S.ok(await step(p) === 'skin', '(前提)走到「你的皮肤」');
@@ -154,8 +154,8 @@ await run('v2-b-oobe', [
         const w = await text(p, '#whatsnew');
         S.ok(/护肤品不用打卡/.test(w) && /记一下皮肤/.test(w) && !/刮胡/.test(w), '极简:讲「不用打卡 / 记一下皮肤」,不提刮胡', w);
         await p.eval(`document.querySelector('#whatsnew .btn-primary').click();return 1`); await sleep(200);
-        await p.eval(`document.getElementById('btn-settings').click();return 1`); await sleep(300);
-        await p.eval(`document.querySelector('#settings-sheet [data-act=oobe]').click();return 1`); await sleep(400);
+        await p.eval(`location.hash='#/settings/help';return 1`); await sleep(400);
+        await p.eval(`document.querySelector('#settings [data-act=oobe]').click();return 1`); await sleep(400);
         S.ok(await step(p) === 'mode' && await has(p, '#oobe [data-ob=close]'), '重新做引导:从「你想怎么用」开始,能关掉');
         await ob(p, 'mode-min');
         S.ok(await step(p) === 'skin', '货架不空:跳过「家里有什么」');

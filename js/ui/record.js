@@ -57,7 +57,7 @@ function tagsHtml(en) {
 }
 // 缩略图读到了才显示(外面的 button 也一起显示,不然留一个空的 44px 按钮)
 function showThumb(img, url) { img.src = url; img.hidden = false; const b = img.closest && img.closest('.thumb-b'); if (b) b.hidden = false; }
-// 看大图(❌3):全宽一张;这天这台设备上正 / 左 / 右有不止一张就给切换(按钮 ≥44px),只有一张就单张
+// 看大图(v1 对照缺口 3):全宽一张;这天这台设备上正 / 左 / 右有不止一张就给切换(按钮 ≥44px),只有一张就单张
 const PH_VIEWS = [['front', '正脸'], ['left', '左脸'], ['right', '右脸']];
 async function openPhotoView(app, date) {
     const got = [];

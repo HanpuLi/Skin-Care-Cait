@@ -40,7 +40,7 @@ export default async function ({ origin, S, open }) {
     // ── 记录页:没标过时说一句怎么标 ──
     {
         const p = await boot(`full()`);
-        const r = await p.eval(`document.getElementById('tab-record').click();${W8(200)}return (document.getElementById('rec-heat')||{}).innerText||''`);
+        const r = await p.eval(`document.getElementById('tab-record').click();${W8(200)}location.hash='#/record/changes';${W8(300)}return (document.getElementById('rec-heat')||{}).innerText||''`);
         S.ok(/还没在脸上标过位置/.test(r), '没标过:记录页说一句怎么标', r.slice(0, 80));
     }
     // ── 线稿、区块虚线、选中描边、左右小字、标记圈:浅 / 深色对底色都 ≥3:1(选中的标记:浅色是墨底,深色是 tint 底 + 墨色描边,量描边)──

@@ -19,7 +19,7 @@ const LS_KEY = 'sk_wpkey';      // VAPID 公钥缓存(点开关时不用先联�
 const LS_OWNER = 'sk_wpowner';  // 这台设备的订阅登记在哪个 uid 名下(换账号就退掉旧订阅)
 export const PUSH_TABS = ['tonight', 'advisor', 'record', 'products'];
 export const IOS_STEPS = ['用 Safari 打开这个页面，点「分享」（iOS 26 在右下角「•••」里）', '选「添加到主屏幕」', '从主屏幕的图标打开，回到设置里打开「提醒」，再点「允许」'];
-export const DENIED_STEPS = ['iPhone：设置 → 通知 → 找到「护肤计划」→ 允许通知', '电脑 / 安卓：点地址栏左边的网站设置，把通知改成「允许」', '改完回到这里，再开一次开关'];
+export const DENIED_STEPS = ['iPhone：设置 › 通知 › 找到「护肤计划」› 允许通知', '电脑 / 安卓：点地址栏左边的网站设置，把通知改成「允许」', '改完回到这里，再开一次开关'];
 
 export function pushPrefs(P) { const p = (P && P.push) || {}; return Object.assign({}, PUSH_DEF, typeof p === 'object' ? p : {}); }
 

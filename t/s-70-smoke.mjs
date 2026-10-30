@@ -43,7 +43,7 @@ export default async function ({ origin, S, open }) {
     await p.eval(`return __seed.full({profile:{hrt:true},jrnl:[{date:__d(-3),status:['稳定','闭口'],products:['PC酸'],note:'旧版记录',phase:'第 3 个月'},{date:__d(-2),status:['好转'],products:[],note:'',phase:''},{date:__d(-1),status:['变差','泛红'],products:[],note:'',phase:''}]})`);
     await p.reload(900);
     const day = i => `document.querySelectorAll('#sheet-root .sheet-ov').forEach(x=>x.remove());document.querySelector('#record [data-act="day"][data-date="'+__d(${i})+'"]').click();${W8(150)}`;
-    const old = await p.eval(`document.getElementById('tab-record').click();${W8(200)}const r={};for(const i of [-3,-2,-1]){${day('i')}const ov=document.getElementById('skin-sheet');
+    const old = await p.eval(`document.getElementById('tab-record').click();${W8(200)}location.hash='#/record/history';${W8(300)}const r={};for(const i of [-3,-2,-1]){${day('i')}const ov=document.getElementById('skin-sheet');
         r[i]={seg:[...ov.querySelectorAll('.sk-trend [aria-checked="true"]')].map(b=>b.textContent.trim()),syms:[...ov.querySelectorAll('.sk-syms .chip[aria-pressed="true"]')].map(b=>b.textContent.trim()),
             phase:(ov.querySelector('#sk-phase')||{}).value,note:(ov.querySelector('#sk-note')||{}).value};}
         document.querySelectorAll('#sheet-root .sheet-ov').forEach(x=>x.remove());return r`);

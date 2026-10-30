@@ -66,7 +66,7 @@
 .adv-hello{padding:var(--sp-2) 0}
 .adv-log{display:flex;flex-direction:column;gap:var(--sp-4);margin-top:var(--sp-3)}
 .msg{display:flex;flex-direction:column;min-width:0}
-.msg .who{font:12px/var(--lh-meta) var(--mono);color:var(--faint)}
+.msg .who{font:14px/var(--lh-note) var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
 .msg.ai .who{color:var(--rev)}
 .msg .body{font:16px/var(--lh-body) var(--serif);color:var(--ink);overflow-wrap:anywhere}
 .msg .body p+p{margin-top:var(--sp-2)}

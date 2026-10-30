@@ -2,26 +2,7 @@
    自成一套,不是纸墨换字体:纸墨靠通栏细线和字号分层,这里靠 inset-grouped 卡片(共同区域)和字重分层;
    按钮是实心胶囊,chip 是浅灰底胶囊,分段控件是「滑块在槽里」;入栈页从右滑入,按压轻缩。
    共同底线照旧:正文对比 ≥4.5:1、全 App 字号 ≤6 种(12/14/16/18/22/28)、触控 ≥44px —— s-50 两套都跑。 */
-:root[data-type="sans"]{
-  --serif:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
-  --mono:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Noto Sans SC",system-ui,sans-serif;
-  --paper:#f2f2f7;--sheet:#ffffff;--tint:#e9e9ef;
-  --line:#dcdce1;--line-ctl:#8e8e93;
-  --ink-strong:#000000;--ink:#1c1c1e;--muted:#5c5c61;--faint:#6a6a70;
-  --medical:#b3261e;--caution:#8a5a00;--ok:#2f6b3a;--rev:#2f5bb7;--accent:#2f5bb7;
-  --scrim:rgba(0,0,0,.28);
-  --lh-meta:18px;--lh-note:20px;--lh-body:24px;--lh-item:22px;--lh-head:28px;--lh-title:34px;--ls-body:0;
-  --r-ctl:12px;--r-card:16px;--r-sheet:22px;--gutter:16px;
-  --ease:cubic-bezier(.2,.8,.2,1);
-  font-synthesis-weight:auto;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
-/* 深色:真黑底 + 抬升的卡片(OLED);灰阶取系统灰的明度,不带暖色 */
-:root[data-type="sans"][data-theme="dark"]{
-  --paper:#000000;--sheet:#1c1c1e;--tint:#2c2c2e;
-  --line:#38383a;--line-ctl:#7c7c82;
-  --ink-strong:#ffffff;--ink:#ececf0;--muted:#a5a5ab;--faint:#94949a;
-  --medical:#ff8a7a;--caution:#f0b85a;--ok:#86c98c;--rev:#7fa6ff;--accent:#7fa6ff;
-  --scrim:rgba(0,0,0,.6)}
-
+/* 颜色 / 行高 / 圆角这些 token 在 css/tokens.css 末尾(token 只定义一份);这里只放形态 */
 /* ── 字:4 档字重语义(大标题 700 / 标题 600 / 小标题 500 / 正文 400);数字等宽;大字号字距收紧 ── */
 :root[data-type="sans"] :is(b,strong){font-weight:600}
 :root[data-type="sans"] :is(.pg-t,.page-title){font-weight:700;letter-spacing:-.02em}

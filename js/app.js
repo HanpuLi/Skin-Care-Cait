@@ -246,7 +246,16 @@ function boot() {
                 SCREENS.forEach(sc => { if (typeof sc.resetForUser === 'function') try { sc.resetForUser(); } catch (e) { } });
             },
             // 登录后核一次顾问开通;核成了就补「新的一天」那次今晚(核不成不再追着核;页面在后台时 tonight.js 自己会跳过,等切回来)
-            onAuthUser: user => { fbUser = user || null; if (user) Promise.resolve(ai.probe()).then(() => { if (ai.ready()) { tonightScreen.onAiReady(app); app.push.onOpen(); } }, () => { }); },
+            onAuthUser: user => {
+                fbUser = user || null;
+                if (user) Promise.resolve(ai.probe()).then(() => {
+                    if (!ai.ready()) return;
+                    // 开机时还没登录,当前页是按「没登录 / 顾问没开通」画的(今晚页的来源一句、记录页的拍照入口):探到能用就重画一次。
+                    //   旧版靠点当前 tab 重画盖住了,多页后点当前 tab 只回顶。顾问 / 设置页挂载时自己核 /api/me,不重画,免得多打一次
+                    if (current !== 'advisor' && current !== 'settings') renderScreen(current);
+                    tonightScreen.onAiReady(app); app.push.onOpen();
+                }, () => { });
+            },
             onFirstSnapshot: () => oobeOnFirstSnapshot(app),   // 新用户引导 / 改版说明(oobe.js 另有兜底:第一份快照走待推分支时这里不来)
             adoptLocalPhotos: uid => { try { photos.adoptLocal(uid); } catch (e) { } }   // 认领了本机没登录时的记录:那时的照片一起搬
         }

@@ -84,15 +84,15 @@ export default async function ({ origin, S, open }) {
         S.ok(JSON.stringify(r) === JSON.stringify(['今晚', '顾问', '记录', '产品']), `${who}:四个 tab 今晚 / 顾问 / 记录 / 产品(极简默认也显示记录)`, r);
     }
 
-    // ── 5. 空货架:今晚页只说货架空、不问洗澡;顾问页方案段说怎么开始 ──
+    // ── 5. 空货架:今晚页只说货架空、不问洗澡;顾问 › 现在的方案 说怎么开始 ──
     {
         const p = await boot(`fresh()`);
         const r = await p.eval(`document.querySelectorAll('#sheet-root .sheet-ov').forEach(x=>x.remove());
             const tn={sit:!!document.getElementById('tn-sit'),empty:(document.getElementById('tn-empty')||{}).textContent||''};
-            document.getElementById('tab-advisor').click();${W8(200)}
+            document.getElementById('tab-advisor').click();${W8(200)}location.hash='#/advisor/plan';${W8(300)}
             return Object.assign(tn,{adv:document.getElementById('advisor').innerText})`);
         S.ok(!r.sit && /货架还是空的/.test(r.empty) && /去「产品」添加/.test(r.empty), '空货架:今晚页不问洗澡 / 刮胡,只说货架空、去「产品」添加', r);
-        S.ok(/还没有方案/.test(r.adv) && /「产品」/.test(r.adv), '空货架:顾问页方案段说怎么开始', r.adv.slice(0, 160));
+        S.ok(/还没有方案/.test(r.adv) && /「产品」/.test(r.adv), '空货架:顾问 › 现在的方案 说怎么开始', r.adv.slice(0, 160));
         S.ok(!p.errors.length, '空货架 0 报错', p.errors);
     }
 }

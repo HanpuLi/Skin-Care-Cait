@@ -104,7 +104,7 @@ await run('v2-a-capture', [
         S.ok(await log(p, '/api/assess') === 1, '只调了一次');
         // 删掉上一次那天的照片(只删照片):本机拿不到了,下一次分析也不再带 previous_image
         await tab(p, 'record', 300);
-        await p.eval(`const d=__d(-3);const b=document.querySelector('#record [data-act="day"][data-date="'+d+'"]');if(b)b.click();return 1`); await sleep(400);
+        await p.eval(`location.hash='#/record/history';await new Promise(r=>setTimeout(r,300));const d=__d(-3);const b=document.querySelector('#record [data-act="day"][data-date="'+d+'"]');if(b)b.click();return 1`); await sleep(400);
         await p.waitFor(`!!document.getElementById('sk-delphoto') && !document.getElementById('sk-delphoto').hidden`, 3000).catch(() => { });
         const hadBtn = await p.eval(`return !!document.getElementById('sk-delphoto') && !document.getElementById('sk-delphoto').hidden`);
         await p.eval(`document.getElementById('sk-delphoto').click();await new Promise(r=>setTimeout(r,150));[...document.querySelectorAll('#sheet-root .sheet-ov:last-child .sheet-actions .btn')].find(b=>b.textContent==='删掉').click();await new Promise(r=>setTimeout(r,400));return 1`);
@@ -113,7 +113,7 @@ await run('v2-a-capture', [
         await p.eval(`document.querySelectorAll('#sheet-root .sheet-ov').forEach(o=>o.remove());return 1`);
         // 今天那份已经是「上一次」了:删今天的照片后再分析(用今天的日期重拍)不应再带图;改用 d-3 的结构化结果测「不带 previous_image」
         await p.eval(`const j=${ENV}.sk_jrnl1;return 1`);
-        await p.eval(`const d=__d(0);const b=document.querySelector('#rec-today [data-act=sheet]')||document.getElementById('rec-more');b.click();return 1`); await sleep(400);
+        await p.eval(`location.hash='#/record';await new Promise(r=>setTimeout(r,300));const d=__d(0);const b=document.querySelector('#rec-today [data-act=sheet]')||document.getElementById('rec-more');b.click();return 1`); await sleep(400);
         await p.eval(`const b=document.getElementById('sk-del');b.click();await new Promise(r=>setTimeout(r,150));[...document.querySelectorAll('#sheet-root .sheet-ov:last-child .sheet-actions .btn')].find(b=>b.textContent==='删掉').click();await new Promise(r=>setTimeout(r,500));return 1`);
         const k3 = await p.eval(`return ${IDB_KEYS}`), d0b = await p.eval(`return __d(0)`), en0 = await p.eval(`return ${TODAY_EN}`);
         S.ok(!k3.some(k => k.indexOf('u-test__' + d0b) === 0) && !en0.date, '「删掉这一天的记录」:当天记录和本机照片一起删', { k3, en0 });

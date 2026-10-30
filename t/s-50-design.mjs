@@ -24,7 +24,7 @@ const SCREENS = [
     ['products', `document.querySelector('#products .prod[data-id]').click();${W8(250)}document.querySelector('#pr-item [data-iact=edit]').click();${W8(250)}document.querySelector('#edit-sheet .pr-adv').open=true`, '编辑产品 · 展开(含怎么排)'],
     ['products', `document.getElementById('pr-add').click();${W8(200)}document.querySelector('#add-sheet [data-role="acid"]').click()`, '编辑产品 · 刷酸'],
     // 某天的记录:历史里有那一天就点那一行;没有(极简模式的推定记录)就走「补记某一天」挑前天
-    ['record', `const d=document.querySelector('#record [data-act="day"]');if(d)d.click();else{document.querySelector('#record [data-act="day-pick"]').click();${W8(200)}document.querySelector('#day-pick [data-d="'+__d(-2)+'"]').click()}`, '某天的记录'],
+    ['record', `location.hash='#/record/history';${W8(300)}const d=document.querySelector('#record [data-act="day"]');if(d)d.click();else{document.querySelector('#record [data-act="day-pick"]').click();${W8(200)}document.querySelector('#day-pick [data-d="'+__d(-2)+'"]').click()}`, '某天的记录'],
     ['tonight', `document.querySelector('#tonight [data-act="skin"]').click()`, '记皮肤']
 ];
 const pass = (r, scheme) => !r.emoji.length && r.minFs >= 12 && r.pctLt14 <= 15 && !r.lowCr.length && !r.smallN && !r.inputsLt16 && r.red <= 2 && (scheme === 'light' || !r.brightN) && !r.styleAttrs.length;
@@ -144,7 +144,7 @@ export default async function ({ origin, S, open }) {
     }
     S.ok(allSizes.size <= 6, '全 App 字号 ≤6 种', [...allSizes].sort((a, b) => a - b));
     // 源码里:token 只定义一份(浅一份、深一份),旧样式和饱和色不再出现,index.html 不内联样式
-    const css = ['css/tokens.css', 'css/base.css', 'css/components.css', ...fs.readdirSync(path.join(ROOT, 'css/screens')).map(f => 'css/screens/' + f)]
+    const css = ['css/tokens.css', ...fs.readdirSync(path.join(ROOT, 'css')).filter(f => f.endsWith('.css') && f !== 'tokens.css').map(f => 'css/' + f), ...fs.readdirSync(path.join(ROOT, 'css/screens')).map(f => 'css/screens/' + f)]
         .map(f => [f, fs.readFileSync(path.join(ROOT, f), 'utf8')]);
     const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
     const paperDefs = css.map(([f, s]) => [f, (s.match(/--paper:/g) || []).length]).filter(([, n]) => n);

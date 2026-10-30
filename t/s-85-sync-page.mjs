@@ -56,8 +56,8 @@ export default async function ({ origin, S }) {
         const h = await a.eval(`const e=${ENV('fic-a')};return {note:(e.data.sk_jrnl1||[{}])[0].note,rev:e.rev,writes:fakeCloud.writes.length}`);
         S.ok(h.note === 'fictional cloud note' && h.rev === 0 && h.writes === 0, '整页:服务器快照落地,重绘不产生改动、不推', h);
         // 用户改一下:设置里点「极简」(档案是云键,'user' 写入)
-        await a.eval(`document.querySelectorAll('#sheet-root .sheet-ov').forEach(x=>x.remove());document.getElementById('btn-settings').click();${W8(200)}
-            document.querySelector('#settings-sheet [data-seg="mode"] [data-v="min"]').click();${W8(120)}return 1`);
+        await a.eval(`document.querySelectorAll('#sheet-root .sheet-ov').forEach(x=>x.remove());location.hash='#/settings/skin';${W8(300)}
+            document.querySelector('#settings [data-seg="mode"] [data-v="min"]').click();${W8(120)}return 1`);
         S.ok(await a.eval(`const e=${ENV('fic-a')};return e.rev===1 && ${PENDING('fic-a')} && e.data.sk_profile1.minimalMode===true`), '整页:用户改一下 → rev 1,等着推');
         await a.reload(300); await a.waitFor(ready, 8000); await a.eval(login('fic-a'));
         await a.eval(`fakeCloud.emit(Object.assign(${JSON.stringify(CLOUD)},{_updatedAt:9999999999999}));${W8(120)}return 1`);
@@ -101,7 +101,7 @@ export default async function ({ origin, S }) {
         S.ok(/升级后第一次同步/.test(c.text) && /这台设备：\d+ 天的记录/.test(c.text) && /云端：1 天的记录/.test(c.text), '升级整页:sheet 里说清楚为什么、两边各有什么', c.text);
         S.ok(!p.dialogs.length, '升级整页:没有原生 confirm / alert', p.dialogs);
         await p.eval(`[...document.querySelectorAll('#sync-conflict .btn')].find(b=>b.textContent==='稍后再选').click();${W8(100)}return 1`);
-        const later = await p.eval(`document.getElementById('btn-settings').click();${W8(200)}const nb=document.getElementById('net-badge');const ch=document.getElementById('sync-choose');
+        const later = await p.eval(`location.hash='#/settings/account';${W8(300)}const nb=document.getElementById('net-badge');const ch=document.getElementById('sync-choose');
             return {badge:nb.hidden?'':nb.textContent,line:document.getElementById('sync-line').textContent,choose:!!ch&&!ch.hidden,n:(${ENV('fic-a')}.data.sk_jrnl1||[]).length,writes:fakeCloud.writes.length}`);
         S.ok(later.badge === '同步暂停 · 去设置里选' && later.choose && /同步先停着/.test(later.line) && later.n > 1 && later.writes === 0, '稍后再选:头部小标「同步暂停」、设置里有「选一份记录」,本机记录照旧', later);
         // 设置里的 sheet 也要过美学验收
@@ -113,7 +113,7 @@ export default async function ({ origin, S }) {
             [...document.querySelectorAll('#sync-conflict .btn')].find(b=>b.textContent==='用云端的').click();${W8(200)}return 1`);
         const chosen = await p.eval(`const e=${ENV('fic-a')};return {note:(e.data.sk_jrnl1||[{}])[0].note,n:(e.data.sk_jrnl1||[]).length,conflict:!!document.getElementById('sync-conflict'),legacy:e.legacy,badge:document.getElementById('net-badge').hidden,choose:document.getElementById('sync-choose')&&document.getElementById('sync-choose').hidden}`);
         S.ok(chosen.note === 'fictional cloud note' && chosen.n === 1 && !chosen.conflict && !chosen.legacy && chosen.badge, '设置里点「选一份记录」→ 用云端的:整份换成云端,小标消失', chosen);
-        await p.eval(`const r=document.querySelector('#settings-sheet [data-act="recovery"]');if(r)r.click();${W8(150)}return 1`);
+        await p.eval(`location.hash='#/settings/data';${W8(300)}const r=document.querySelector('#set-data [data-act="recovery"]');if(r)r.click();${W8(150)}return 1`);
         const rec = await p.eval(`const ov=document.getElementById('sync-recovery');return ov?{secs:[...ov.querySelectorAll('.sheet-sec .sec-t')].map(x=>x.textContent),btns:[...ov.querySelectorAll('.sheet-sec .btn')].map(x=>x.textContent)}:null`);
         S.ok(rec && rec.secs.some(s => /选之前这台设备的/.test(s)) && rec.secs.some(s => /升级前这台设备的/.test(s)) && rec.btns.includes('下载') && rec.btns.includes('换成这份'), '恢复副本(设置 → 数据 → 恢复副本):本机那份(升级前 / 选之前)都在,能下载、能换回去', rec);
         await p.eval(probe + ';return 1');
