@@ -29,6 +29,7 @@ import { parseSseBlock, aiClean, createAiClient } from '../js/ai/client.js';
 import { localEditProduct, localDropProduct } from '../js/ui/products.js';
 import { localUnGone as localUnGone2 } from '../js/ai/apply.js';
 import { DEFAULT_PD } from '../js/model/products.js';
+import { pushFacts, factsSig, nightOf, keyStepOf, shopNowIds, pushPrefs, PUSH_DEF } from '../js/ai/push.js';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const T = '2026-10-29';
@@ -565,6 +566,49 @@ export async function runEngineUnit(S) {
         S.ok(!oldHits.length, 'js/ 里没有 iOS 15.4 不认的语法(后行断言、正则 v 标志、static 块)', oldHits);
         const emo = files.concat(['./index.html', './sw.js', './manifest.json']).filter(f => /\p{Extended_Pictographic}/u.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
         S.ok(!emo.length, 'App 源码里 0 emoji', emo);
+    });
+
+    // ═══ 「主动找你」的判断用事实(ai/push.js pushFacts):只放最小字段,不带 HRT / 用药 / 皮肤记录 ═══
+    const FACT_KEYS = ['today', 'mode', 'done', 'night', 'key', 'times', 'photo', 'lastPhoto', 'redline', 'redStart', 'shopNow'];
+    t('提醒事实:字段白名单、完成今晚时刻、HRT 不带', () => {
+        const jr = [];
+        for (let i = -1; i >= -13; i--) jr.push({ date: d(i), status: ['泛红'].slice(0, i === -1 ? 0 : 0), products: [], note: '私密的话', phase: 'late',
+            ...(i >= -4 ? { done: true, doneAt: new Date(2026, 9, 29 + i, 22, 10 + i).toISOString() } : {}), ...(i === -5 ? { photoAssess: { usable: true, zones: [] } } : {}) });
+        const s = full({ jrnl: jr, profile: { hrt: true, startState: 'care', careAt: d(-2) } }), w = W(s);
+        const f = pushFacts(w, { plan: shownTonight(w, null), photoOn: true, shop: null, uid: 'u1' });
+        const js = JSON.stringify(f);
+        S.ok(Object.keys(f).every(k => FACT_KEYS.includes(k)), '提醒事实:只有契约里的字段', Object.keys(f));
+        S.ok(!/late|私密|hrt|phase|care|泛红/i.test(js), '提醒事实:不带 HRT 阶段、备注、在看医生、肤况标签', js);
+        S.ok(f.mode === 'full' && f.done === false && f.today === T && f.times.length === 4 && f.times.every(x => /^\d\d:\d\d$/.test(x.hm)) && f.times[3].date === d(-1), '提醒事实:模式、今晚没完成、最近几次完成今晚的本地时刻', f.times);
+        S.ok(f.photo === true && f.lastPhoto === d(-5) && f.redline === false && Array.isArray(f.shopNow) && !f.shopNow.length, '提醒事实:拍照开关和上次分析的日子、红线没亮', f);
+        S.ok(['刷酸夜', '修护夜', '维 A 夜', '面膜夜', '刮胡夜'].includes(f.night), '提醒事实:今晚的类型是今晚页那五种说法之一', f.night);
+    });
+    t('提醒事实:就医红线亮了 → redline + 起始日,不报产品名', () => {
+        const s = full({ status: i => i >= -6 ? ['泛红'] : [] }), w = W(s);
+        const f = pushFacts(w, { plan: shownTonight(w, null) });
+        S.ok(f.redline === true && f.redStart === medicalRedLine(w).start && !('key' in f) && !/泛红|红线|就医/.test(JSON.stringify(f)), '红线:只传亮没亮和起始日,不传为什么,也不报关键一步', f);
+    });
+    t('提醒事实:极简模式、今晚类型和关键一步', () => {
+        const w = W(minimal());
+        const f = pushFacts(w, { plan: shownTonight(w, null) });
+        S.ok(f.mode === 'minimal', '极简模式标出来(后端据此只报今晚排什么,不说「还没做」)', f.mode);
+        const w2 = W(full());
+        const plan = { steps: [{ product: '', how: '温水洗脸', kind: 'base' }, { product: PC, kind: 'acid' }, { product: 'X 保湿', kind: 'base' }] };
+        S.ok(nightOf(w2, plan) === (tonight(w2).shave ? '刮胡夜' : '刷酸夜') && keyStepOf(w2, plan) === PC, '有酸 → 刷酸夜(刮胡夜优先),关键一步是那支酸', [nightOf(w2, plan), keyStepOf(w2, plan)]);
+        S.ok(keyStepOf(w2, { steps: [{ product: '', how: '洗脸' }] }) === '' && nightOf(w2, null) === '', '没有产品步骤 → 不报名字;没有今晚 → 不报类型');
+        const f1 = pushFacts(w2, { plan }), f2 = pushFacts(w2, { plan: { steps: plan.steps.filter(x => x.kind !== 'acid') } });
+        S.ok(factsSig(f1) !== factsSig(f2) && factsSig(f1) === factsSig(pushFacts(w2, { plan })), '事实指纹:今晚换了才变(节流上传按它)');
+    });
+    t('提醒事实:「要不要买」只取现在就缺、按账号', () => {
+        const rec = { uid: 'u1', data: { items: [{ need: '温和疏通', what: '杏仁酸', urgency: 'now' }, { need: '保湿', what: '', urgency: 'soon' }, { need: '防晒', what: 'SPF50', urgency: 'now' }] } };
+        const ids = shopNowIds(rec, 'u1');
+        S.ok(ids.length === 2 && ids.every(x => /^[A-Za-z0-9_-]{1,40}$/.test(x)) && ids[0] !== ids[1] && shopNowIds(rec, 'u1')[0] === ids[0], '现在就缺 → 两个稳定的短 id(后端 ID_RE 认得)', ids);
+        S.ok(!shopNowIds(rec, 'u2').length && !shopNowIds(null, 'u1').length, '别的账号的结果不算');
+        S.ok(!ids.some(x => /疏通|防晒/.test(x)), 'id 里不带缺什么的原文');
+    });
+    t('提醒设置:默认关,存在档案 profile.push', () => {
+        S.ok(pushPrefs({}).on === false && pushPrefs({}).qs === PUSH_DEF.qs && pushPrefs({ push: { on: true, max: 2 } }).max === 2, '默认关、23–08、每天 1 条;档案里有就用档案的');
+        S.ok(skinSignature(W(full({ profile: { push: { on: true } } }))) === skinSignature(W(full())), '档案里多了 push 不改皮肤指纹(不会因此重出方案)');
     });
 }
 function minimalPlanday(p) { return p.W ? plandayOf(p.W) : null; }

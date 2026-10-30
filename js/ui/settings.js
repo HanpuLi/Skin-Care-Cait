@@ -1,6 +1,7 @@
 // ══ 设置(页头右上角印章打开)═══════════════════════════════════════════════════════════
 // 一个 sheet,从上到下:账号与同步 → 怎么用(完整 / 极简、记录页开关)→ 你的情况(刮胡、HRT、卸妆、肤质、想解决的、避开的区域)
 //   → 洗澡习惯(和顾问页「存成每周习惯」同一份 sk_preset1)→ 刷酸时机 + 高级手动覆盖 → 照片分析(按账号,非主账号默认关、本人同意才开)
+//   → 提醒(「主动找你」推送,ai/push.js;默认关)
 //   → 外观(深浅色默认跟随系统、印章字)→ 顾问(开通、记得的事、模型)→ 数据(导出 / 恢复备份 / 恢复副本)→ 数据说明 → 重新做引导 / 改版说明。
 // 写档案一律走 model/profile.js 的 updateProfile(读 → 改 → 写回,别拿内存旧档案盖掉刚同步来的);洗澡习惯走 model/week.js。
 // 【要紧】#sync-line / #sync-choose / #auth-btn 这几个 id 不能改:sync.js 的状态回调和整页同步测试(s-85)直接找它们。
@@ -103,6 +104,7 @@ export const DATA_NOTE = [
     '对话里顾问会自己记下以后也要用的事（比如对某成分的反应、过敏、偏好），存在服务器上；记了会在那条回答下面写「记住了」，在这里的「顾问记得的事」能看、能删。',
     '对话、「要不要买新的」的结果只存在这台设备上，换设备不带过去。',
     '照片只存在这台设备上（浏览器的本机数据库），不进云端同步。只有你点了分析、读成分表或随消息发图时，才把照片发给顾问：分析时是这次拍的那几张，这台设备上存着上一次分析时的正脸照片的话，也会一起发过去对比（拍之前能选不带）。分析完服务器不留，存下来的只有分析结果（进当天的记录）。',
+    '开了「提醒」以后，有变化时会把几样判断用的小事实发到 Cait 家里的顾问服务器：今晚是哪种夜和关键一步的产品名、用的哪个模式、今晚完成了没有、最近几次完成今晚的时刻、拍照分析开没开和上次的日子、就医提醒亮没亮、「要不要买」里现在就缺的编号。不带 HRT、皮肤记录和其他内容。服务器只存最新一份，关掉提醒就删；推送那一句由 Claude 的快模型照这些写，锁屏上不写病名和用药。',
     'HRT 只在你自己打开了 HRT 时才进顾问看到的快照；两个账号的数据互相看不到。'
 ];
 // 主账号:家里的服务器会另外附上运营者自己在服务器上记的 HRT 用药和化验(server 端,和 App 里的开关无关;这里照实说,不写具体内容)
@@ -157,6 +159,8 @@ function body(app) {
         ${sw('set-photoai', '拍的皮肤照片可以发给顾问分析', photoOn)}
         <p class="note">${photoOn ? '开着：你点「分析」时，那几张照片（本机有上一次的正脸照片的话也一起）发给顾问逐区看，结果记进当天。' : '关着：照片只存在这台设备上，不发给顾问。'}每个账号单独开关，只有本人能开。</p></div>
 
+    ${pushSec(app)}
+
     <div class="sheet-sec" id="set-look"><div class="sec-t">外观</div>
         ${seg('theme', currentTheme(), [['system', '跟随系统'], ['light', '纸'], ['dark', '夜'], ['auto', '晚上自动']], '外观')}
         <p class="note">晚上自动：21:00 到早上 7:00 用夜间配色。</p>
@@ -183,6 +187,22 @@ function body(app) {
         <details class="fold" id="set-changelog"><summary><span class="fold-sum"><span class="meta" id="set-version">护肤计划 v${esc(VERSION)} · ${BUILD}</span><span class="note">更新日志</span></span></summary><div class="fold-body">${CHANGELOG.map(([v, d, L]) => `<div class="set-sub"><div class="sec-t">v${esc(v)} · ${esc(d)}</div><ul class="list note">${L.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`).join('')}</div></details></div>`;
 }
 
+// ── 提醒(「主动找你」,ai/push.js):开关、安静时段、每天最多几条、这台设备的状态、iPhone 装到主屏的步骤 ──
+const hourOpts = v => Array.from({ length: 24 }, (_, h) => `<option value="${h}"${+v === h ? ' selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('');
+function pushSec(app) {
+    if (!app.push) return '';
+    const c = app.push.view();
+    return `<div class="sheet-sec" id="set-push"><div class="sec-t">提醒</div>
+        ${sw('set-pushon', '顾问主动找你', c.on)}
+        <p class="note">到你平时护肤的点，告诉你今晚排的是什么；就医提醒亮了、「要不要买」里有现在就缺的，也会推一条。不催，不会因为没记录来找你。默认关。</p>
+        ${c.on ? `<div class="set-push-q"><label class="field field-row"><span>安静从</span><select id="set-pushqs">${hourOpts(c.qs)}</select></label>
+            <label class="field field-row"><span>安静到</span><select id="set-pushqe">${hourOpts(c.qe)}</select></label>
+            <label class="field field-row"><span>每天最多</span><select id="set-pushmax">${[1, 2, 3].map(n => `<option value="${n}"${c.max === n ? ' selected' : ''}>${n} 条</option>`).join('')}</select></label></div>` : ''}
+        ${c.line ? `<p class="note" id="set-push-dev" role="status">这台设备：${esc(c.line)}${c.act ? ` <button type="button" class="btn-link sm" data-act="${c.act[0]}">${esc(c.act[1])}</button>` : ''}</p>` : ''}
+        ${c.guide ? `<ol class="list note" id="set-push-guide">${c.guide.map(g => `<li>${esc(g)}</li>`).join('')}</ol>` : ''}
+        <p class="note faint">锁屏上只写今晚排什么，不写病名、用药。安静时段里不推，同一件事只推一次。</p></div>`;
+}
+
 function paint(app) {
     const ov = document.getElementById('settings-sheet'); if (!ov) return;
     const bd = ov.querySelector('.sheet-b'); if (!bd) return;
@@ -207,6 +227,8 @@ function bind(ov, app) {
         else if (a === 'oobe') { closeSheet('settings-sheet'); startOobe(app, { redo: true }); }
         else if (a === 'whatsnew') { closeSheet('settings-sheet'); showWhatsNew(app, { force: true }); }
         else if (a === 'reset') factoryReset(app);
+        else if (a === 'wptest') app.push.test();
+        else if (a === 'wphere') app.push.here();
     }));
     ov.querySelectorAll('[data-seg]').forEach(g => g.querySelectorAll('[data-v]').forEach(b => b.addEventListener('click', () => {
         const v = b.dataset.v, name = g.dataset.seg;
@@ -234,6 +256,10 @@ function bind(ov, app) {
             <p class="note">照片本身只存在这台设备上；服务器分析完不留。随时能在这里关掉。这个开关只管你自己的账号，要你本人同意才开。</p>`,
             actions: [{ label: '先不' }, { label: '我同意，打开', primary: true, fn: () => setProfile(app, p => { p[PHOTO_FIELD] = true; p.photoAnalysisAt = t(); }) }] });
     });
+    on('set-pushon', el => { const want = el.checked; el.checked = !want; if (want) app.push.turnOn(); else app.push.turnOff(); });   // 开关的样子等真开成了再变
+    on('set-pushqs', el => { app.push.setPref('qs', el.value); paint(app); });
+    on('set-pushqe', el => { app.push.setPref('qe', el.value); paint(app); });
+    on('set-pushmax', el => { app.push.setPref('max', el.value); paint(app); });
     on('set-model', () => saveOpts(app, ov));
     on('set-effort', () => saveOpts(app, ov));
     on('set-import', el => { const f = el.files && el.files[0]; el.value = ''; if (f) importBackup(app, f); });

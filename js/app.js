@@ -14,8 +14,10 @@ import { syncRegimen } from './model/regimen.js';
 import { buildWorld, planNow } from './model/world.js';
 import { createPhotoStore } from './model/photos.js';
 import { createAiClient, aiBase } from './ai/client.js';
+import { createPush } from './ai/push.js';
 import { openSheet, closeSheet, hasSheet, toast, sysAlert, sysConfirm, download, bindEscape, esc } from './ui/sheets.js';
-import { openSettings, watchTheme } from './ui/settings.js';
+import { openSettings, watchTheme, refreshSettings } from './ui/settings.js';
+import { photoAnalysisOn } from './ui/capture.js';
 import { onBoot as oobeOnBoot, onFirstSnapshot as oobeOnFirstSnapshot } from './ui/oobe.js';
 import { ensureShopRunner } from './ui/products.js';
 import { onShopLocalChange, shownTonight } from './ai/apply.js';
@@ -118,6 +120,7 @@ function boot() {
     }
     function renderAll() { maintain(); applyVisibility(); renderHeader(); renderScreen(current); updateBadge(); }
     function updateBadge() {
+        if (app.push) app.push.dirty();   // 「主动找你」:开着、判断用的事实变了才传(完成今晚 / 改方案 / 换了今晚 / 翻页)
         if (!navigator.setAppBadge) return;
         let n = 0; try { n = badgeCount(app.world(), new Date().getHours()); } catch (e) { return; }
         try { (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => { }); } catch (e) { }
@@ -148,14 +151,19 @@ function boot() {
             clearLocalExtras: () => {
                 try { ai.abort(); } catch (e) { }
                 ai.clearLocal(); photos.clearLegacyUnprefixed();
+                if (app.push) app.push.resetForUser();
                 SCREENS.forEach(sc => { if (typeof sc.resetForUser === 'function') try { sc.resetForUser(); } catch (e) { } });
             },
             // 登录后核一次顾问开通;核成了就补「新的一天」那次今晚(核不成不再追着核;页面在后台时 tonight.js 自己会跳过,等切回来)
-            onAuthUser: user => { fbUser = user || null; if (user) Promise.resolve(ai.probe()).then(() => { if (ai.ready()) tonightScreen.onAiReady(app); }, () => { }); },
+            onAuthUser: user => { fbUser = user || null; if (user) Promise.resolve(ai.probe()).then(() => { if (ai.ready()) { tonightScreen.onAiReady(app); app.push.onOpen(); } }, () => { }); },
             onFirstSnapshot: () => oobeOnFirstSnapshot(app),   // 新用户引导 / 改版说明(oobe.js 另有兜底:第一份快照走待推分支时这里不来)
             adoptLocalPhotos: uid => { try { photos.adoptLocal(uid); } catch (e) { } }   // 认领了本机没登录时的记录:那时的照片一起搬
         }
     });
+    // 「主动找你」(Web Push):设置在 profile.push,事实上传 / 订阅 / 点通知跳页都在 ai/push.js
+    app.push = createPush(app, { navigator, window, localStorage: window.localStorage, toast,
+        photoOn: W => photoAnalysisOn(app, W.profile), shownTonight: W => app.shownTonight(W),
+        user: () => fbUser, rerender: () => refreshSettings(app) });
     Object.assign(app, { store, sync, ai, photos, today, show, renderAll, renderScreen,
         tonightChanged: why => tonightScreen.localChange(app, why),   // 别的屏改了今晚的前提(今天洗澡 / 刮胡、模式)后调:签名变了才让顾问重排
         // 她眼前的今晚(今晚页显示的那份,顾问版或离线):对话 / 反馈 / 拍照分析的上下文、change_tonight 的校验、未来 7 晚的今晚那格都用它
@@ -189,6 +197,7 @@ function boot() {
     watchTheme();            // 深浅色跟随系统 / 晚上自动
     oobeOnBoot(app);         // 新用户引导 / 改版说明(没登录时 1.8 秒后按本机数据判断)
     installHint();           // iPhone Safari 标签页里:提示装到主屏(可关,关了不再出)
+    app.push.boot();         // 点通知跳页(SW 发来的消息)+ 切回前台时补登记 / 传事实
     updateBadge();
 
     // 跨零点 / 凌晨 3 点翻页(PWA 常挂在后台过夜)

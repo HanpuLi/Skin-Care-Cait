@@ -8,7 +8,7 @@
 //   (t/engine-unit.mjs 从这里解析清单、对着 main 核;字体子集重做是原地覆盖同一个文件名,不升版已装 App 永远拿旧子集)。
 // · Firebase SDK(URL 带版本、内容不变):缓存优先。iOS 会清 HTTP 缓存,不放进 SW 的话离线首开就成了「没登录」。
 // · Google 字体域(子集外的生僻字兜底):stale-while-revalidate,先给缓存、后台更新。
-const CACHE_NAME = 'skincare-app-v33';
+const CACHE_NAME = 'skincare-app-v34';
 const CORE = [
   './',
   './index.html',
@@ -31,6 +31,7 @@ const CORE = [
   './js/ai/apply.js',
   './js/ai/client.js',
   './js/ai/context.js',
+  './js/ai/push.js',
   './js/app.js',
   './js/clock.js',
   './js/engine/assess.js',
@@ -127,4 +128,24 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   event.respondWith(cacheFirst(req, { ignoreSearch: true }));
+});
+
+// ── 「主动找你」推送(js/ai/push.js 订阅,后端 ~/skincare-coach/push.py 发):收到就弹通知;点通知打开 App 到对应页 ──
+// 内容 {title, body, tag: sk-<类>, url: './index.html#/tonight'};iOS 要求每条推送都弹出通知,所以这里不做任何「静默」分支
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (x) { d = { body: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(d.title || '顾问', {
+    body: d.body || '', tag: d.tag || 'sk-coach', icon: './icon-192.png', badge: './icon-192.png', data: { url: d.url || './index.html#/tonight' }
+  }));
+});
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = new URL((e.notification.data && e.notification.data.url) || './index.html#/tonight', self.registration.scope).href;
+  const tab = (/#\/(tonight|advisor|record|products)\b/.exec(url) || [])[1] || '';
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    const c = list.find((w) => w.url.startsWith(self.registration.scope));
+    if (c) { if (tab) c.postMessage({ type: 'sk-open', tab }); return c.focus(); }   // App 开着:切到那一页
+    return self.clients.openWindow(url);   // 没开着:冷启动,app.js 按地址里的 #/页 打开
+  }));
 });
