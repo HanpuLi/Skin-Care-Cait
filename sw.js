@@ -66,6 +66,7 @@ const CORE = [
   './js/ui/settings.js',
   './js/ui/sheets.js',
   './js/ui/tonight-step.js',
+  './js/ui/shower.js',
   './js/ui/tonight.js',
   './js/version.js'
 ];

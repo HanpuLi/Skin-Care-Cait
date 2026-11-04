@@ -165,6 +165,25 @@ await run('v2-a-tonight', [
         S.ok(past[0] === false && past[1] === true, '昨天还是没洗,明天排上了(近 14 天不多出没洗过的澡)', past);
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
+    ['洗澡安排:页头随时看今晚洗不洗,日历点未来哪天洗', async ({ S, open }) => {
+        const p = await open({ seed: 'minimal', seedArg: `{profile:{showerDays:[(new Date().getDay()+1)%7]}}` });
+        const lab = () => p.eval(`return document.querySelector('#btn-shower span').textContent`);
+        S.ok(await lab() === '今晚不洗', '页头:今晚不洗', await lab());
+        await tab(p, 'products');
+        S.ok(await lab() === '今晚不洗' && await p.eval(`const r=document.getElementById('btn-shower').getBoundingClientRect();return r.height>=44&&r.width>=44&&r.top>=0`), '换一页页头还在,点击区 ≥44');
+        await click(p, '#btn-shower', 300);
+        const a = await p.eval(`const c=[...document.querySelectorAll('#sh-cal .sh-d')];return {n:c.length,past:c.filter(x=>x.classList.contains('past')).every(x=>x.tagName==='DIV'),todayBtn:!!document.querySelector('#sh-cal button.today'),head:document.getElementById('sh-today').textContent,next:document.getElementById('sh-next').textContent,last:c[27].dataset.d}`);
+        S.ok(a.n === 28 && a.past && a.todayBtn && a.head === '今晚不用洗。' && /^下次洗澡：/.test(a.next), '日历:上周到后两周 28 天,过去的只看,写今晚和下次', a);
+        await click(p, `#sh-cal [data-d="${a.last}"]`, 300);
+        const b = await p.eval(`const m=await import('/js/model/week.js');const D=${SK_DATA};return {pressed:document.querySelector('#sh-cal [data-d="${a.last}"]').getAttribute('aria-pressed'),saved:m.dayState({wk:D.sk_wk1,preset:D.sk_preset1,profile:D.sk_profile1},'${a.last}').shower}`);
+        S.ok(b.pressed === 'true' && b.saved === true, '点最后一格:存进排班(不止 7 天)', b);
+        await click(p, '#sh-cal button.today', 300);
+        S.ok(await lab() === '今晚洗澡' && await p.eval(`return document.getElementById('sh-today').textContent`) === '今晚该洗澡。', '点今天:页头和日历一起变');
+        await p.eval(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));return 1`); await sleep(200);
+        await tab(p, 'tonight');
+        S.ok(await p.eval(`return !document.getElementById('shower-sheet') && document.getElementById('tn-ql-shower').textContent==='今晚排了洗澡'`), 'Esc 关;今晚页是同一份数据');
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
     ['洗澡安排:先不排 → 卡不再出,今晚页照写', async ({ S, open }) => {
         const p = await open({ seed: 'minimal' });
         await click(p, '[data-act=shplan-off]', 300);

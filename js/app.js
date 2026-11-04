@@ -17,6 +17,7 @@ import { createAiClient, aiBase } from './ai/client.js';
 import { createPush } from './ai/push.js';
 import { openSheet, closeSheet, hasSheet, toast, sysAlert, sysConfirm, download, bindEscape, esc, ico } from './ui/sheets.js';
 import { watchTheme, refreshSettings } from './ui/settings.js';
+import { openShowerSheet, showerLabel } from './ui/shower.js';
 import { photoAnalysisOn } from './ui/capture.js';
 import { onBoot as oobeOnBoot, onFirstSnapshot as oobeOnFirstSnapshot } from './ui/oobe.js';
 import { ensureShopRunner } from './ui/products.js';
@@ -78,6 +79,9 @@ function boot() {
     function renderHeader() {
         const t = today(), el = document.getElementById('hdr-date');
         if (el) el.textContent = mdOf(t) + ' ' + WEEK[dowOf(t)];
+        // 今晚洗不洗:每一页都看得到(点开是日历)
+        const sh = document.getElementById('btn-shower');
+        if (sh) try { const v = showerLabel(app.world()); sh.dataset.on = v.on ? '1' : '0'; sh.setAttribute('aria-label', '洗澡安排：' + v.text); sh.firstElementChild.textContent = v.text; } catch (e) { }
     }
     // 印章字:和 v1 同一个字段 profile.seal(v2 早期写过 stamp,读的时候兼容);没设就退到登录名的首个汉字(v1 sealChar)
     function sealChar(p) {
@@ -184,6 +188,7 @@ function boot() {
             const b = root.querySelector('[data-reload]'); if (b) b.addEventListener('click', () => location.reload());
             try { console.error(e); } catch (x) { }
         }
+        renderHeader();   // 页头的「今晚洗澡」跟着今晚页、7 晚页的改动走
     }
     // 主屏 App 里没有系统的返回手势:二级页从左边缘 24px 内起手右滑,页面跟手;过 1/3 宽或甩得够快就返回(DESIGN.md §2)
     function bindEdgeSwipe() {
@@ -296,6 +301,7 @@ function boot() {
         else go(id);
     }));
     const sealBtn = document.getElementById('btn-settings'); if (sealBtn) sealBtn.addEventListener('click', () => { if (current !== 'settings') go('settings'); });
+    const shBtn = document.getElementById('btn-shower'); if (shBtn) shBtn.addEventListener('click', () => openShowerSheet(app));
     // 站内链接 <a href="#/…">:走 go() 入栈(带 sk 标记,返回键才知道能 history.back());返回键委托
     document.addEventListener('click', e => {
         const bk = e.target.closest && e.target.closest('[data-back]');
