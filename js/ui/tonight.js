@@ -426,9 +426,9 @@ export function render(app) {
     if (st.medUndo) h += `<div class="revbar mine" id="tn-med-undo"><span class="who">就医提醒</span><span class="what">记下了「看过医生了」，提醒已解除。</span>
         <button type="button" class="btn-link" data-act="med-undo">撤销</button></div>`;
     // ② 今晚的情况。完整模式是问句;极简模式直接写「今晚排了 / 没排洗澡」(Cici 照安排办事:页面不写就不洗,Cait 11/04),一样能点改。
-    //    刮胡夜不上酸是安全规则,临时刮了得能说,所以开了刮胡的两种模式都问。接下来 7 晚一次澡都没排:下面出一张卡让她排
+    //    刮胡夜不上酸是安全规则,临时刮了得能说,所以开了刮胡的两种模式都问。极简模式接下来 7 晚一次澡都没排:下面出一张卡,选每周哪几天
     if (hasShelf) {
-        const ahead = showersAhead(W, t), needPlan = !ahead.length && !P.noShowerPlan;
+        const ahead = showersAhead(W, t), needPlan = minimal && !ahead.length && !P.noShowerPlan;   // 完整模式有问句和页头入口,不再占第一屏
         const acidTonight = m.type === '刷酸夜';
         const q = (k, label, yes, no, on) => {
             const fx = st.fx && st.fx.date === t && st.fx.k === k ? st.fx.text : (k === 'shower' && !on && ahead.length ? '下次洗澡：' + (ahead[0] === addDays(t, 1) ? '明晚' : WEEK[dowOf(ahead[0])]) + '。' : '') + defaultFx(k, on, acidTonight, g);
@@ -437,7 +437,7 @@ export function render(app) {
                 <p class="note sit-fx${st.fx && st.fx.date === t && st.fx.k === k ? ' changed' : ''}" id="tn-fx-${k}" aria-live="polite">${esc(fx)}</p></div>`;
         };
         // 没有单独的小标题行(问句自己就说清楚了;按每周习惯预填写在 title 里):省下的高度留给步骤,真机一屏要看得到第一步
-        const sit = (needPlan && minimal ? '' : q('shower', minimal ? (off.shower ? '今晚排了洗澡' : '今晚没排洗澡') : '今晚洗澡吗？', '洗', '不洗', !!off.shower)) + (P.shaving ? q('shave', '今晚刮胡吗？', '刮', '不刮', !!off.shave) : '');
+        const sit = (needPlan ? '' : q('shower', minimal ? (off.shower ? '今晚排了洗澡' : '今晚没排洗澡') : '今晚洗澡吗？', '洗', '不洗', !!off.shower)) + (P.shaving ? q('shave', '今晚刮胡吗？', '刮', '不刮', !!off.shave) : '');
         if (sit) h += `<section class="tn-sit" id="tn-sit" aria-label="今晚的情况（按每周习惯先填好了）">${sit}</section>`;
         if (needPlan) h += showerPlanHtml();
     }
