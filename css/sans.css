@@ -89,3 +89,8 @@
 @keyframes sans-push{from{opacity:0;transform:translateX(40px)}}
 @keyframes sans-pop{from{opacity:.4;transform:translateX(-24px)}}
 :root[data-type="sans"] .panel:not(.pg-drag){transition:transform .28s var(--ease)}
+:root[data-type="sans"] .hdr-sh span{border-radius:999px;box-shadow:none;background:var(--tint)}
+:root[data-type="sans"] .hdr-sh[data-on="1"] span{font-weight:600}
+:root[data-type="sans"] .sh-d{box-shadow:none;background:var(--tint)}
+:root[data-type="sans"] .sh-d.past{background:none}
+:root[data-type="sans"] .sh-d.today,:root[data-type="sans"] .sh-d[aria-pressed="true"]{box-shadow:inset 0 0 0 1.5px var(--ink)}

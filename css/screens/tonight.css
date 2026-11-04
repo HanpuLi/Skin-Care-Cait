@@ -143,3 +143,18 @@
 /* 还没有洗澡安排那张卡(tonight.js showerPlanHtml) */
 .tn-shplan{margin:var(--sp-3) 0;padding:var(--sp-3) 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 .tn-shplan .chips{margin:var(--sp-2) 0}
+/* 页头「今晚洗澡」和洗澡安排日历(ui/shower.js) */
+.hdr-sh{flex:none;min-height:44px;min-width:44px;display:grid;place-items:center}
+.hdr-sh span{padding:var(--sp-1) var(--sp-2);border-radius:var(--r-ctl);box-shadow:inset 0 0 0 1px var(--line-ctl);font:14px/20px var(--serif);color:var(--muted)}
+.hdr-sh span:empty{display:none}
+.hdr-sh[data-on="1"] span{background:var(--tint);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.sh .lede{margin:0}
+.sh-mode{margin-top:var(--sp-3)}
+.sh-wk,.sh-cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:var(--sp-1)}
+.sh-wk{margin-top:var(--sp-3);text-align:center;font:14px/20px var(--serif);color:var(--muted)}
+.sh-cal{margin:var(--sp-1) 0 var(--sp-3)}
+.sh-d{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:52px;min-width:0;border-radius:var(--r-ctl);font:14px/20px var(--serif);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line-ctl)}
+.sh-d .sh-m{min-height:20px}
+.sh-d.past{box-shadow:none;color:var(--muted)}
+.sh-d.today{box-shadow:inset 0 0 0 1.5px var(--ink)}
+.sh-d[aria-pressed="true"]{background:var(--tint);box-shadow:inset 0 0 0 1.5px var(--ink)}
