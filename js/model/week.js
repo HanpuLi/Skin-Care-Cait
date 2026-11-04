@@ -4,7 +4,7 @@
 // 某天洗不洗 / 刮不刮:sk_wk1 里那一周改过的以改过的为准;那一周还没动过就按习惯。
 // 今晚(sk_tn1)和「接下来 7 晚」的今晚那行是同一份:都走 toggleTn → setDayState。
 import { K } from '../store.js';
-import { isoWeek, wkIdxForDate } from '../clock.js';
+import { isoWeek, wkIdxForDate, addDays, dowOf } from '../clock.js';
 
 export function presetOk(p) { return Array.isArray(p) && p.length === 7 && p.every(x => x && typeof x.dow === 'number' && x.dow >= 0 && x.dow <= 6) && new Set(p.map(x => x.dow)).size === 7; }
 export function habitPreset(preset, profile) {
@@ -77,6 +77,25 @@ export function initTN(store, today) {
         store.ls(K.tnsteps, { date: today, done: [], skipped: [] }, 'system');
     }
     return tn;
+}
+// 今晚起 n 晚里排了洗澡的日期。一晚都没有 = 还没有洗澡安排(今晚页那张卡看它)
+export function showersAhead(w, today, n) {
+    const out = [];
+    for (let i = 0; i < (n || 7); i++) { const d = addDays(today, i); if (dayState(w, d).shower) out.push(d); }
+    return out;
+}
+// 第一次排洗澡:写每周习惯,今晚起两周都按它排;刮胡不动。
+//   先把过去两周按旧习惯钉进 sk_wk1(dayState 对没动过的周按习惯算,不钉的话「近 14 天」会多出她没洗过的澡)
+export function applyShowerPlan(store, dows, today) {
+    const w = wctx(store), all = w.wk;
+    for (let i = 1; i <= 14; i++) { const k = isoWeek(addDays(today, -i)); if (!all[k]) all[k] = habitWeek(w.preset, w.profile); }
+    store.ls(K.wk, all);
+    saveHabit(store, habitPreset(w.preset, w.profile).map(x => Object.assign({}, x, { shower: dows.indexOf(x.dow) >= 0 })));
+    for (let i = 1; i <= 13; i++) {
+        const d = addDays(today, i), s = getDayState(store, d);
+        setDayState(store, d, dows.indexOf(dowOf(d)) >= 0, s.shave, today);
+    }
+    return toggleTn(store, 'shower', dows.indexOf(dowOf(today)) >= 0, today);
 }
 // 今晚开关:回写到排班本身(否则今晚跳过酸、7 晚里却还排着)
 export function toggleTn(store, k, v, today) {

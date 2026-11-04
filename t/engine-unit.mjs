@@ -586,7 +586,7 @@ export async function runEngineUnit(S) {
     });
 
     // ═══ 「主动找你」的判断用事实(ai/push.js pushFacts):只放最小字段,不带 HRT / 用药 / 皮肤记录 ═══
-    const FACT_KEYS = ['today', 'mode', 'done', 'night', 'key', 'times', 'photo', 'lastPhoto', 'redline', 'redStart', 'shopNow'];
+    const FACT_KEYS = ['shower', 'today', 'mode', 'done', 'night', 'key', 'times', 'photo', 'lastPhoto', 'redline', 'redStart', 'shopNow'];
     t('提醒事实:字段白名单、完成今晚时刻、HRT 不带', () => {
         const jr = [];
         for (let i = -1; i >= -13; i--) jr.push({ date: d(i), status: ['泛红'].slice(0, i === -1 ? 0 : 0), products: [], note: '私密的话', phase: 'late',

@@ -140,3 +140,6 @@
 .wk-set .sheet-sec>.note{margin-top:var(--sp-2)}
 .wk-set select{width:100%;min-height:44px;font:16px/22px var(--serif);color:var(--ink);background:transparent;border:0;border-bottom:1px solid var(--line-ctl);border-radius:0;padding:0}
 .wk-set select:focus{outline:none;border-bottom:1.5px solid var(--ink)}
+/* 还没有洗澡安排那张卡(tonight.js showerPlanHtml) */
+.tn-shplan{margin:var(--sp-3) 0;padding:var(--sp-3) 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.tn-shplan .chips{margin:var(--sp-2) 0}

@@ -10,6 +10,7 @@
 import { safetyGate } from '../engine/gate.js';
 import { medicalRedLine } from '../engine/redline.js';
 import { tonight as offlineTonight } from '../engine/schedule.js';
+import { dayState } from '../model/week.js';
 import { syncHash, LOCAL_KEYS } from '../store.js';
 import { updateProfile, loadProfile } from '../model/profile.js';
 
@@ -55,6 +56,7 @@ export function pushFacts(W, opt) {
     const f = { today: W.today, mode: minimal ? 'minimal' : 'full', done: !!(en && en.done) };
     const night = nightOf(W, opt.plan);
     if (night) f.night = night;
+    try { f.shower = !!dayState(W, W.today).shower; } catch (e) { }   // 今晚排了洗澡:提醒里带上(Cici 照安排办事)
     // 就医红线亮着时今晚只排基础几样,不报产品名(锁屏上不暗示在处理什么)
     let red = { on: false };
     try { red = medicalRedLine(W); } catch (e) { }
@@ -71,7 +73,7 @@ export function pushFacts(W, opt) {
     f.shopNow = shopNowIds(opt.shop, opt.uid);
     return f;
 }
-export function factsSig(f) { return JSON.stringify([f.today, f.mode, f.night, f.key, f.done, (f.times || []).length, f.photo, f.lastPhoto, f.redline, f.redStart, f.shopNow]); }
+export function factsSig(f) { return JSON.stringify([f.today, f.mode, f.night, f.shower, f.key, f.done, (f.times || []).length, f.photo, f.lastPhoto, f.redline, f.redStart, f.shopNow]); }
 
 // 这台设备:'ios' 还没装到主屏 / 'unsupported' / 'denied' / 'on' / 'off' / null 还在查
 export function deviceState(nav, win, dev) {

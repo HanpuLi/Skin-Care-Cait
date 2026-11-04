@@ -20,7 +20,8 @@
 import { K, LOCAL_KEYS } from '../store.js';
 import { dowOf, addDays, mdOf } from '../clock.js';
 import { jrnlEntry, saveJrnl, toggleSkipped, writeTnSteps } from '../model/journal.js';
-import { toggleTn } from '../model/week.js';
+import { toggleTn, showersAhead, applyShowerPlan } from '../model/week.js';
+import { updateProfile } from '../model/profile.js';
 import { setMedical, restoreMedical } from '../model/profile.js';
 import { ROLE_LABEL, ROLE_ORDER, cleanseStrength } from '../model/products.js';
 import { tonight as offlineTonight, computePlan, acidHistory } from '../engine/schedule.js';
@@ -42,9 +43,10 @@ const WEEK = ['周日', '周一', '周二', '周三', '周四', '周五', '周�
 const ACTIVE = ['acid', 'mask', 'retinol'];
 const ACT_N = { acid: '酸', retinol: '维 A', mask: '面膜' };
 const DEBOUNCE = 1500;
-const st = { more: false, busy: false, pending: '', timer: null, tried: {}, lastProbe: 0, redo: null, fx: null, medUndo: null };
+const st = { more: false, busy: false, pending: '', timer: null, tried: {}, lastProbe: 0, redo: null, fx: null, medUndo: null, shPlan: [] };
 // 换账号:模块里的半截状态(「已撤销 · 重做」、刚点的开关说明、就医的撤销)都属于上一个人,清掉(app.js 的 clearLocalExtras 调)
 export function resetForUser() {
+    st.shPlan = [];
     clearTimeout(st.timer);
     Object.assign(st, { more: false, pending: '', timer: null, tried: {}, lastProbe: 0, redo: null, fx: null, medUndo: null });
     resetStep();   // 单步面板、「问一句」的草稿和答案
@@ -423,18 +425,21 @@ export function render(app) {
     // 这一条是她自己点的,不是顾问的改动:不用 --rev(§3.6),用中性竖线
     if (st.medUndo) h += `<div class="revbar mine" id="tn-med-undo"><span class="who">就医提醒</span><span class="what">记下了「看过医生了」，提醒已解除。</span>
         <button type="button" class="btn-link" data-act="med-undo">撤销</button></div>`;
-    // ② 今晚的情况(完整模式;极简模式不问洗澡,按每周习惯 —— 但开了刮胡的还要问「今晚刮胡吗」:刮胡夜不上酸是安全规则,临时刮了得能说)
-    if (hasShelf && (!minimal || P.shaving)) {
+    // ② 今晚的情况。完整模式是问句;极简模式直接写「今晚排了 / 没排洗澡」(Cici 照安排办事:页面不写就不洗,Cait 11/04),一样能点改。
+    //    刮胡夜不上酸是安全规则,临时刮了得能说,所以开了刮胡的两种模式都问。接下来 7 晚一次澡都没排:下面出一张卡让她排
+    if (hasShelf) {
+        const ahead = showersAhead(W, t), needPlan = !ahead.length && !P.noShowerPlan;
         const acidTonight = m.type === '刷酸夜';
         const q = (k, label, yes, no, on) => {
-            const fx = st.fx && st.fx.date === t && st.fx.k === k ? st.fx.text : defaultFx(k, on, acidTonight, g);
+            const fx = st.fx && st.fx.date === t && st.fx.k === k ? st.fx.text : (k === 'shower' && !on && ahead.length ? '下次洗澡：' + (ahead[0] === addDays(t, 1) ? '明晚' : WEEK[dowOf(ahead[0])]) + '。' : '') + defaultFx(k, on, acidTonight, g);
             return `<div class="sit-q" id="tn-q-${k}"><div class="sit-row"><span class="sit-l" id="tn-ql-${k}">${label}</span><div class="sit-btns" role="group" aria-labelledby="tn-ql-${k}">
                 <button type="button" data-sit="${k}" data-v="1" aria-pressed="${on}" id="tn-${k}-y">${yes}</button><button type="button" data-sit="${k}" data-v="0" aria-pressed="${!on}" id="tn-${k}-n">${no}</button></div></div>
                 <p class="note sit-fx${st.fx && st.fx.date === t && st.fx.k === k ? ' changed' : ''}" id="tn-fx-${k}" aria-live="polite">${esc(fx)}</p></div>`;
         };
         // 没有单独的小标题行(问句自己就说清楚了;按每周习惯预填写在 title 里):省下的高度留给步骤,真机一屏要看得到第一步
-        h += `<section class="tn-sit" id="tn-sit" aria-label="今晚的情况（按每周习惯先填好了）">`
-            + (minimal ? '' : q('shower', '今晚洗澡吗？', '洗', '不洗', !!off.shower)) + (P.shaving ? q('shave', '今晚刮胡吗？', '刮', '不刮', !!off.shave) : '') + '</section>';
+        const sit = (needPlan && minimal ? '' : q('shower', minimal ? (off.shower ? '今晚排了洗澡' : '今晚没排洗澡') : '今晚洗澡吗？', '洗', '不洗', !!off.shower)) + (P.shaving ? q('shave', '今晚刮胡吗？', '刮', '不刮', !!off.shave) : '');
+        if (sit) h += `<section class="tn-sit" id="tn-sit" aria-label="今晚的情况（按每周习惯先填好了）">${sit}</section>`;
+        if (needPlan) h += showerPlanHtml();
     }
     // ③ 最多一张提醒卡 + 「还有 N 条」
     if (cards.length) {
@@ -499,9 +504,21 @@ export function render(app) {
     return h + weekRow(W);
 }
 // 「→」行:接下来 7 晚(右边一句现状:下次刷酸是哪晚)。主事之后、页尾
+// 还没有洗澡安排:选每周哪几天,一点就排好(习惯 + 今晚起两周)。不替她定默认值;「先不排」记在档案里,不再出
+const SH_WD = [[1, '一'], [2, '二'], [3, '三'], [4, '四'], [5, '五'], [6, '六'], [0, '日']];
+const SH_PRESETS = [['每天', [1, 2, 3, 4, 5, 6, 0]], ['隔一天', [1, 3, 5, 0]], ['一周两次', [3, 0]]];
+function showerPlanHtml() {
+    const sel = st.shPlan;
+    return `<section class="tn-shplan" id="tn-shplan" aria-labelledby="tn-shplan-h"><p class="lede" id="tn-shplan-h">接下来 7 晚还没排洗澡。</p>
+        <p class="note">每周哪几天洗？排好之后，今晚页会写今晚洗不洗。</p>
+        <div class="btn-row">${SH_PRESETS.map((x, i) => `<button type="button" class="btn-link sm" data-act="shplan-preset" data-i="${i}">${x[0]}</button>`).join('')}</div>
+        <div class="chips set-days" role="group" aria-label="每周哪几天洗澡">${SH_WD.map(([d, n]) => `<button type="button" class="chip" aria-pressed="${sel.indexOf(d) >= 0}" data-act="shplan-day" data-d="${d}" aria-label="周${n}洗澡">${n}</button>`).join('')}</div>
+        <div class="btn-row">${sel.length ? '<button type="button" class="btn btn-primary" data-act="shplan-save" id="tn-shplan-save">就这几天</button>' : ''}<button type="button" class="btn-link sm quiet" data-act="shplan-off">先不排</button></div></section>`;
+}
 function weekRow(W) {
     const nxt = (W.products || []).some(p => !p.hidden) ? nextAcidNight(W) : '';
-    return `<nav class="grp nav-list" aria-label="今晚以外">${navRow('#/tonight/week', '接下来 7 晚', nxt ? '下次刷酸 ' + nxt : '这 7 晚没排酸', 'tn-go-week')}</nav>`;
+    const sh = showersAhead(W, W.today).filter(d => d !== W.today)[0];
+    return `<nav class="grp nav-list" aria-label="今晚以外">${navRow('#/tonight/week', '接下来 7 晚', (sh ? '下次洗澡 ' + WEEK[dowOf(sh)] + ' · ' : '') + (nxt ? '下次刷酸 ' + nxt : '这 7 晚没排酸'), 'tn-go-week')}</nav>`;
 }
 // 二级页 #/tonight/week:接下来 7 晚 + 每周洗澡 / 刮胡习惯 + 刷酸时机(这些全 App 只在这里改;设置里不再有)
 function weekPageHtml(app) {
@@ -555,6 +572,15 @@ export function mount(root, app) {
         if (tg.dataset.med) { medicalAct(app, tg.dataset.med); return; }
         const a = tg.dataset.act;
         if (a === 'more') { st.more = !st.more; app.renderScreen('tonight'); }
+        else if (a === 'shplan-day') { const d = +tg.dataset.d; st.shPlan = st.shPlan.indexOf(d) >= 0 ? st.shPlan.filter(x => x !== d) : st.shPlan.concat(d); app.renderScreen('tonight'); }
+        else if (a === 'shplan-preset') { st.shPlan = SH_PRESETS[+tg.dataset.i][1].slice(); app.renderScreen('tonight'); }
+        else if (a === 'shplan-save') {
+            if (!st.shPlan.length) return;
+            const names = SH_WD.filter(x => st.shPlan.indexOf(x[0]) >= 0).map(x => x[1]).join('、');
+            applyShowerPlan(app.store, st.shPlan, app.today()); st.shPlan = [];
+            app.renderAll(); localChange(app, '洗澡排好了'); toast('排好了：每周' + names + '洗澡');
+        }
+        else if (a === 'shplan-off') { updateProfile(app.store, p => { p.noShowerPlan = true; }); st.shPlan = []; app.renderAll(); toast('先不排。想排了去「接下来 7 晚」。'); }
         else if (a === 'step-ops') { const x = model(app).steps.find(y => y.key === tg.dataset.name); if (x && x.product) openStepSheet(app, x); }
         else if (a === 'qk-go') askQuick(app);
         else if (a === 'ask') { if (dataNoticeSeen(app)) fetchTonight(app, 'manual'); else openDataNotice(app, () => fetchTonight(app, 'manual')); }

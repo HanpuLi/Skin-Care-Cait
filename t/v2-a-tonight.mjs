@@ -9,6 +9,7 @@
 //   + 「问一句」(/api/quick 流式、带实时状态、action 生效挂修订线);闸挡住的候选不出现、红线亮时酸类不出现
 //   跑:node t/v2-a-tonight.mjs
 import { run, tab, click, log, sleep, W8, ENV, TODAY_EN, TONIGHT_FULL, PROBE } from './v2-a-lib.mjs';
+const SK_DATA = `JSON.parse(localStorage.getItem(Object.keys(localStorage).filter(k=>k.startsWith('sk_sync_v1:')).sort((a,b)=>b.length-a.length)[0])).data`;
 
 const ACID = "Paula's Choice 6%杏仁酸+2%乳酸", EYE = 'MZ Skin Soothe & Smooth 眼部精华';
 const VIEW = `const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];
@@ -152,10 +153,35 @@ await run('v2-a-tonight', [
         S.ok(await p.eval(`return location.hash==='#/tonight' && !!document.getElementById('tn-plan') && !document.getElementById('adv-n7')`), '返回键:回到今晚首页');
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
-    ['极简 + 开了刮胡:今晚页只问「今晚刮胡吗」(洗澡不问)', async ({ S, open }) => {
+    ['洗澡安排:还没排 → 出卡,一点排好;过去的日子不动', async ({ S, open }) => {
+        const p = await open({ seed: 'minimal' });
+        const r = await p.eval(`return {card:!!document.getElementById('tn-shplan'),q:!!document.getElementById('tn-q-shower'),off:!document.getElementById('tn-shplan-save')}`);
+        S.ok(r.card && !r.q && r.off, '极简、7 晚一次澡都没排:出卡,不写「今晚没排」,没选之前没有保存按钮', r);
+        await click(p, '[data-act=shplan-preset][data-i="0"]', 200);
+        await click(p, '#tn-shplan-save', 400);
+        const v = await p.eval(`const D=${SK_DATA};return {card:!!document.getElementById('tn-shplan'),l:(document.getElementById('tn-ql-shower')||{}).textContent,y:document.getElementById('tn-shower-y').getAttribute('aria-pressed'),preset:(D.sk_preset1||[]).filter(x=>x.shower).length,days:(D.sk_profile1.showerDays||[]).length}`);
+        S.ok(!v.card && v.l === '今晚排了洗澡' && v.y === 'true' && v.preset === 7 && v.days === 7, '选「每天」存下:卡消失,今晚页写「今晚排了洗澡」,习惯两份都写上', v);
+        const past = await p.eval(`const m=await import('/js/model/week.js');const c=await import('/js/clock.js');const D=${SK_DATA};const w={wk:D.sk_wk1,preset:D.sk_preset1,profile:D.sk_profile1},t=c.today();return [m.dayState(w,c.addDays(t,-1)).shower,m.dayState(w,c.addDays(t,1)).shower]`);
+        S.ok(past[0] === false && past[1] === true, '昨天还是没洗,明天排上了(近 14 天不多出没洗过的澡)', past);
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
+    ['洗澡安排:先不排 → 卡不再出,今晚页照写', async ({ S, open }) => {
+        const p = await open({ seed: 'minimal' });
+        await click(p, '[data-act=shplan-off]', 300);
+        const r = await p.eval(`return {card:!!document.getElementById('tn-shplan'),l:(document.getElementById('tn-ql-shower')||{}).textContent,flag:${SK_DATA}.sk_profile1.noShowerPlan}`);
+        S.ok(!r.card && r.l === '今晚没排洗澡' && r.flag === true, '「先不排」记进档案', r);
+    }],
+    ['洗澡安排:极简今晚页写今晚洗不洗 + 下次哪晚', async ({ S, open }) => {
+        const p = await open({ seed: 'minimal', seedArg: `{profile:{showerDays:[(new Date().getDay()+1)%7]}}` });
+        const r = await p.eval(`return {card:!!document.getElementById('tn-shplan'),l:document.getElementById('tn-ql-shower').textContent,n:document.getElementById('tn-shower-n').getAttribute('aria-pressed'),fx:document.getElementById('tn-fx-shower').textContent,wk:document.getElementById('tn-go-week').textContent}`);
+        S.ok(!r.card && r.l === '今晚没排洗澡' && r.n === 'true' && /^下次洗澡：/.test(r.fx) && /下次洗澡 周/.test(r.wk), '没排的晚上:写下次哪晚洗,7 晚入口也写', r);
+        await click(p, '#tn-shower-y', 300);
+        S.ok(await p.eval(`return document.getElementById('tn-ql-shower').textContent==='今晚排了洗澡'`), '点「洗」:今晚改成排了');
+    }],
+    ['极简 + 开了刮胡:还没排洗澡时只问「今晚刮胡吗」', async ({ S, open }) => {
         const p = await open({ seed: 'minimal', seedArg: `{profile:{shaving:true}}` });
         const r = await p.eval(`return {shave:!!document.getElementById('tn-q-shave'),shower:!!document.getElementById('tn-q-shower')}`);
-        S.ok(r.shave && !r.shower, '极简 + 刮胡:有「今晚刮胡吗」,没有「今晚洗澡吗」', r);
+        S.ok(r.shave && !r.shower, '极简 + 刮胡 + 没排洗澡:有「今晚刮胡吗」,洗澡先走排班卡', r);
         await click(p, '#tn-shave-y', 300);
         const v = await view(p);
         S.ok(v.h1 === '今晚 · 刮胡夜' && !v.steps.includes(ACID), '点「刮」:刮胡夜,酸不上', v.steps);
