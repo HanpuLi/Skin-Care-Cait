@@ -18,12 +18,40 @@
 .nav-l{flex:none;font:16px/var(--lh-item) var(--serif);color:var(--ink)}
 .nav-now{flex:1;min-width:0;text-align:right;font:14px/var(--lh-note) var(--serif);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nav-chev{color:var(--faint);margin-left:calc(-1 * var(--sp-1))}
+/* 右边没有现状那句时(「护肤常识」),chevron 推到最右,和同一组里别的行对齐 */
+.nav-l+.nav-chev{margin-left:auto}
 .nav-row:active{background:var(--tint)}
 .nav-list{margin-top:var(--sp-2)}
 .sec .nav-row:first-child,.nav-gap{margin-top:var(--sp-5)}
 
 /* 设置的二级页:一段一组 */
 .set-page>.sheet-sec:first-child{padding-top:var(--sp-2)}
+
+/* 接下来 7 晚那一页(11/10 从今晚搬到顾问 #/advisor/week,advisor.js)底下的每周习惯 / 刷酸时机(settings.js 的 weekSettingsHtml)。
+   这两段的控件样式原来挂在 #settings-sheet 下,搬进二级页后在这里照着补一份(只管 .wk-set 里面);
+   放在这里而不是某一屏的 css:它跟着页面走,不跟 tab 走(原来在 tonight.css,页面搬家后今晚那份就成了别人家的规则) */
+.wk-set{margin-top:var(--sp-2)}
+.wk-set .set-seg{margin-top:var(--sp-1)}
+.wk-set .set-seg[data-seg="timing"]{grid-auto-flow:row;grid-template-columns:repeat(2,minmax(0,1fr))}
+.wk-set .set-seg>button{padding:0 var(--sp-1);font-size:14px}
+.wk-set .sheet-sec>.note{margin-top:var(--sp-2)}
+.wk-set select{width:100%;min-height:44px;font:16px/22px var(--serif);color:var(--ink);background:transparent;border:0;border-bottom:1px solid var(--line-ctl);border-radius:0;padding:0}
+.wk-set select:focus{outline:none;border-bottom:1.5px solid var(--ink)}
+/* 无衬线:和设置二级页一样,每段一张卡(11/11 前这两段直接浮在页面底色上,「手动覆盖」那一行像掉出了卡片);卡里的解释是 14 号灰字 */
+:root[data-type="sans"] .wk-set>.sheet-sec{background:var(--sheet);border:0;border-radius:var(--r-card);padding:var(--sp-4);margin-top:var(--sp-5)}
+:root[data-type="sans"] .wk-set .sheet-sec>.note{font-size:14px;color:var(--muted)}
+:root[data-type="sans"] .wk-set .set-adv{border-top:0;position:relative}
+:root[data-type="sans"] .wk-set .set-adv::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:var(--line);transform:scaleY(.5);transform-origin:top}
+/* 刮胡那张卡里一排 7 个星期芯片:卡片左右 16 的内边距会把芯片挤到 43 宽。和洗澡页日历一样,这张卡左右只留 8、芯片间 2
+   (间距 4 倍数的例外,DESIGN §5 记着),标题和说明照旧缩进 16;320 宽时卡片铺满整行,芯片通栏 */
+:root[data-type="sans"] .wk-set>#set-habit{padding-left:var(--sp-2);padding-right:var(--sp-2)}
+:root[data-type="sans"] .wk-set>#set-habit>:not(.set-days){padding-left:var(--sp-2);padding-right:var(--sp-2)}
+:root[data-type="sans"] .wk-set .set-days{gap:2px}
+@media(max-width:360px){
+  :root[data-type="sans"] .wk-set>#set-habit{margin-left:calc(-1 * var(--gutter));margin-right:calc(-1 * var(--gutter));border-radius:0;padding-left:var(--gutter);padding-right:var(--gutter)}
+  :root[data-type="sans"] .wk-set>#set-habit>:not(.set-days){padding-left:0;padding-right:0}
+  :root[data-type="sans"] .wk-set .set-days{gap:1px}
+}
 
 /* 入栈 / 出栈:纸墨只淡入(书页不滑);左边缘右滑时页面跟手 */
 .panel.pg-push,.panel.pg-pop{animation:pg-fade .16s ease-out}

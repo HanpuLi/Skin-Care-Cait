@@ -1,9 +1,10 @@
 // B 路 · 顾问页(无头 Chrome,假顾问后端,不花钱):
-//   「现在的方案」页(#/advisor/plan)离线可看(一句话、刷酸阶梯、细则、版本与撤销);未来 7 晚点「澡」「刮」即时重排(刮只给开了刮胡的人)、
-//   (7 晚在 #/tonight/week,今晚那一格和今晚页开关是同一份;「存成每周习惯 / 按习惯重填」= sk_preset1,页内的「通常哪几天洗澡」是同一份);
+//   「现在的方案」页(#/advisor/plan)离线可看(一句话、刷酸阶梯、细则、版本与撤销);未来 7 晚点「刮」即时重排(只给开了刮胡的人)、
+//   (7 晚 2.3.0 起在 #/advisor/week,顾问首页一条「→」行进去;今晚那一格和今晚页刮胡开关是同一份;「存成每周习惯 / 按习惯重填」= sk_preset1 的刮胡位,
+//    页内的「通常哪几天刮胡」是同一份;洗澡不在这一页,按「隔几天洗」只在今晚页的洗澡模块和洗澡页);
 //   对话 SSE:顾问改今晚 / 改方案直接生效 + 修订线,今晚页那条和对话里这条撤销 / 重做联动;出方案、复盘;
 //   没登录 / 邀请制(邀请码开通)/ 连不上 / 额度用完 / 没回应(只核一次,不循环打 /api/me)都不白屏;
-//   顾问首页只有对话 + 两条「→」行(方案 / 常识各一页),极简模式也一样;常识(#/advisor/guide)写死离线可看、刮胡 / HRT 两节按档案门控、「问顾问这一条」只预填不发送。
+//   顾问首页只有对话 + 三条「→」行(方案 / 7 晚 / 常识各一页),极简模式也一样;常识(#/advisor/guide)写死离线可看、刮胡 / HRT 两节按档案门控、「问顾问这一条」只预填不发送。
 //   跑:node t/v2-b-advisor.mjs [块名关键词]
 import { run, tab, click, log, sleep, DATA, text, has, design } from './v2-b-lib.mjs';
 
@@ -13,7 +14,7 @@ const advView = p => p.eval(ADV + `return {line:(q('#adv-line')||{}).textContent
     note:(q('#adv-n7-note')||{}).textContent||'',revs:qa('#adv-log .rev').map(x=>x.dataset.state+':'+((x.querySelector('.rev-act')||{}).textContent||'')),
     guide:qa('#adv-guide .g-head').map(x=>x.textContent.trim()),asks:qa('#adv-guide [data-gask]').length,minfold:!!q('#adv-minfold'),minOpen:!!(q('#adv-minfold')||{}).open,
     quick:qa('#adv-quick .chip').map(x=>x.textContent),hist:(q('#adv-hist summary')||{}).textContent||''}`);
-// 二级页直达(DESIGN §3):#/advisor/plan · #/advisor/guide · #/tonight/week;tab 点一下回首页
+// 二级页直达(DESIGN §3):#/advisor/plan · #/advisor/week · #/advisor/guide;tab 点一下回首页
 async function go(p, hash, ms = 400) { await p.eval(`location.hash=${JSON.stringify(hash)};return 1`); await sleep(ms); }
 async function say(p, msg, waitMs = 4000) {
     await p.eval(`const t=document.getElementById('adv-text');t.value=${JSON.stringify(msg)};t.dispatchEvent(new Event('input'));document.getElementById('adv-send').click();return 1`);
@@ -29,7 +30,7 @@ await run('v2-b-advisor', [
         S.ok(home.acc === 'out' && !home.dock && await has(p, '#adv-access [data-act=signin]'), '没登录:问顾问那一块说「要先登录」+ 登录按钮,没有输入框', home.acc);
         S.ok(!(await has(p, '#adv-plan')) && !(await has(p, '#adv-week')) && !(await has(p, '#adv-guide')) && !(await has(p, '#adv-minfold')), '顾问首页只有对话:没有方案、7 晚、常识,也没有极简折叠', home);
         const nav = await p.eval(`return [...document.querySelectorAll('#advisor .nav-row')].map(a=>({id:a.id,href:a.getAttribute('href'),now:(a.querySelector('.nav-now')||{}).textContent||''}))`);
-        S.ok(nav.length === 2 && nav[0].href === '#/advisor/plan' && /^v\d+ · \d+\/\d+$/.test(nav[0].now) && nav[1].href === '#/advisor/guide', '首页两条「→」行:现在的方案(右边写 v几 · 日期)、护肤常识', nav);
+        S.ok(nav.length === 3 && nav[0].href === '#/advisor/plan' && /^v\d+ · \d+\/\d+$/.test(nav[0].now) && nav[1].href === '#/advisor/week' && /^(今晚刷酸|下次刷酸 周.|这 7 晚没排酸)$/.test(nav[1].now) && nav[2].href === '#/advisor/guide', '首页三条「→」行:现在的方案(右边写 v几 · 日期)、接下来 7 晚(右边写下次刷酸)、护肤常识', nav);
         // 点进方案页:页头 h1 + 返回键,返回回到首页
         await click(p, '#adv-go-plan', 400);
         const pg = await p.eval(`return {h:location.hash,t:(document.querySelector('#advisor .pg-t')||{}).textContent,back:(document.querySelector('#advisor .pg-back')||{}).textContent,plan:!!document.getElementById('adv-plan')}`);
@@ -46,11 +47,23 @@ await run('v2-b-advisor', [
         await go(p, '#/advisor/guide');
         v = await advView(p);
         S.ok(v.guide.length >= 8 && v.guide.includes('刮胡 = 机械性去角质') && !v.guide.includes('HRT 和长痘') && v.asks === 0, '④ 常识(#/advisor/guide):写死、离线可看;刮胡那节给开了刮胡的人;没开 HRT 看不到 HRT 那节;没开通不露「问顾问这一条」', v.guide);
-        // ② 接下来 7 晚:直达 #/tonight/week 画得出 7 晚和 set-habit / set-timing
-        await go(p, '#/tonight/week');
+        // ② 接下来 7 晚(2.3.0 从今晚搬到顾问):首页一条「→」行,右边写下次刷酸;直达 #/advisor/week 画得出 7 晚和 set-habit / set-timing
+        await tab(p, 'advisor', 300);
+        const row = await p.eval(`const a=document.getElementById('adv-go-week');return {href:a&&a.getAttribute('href'),now:a?(a.querySelector('.nav-now')||{}).textContent:'',n7:!!document.getElementById('adv-n7'),tn:!!document.getElementById('tn-go-week')}`);
+        S.ok(row.href === '#/advisor/week' && /^(今晚刷酸|下次刷酸 周.|这 7 晚没排酸)$/.test(row.now) && !row.n7, '顾问首页:「接下来 7 晚」→ 行,右边写下次刷酸是哪晚(不提洗澡);首页本身没有 7 晚', row);
+        await click(p, '#adv-go-week', 400);
         v = await advView(p);
-        S.ok(v.n7 === 7 && v.shave === 7, '② 接下来 7 晚(直达 #/tonight/week):7 格,开了刮胡的人每格有「刮」', v);
-        S.ok(await has(p, '#tonight .pg-t') && /接下来 7 晚/.test(await text(p, '#tonight .pg-t')) && await has(p, '#set-habit') && await has(p, '#set-timing') && await has(p, '#set-shower') && await has(p, '#set-shavedays'), '页内:h1「接下来 7 晚」+ 每周洗澡 / 刮胡习惯(set-habit)+ 刷酸时机(set-timing)');
+        S.ok(v.n7 === 7 && v.shave === 7 && await p.eval(`return location.hash`) === '#/advisor/week', '② 接下来 7 晚(#/advisor/week):7 格,开了刮胡的人每格有「刮」', v);
+        S.ok(await has(p, '#advisor .pg-t') && /接下来 7 晚/.test(await text(p, '#advisor .pg-t')) && await has(p, '#set-habit') && await has(p, '#set-timing') && await has(p, '#set-shavedays'), '页内:h1「接下来 7 晚」+ 每周刮胡习惯(set-habit)+ 刷酸时机(set-timing)');
+        S.ok(!(await has(p, '#set-shower')) && !(await has(p, '#adv-n7 [data-k=shower]')) && !/洗澡/.test(await text(p, '#adv-week')), '7 晚页没有洗澡:格子里没有「澡」、没有每周洗澡习惯、说明里不提洗澡(洗澡的家是今晚页的洗澡模块)');
+        // 旧地址 #/tonight/week(书签、主屏快捷方式)照样到这一页
+        await go(p, '#/tonight/week', 400);
+        S.ok(await p.eval(`return location.hash==='#/advisor/week' && !!document.querySelector('#advisor #adv-n7')`), '旧地址 #/tonight/week:换成 #/advisor/week');
+        // 刷酸时机在这一页改:写进档案,重画后还停在这一页
+        await click(p, '#set-timing [data-v="avoid"]', 300);
+        const t1 = await p.eval(`const d=${DATA};return {h:location.hash,tm:d.sk_profile1.acidTiming,n7:document.querySelectorAll('#adv-n7 .n7-d').length}`);
+        S.ok(t1.tm === 'avoid' && t1.h === '#/advisor/week' && t1.n7 === 7, '在 7 晚页改「刷酸时机」:写进档案(acidTiming),重画后还停在这一页', t1);
+        await click(p, '#set-timing [data-v=""]', 300);
         // 今晚那格「刮」= 今晚页的开关(同一份 sk_tn1 / sk_wk1)
         const today = await p.eval(`return __d(0)`);
         await click(p, `#adv-n7 .n7-b[data-date="${today}"][data-k=shave]`, 300);
@@ -58,54 +71,60 @@ await run('v2-b-advisor', [
         S.ok(d1.tn && d1.tn.shave === true && d1.pressed === 'true', '点今晚的「刮」:写进今晚(sk_tn1),按钮 aria-pressed', d1);
         S.ok(d1.note.length > 4, '点完下面一行说改了什么(酸挪到哪晚 / 排的没变)', d1.note);
         await tab(p, 'tonight', 300);
-        S.ok(/刮胡夜/.test(await text(p, '#tonight-h')), '今晚页同一份:标题变「今晚 · 刮胡夜」');
-        await go(p, '#/tonight/week', 300);
+        S.ok(/刮胡夜/.test(await text(p, '#tonight-h')), '今晚页同一份:标题变「今晚刮胡夜」');
+        await go(p, '#/advisor/week', 300);
         await click(p, `#adv-n7 .n7-b[data-date="${today}"][data-k=shave]`, 300);
-        // 未来某晚的「澡」→ sk_wk1
+        // 未来某晚的「刮」→ sk_wk1
         const d3 = await p.eval(`return __d(3)`);
-        const before = await p.eval(`return document.querySelector('#adv-n7 .n7-b[data-date="${d3}"][data-k=shower]').getAttribute('aria-pressed')`);
-        await click(p, `#adv-n7 .n7-b[data-date="${d3}"][data-k=shower]`, 300);
-        const after = await p.eval(`return document.querySelector('#adv-n7 .n7-b[data-date="${d3}"][data-k=shower]').getAttribute('aria-pressed')`);
-        S.ok(before !== after, '点未来某晚的「澡」:即时改(排班 sk_wk1),重画后还在', { before, after });
-        // 存成每周习惯 → sk_preset1(+ showerDays 镜像);设置里看到的是同一份
+        const before = await p.eval(`return document.querySelector('#adv-n7 .n7-b[data-date="${d3}"][data-k=shave]').getAttribute('aria-pressed')`);
+        await click(p, `#adv-n7 .n7-b[data-date="${d3}"][data-k=shave]`, 300);
+        const after = await p.eval(`return document.querySelector('#adv-n7 .n7-b[data-date="${d3}"][data-k=shave]').getAttribute('aria-pressed')`);
+        S.ok(before !== after, '点未来某晚的「刮」:即时改(排班 sk_wk1),重画后还在', { before, after });
+        // 存成每周习惯 → sk_preset1 的刮胡位;洗澡位和 showerDays 原样不动(洗澡不在这里管)
+        const sd0 = await p.eval(`return JSON.stringify(${DATA}.sk_profile1.showerDays||null)`);
         await click(p, '#adv-habit-save', 300);
-        const h = await p.eval(`const d=${DATA};return {pre:d.sk_preset1,sd:d.sk_profile1.showerDays,btn:document.getElementById('adv-habit-save').textContent,
-            nights:[...document.querySelectorAll('#adv-n7 .n7-d')].map(x=>({date:x.dataset.day,sh:x.querySelector('[data-k=shower]').getAttribute('aria-pressed')==='true'}))}`);
+        const h = await p.eval(`const d=${DATA};return {pre:d.sk_preset1,sd:JSON.stringify(d.sk_profile1.showerDays||null),btn:document.getElementById('adv-habit-save').textContent,
+            nights:[...document.querySelectorAll('#adv-n7 .n7-d')].map(x=>({date:x.dataset.day,sv:x.querySelector('[data-k=shave]').getAttribute('aria-pressed')==='true'}))}`);
         const dow = ds => new Date(ds + 'T12:00:00').getDay();
-        const okPre = h.pre && h.pre.length === 7 && h.nights.every(n => !!(h.pre.find(x => x.dow === dow(n.date)) || {}).shower === n.sh);
-        S.ok(okPre && JSON.stringify(h.sd) === JSON.stringify(h.pre.filter(x => x.shower).map(x => x.dow).sort((a, b) => a - b)) && h.btn === '已存成每周习惯', '「存成每周习惯」= sk_preset1(单一来源)+ showerDays 镜像', h);
-        const st = await p.eval(`return [...document.querySelectorAll('#set-shower .chip')].map(b=>+b.dataset.hd+':'+b.getAttribute('aria-pressed'))`);
-        S.ok(st.length === 7 && st.every(x => { const [d, on] = x.split(':'); return (on === 'true') === !!(h.pre.find(y => y.dow === +d) || {}).shower; }), '同一页里「通常哪几天洗澡」显示同一份习惯', st);
+        const okPre = h.pre && h.pre.length === 7 && h.nights.every(n => !!(h.pre.find(x => x.dow === dow(n.date)) || {}).shave === n.sv);
+        const sh0 = JSON.parse(sd0) || [], mirror = JSON.stringify(h.pre.filter(x => x.shower).map(x => x.dow).sort((a, b) => a - b));
+        S.ok(okPre && h.sd === mirror && JSON.parse(h.sd).length === sh0.length && h.btn === '已存成每周习惯', '「存成每周习惯」= sk_preset1 的刮胡位(单一来源);洗澡位原样带着(showerDays 镜像照旧,天数不变)', { h, sd0 });
+        const st = await p.eval(`return [...document.querySelectorAll('#set-shavedays .chip')].map(b=>+b.dataset.hd+':'+b.getAttribute('aria-pressed'))`);
+        S.ok(st.length === 7 && st.every(x => { const [d, on] = x.split(':'); return (on === 'true') === !!(h.pre.find(y => y.dow === +d) || {}).shave; }), '同一页里「通常哪几天刮胡」显示同一份习惯', st);
         await go(p, '#/settings/skin', 350);
-        S.ok(!(await has(p, '#settings #set-habit')) && !(await has(p, '#settings #set-shower')) && !(await has(p, '#settings #set-timing')) && await has(p, '#settings .set-page'), '设置 → 你的皮肤里不再有洗澡习惯 / 刷酸时机(全 App 只在 7 晚页改)');
-        await go(p, '#/tonight/week', 300);
+        S.ok(!(await has(p, '#settings #set-habit')) && !(await has(p, '#settings #set-shower')) && !(await has(p, '#settings #set-timing')) && await has(p, '#settings .set-page'), '设置 → 你的皮肤里没有洗澡 / 刮胡习惯和刷酸时机(刮胡、刷酸只在 7 晚页改)');
+        await go(p, '#/advisor/week', 300);
         await p.eval(`document.querySelectorAll('#sheet-root .sheet-ov').forEach(o=>o.remove());return 1`);
         // 改一晚 → 按习惯重填 → 回到习惯
-        await click(p, `#adv-n7 .n7-b[data-date="${d3}"][data-k=shower]`, 300);
+        await click(p, `#adv-n7 .n7-b[data-date="${d3}"][data-k=shave]`, 300);
         await click(p, '#adv-habit-fill', 200);
         await p.eval(`const b=[...document.querySelectorAll('#sheet-root .sheet-actions .btn-primary')].pop();b.click();return 1`); await sleep(300);
-        const back = await p.eval(`return document.querySelector('#adv-n7 .n7-b[data-date="${d3}"][data-k=shower]').getAttribute('aria-pressed')`);
+        const back = await p.eval(`return document.querySelector('#adv-n7 .n7-b[data-date="${d3}"][data-k=shave]').getAttribute('aria-pressed')`);
         S.ok(back === after, '「按习惯重填」(确认后):那晚回到习惯', { back, after });
+        await click(p, '#advisor .pg-back', 400);
+        S.ok(await p.eval(`return location.hash==='#/advisor' && !document.getElementById('adv-n7') && !!document.getElementById('adv-go-week')`), '返回键:回到顾问首页');
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
     ['极简模式 · 对话为主,方案和 7 晚各一页', async ({ S, open }) => {
         const p = await open({ seed: 'minimal', mode: 'on', login: true });
         await tab(p, 'advisor', 400);
         const v = await advView(p);
-        S.ok(!v.minfold && !(await has(p, '#adv-plan')) && !(await has(p, '#adv-week')) && await has(p, '#adv-go-plan') && await has(p, '#adv-go-guide'), '极简:顾问首页只有对话 + 两条「→」行(没有折叠,方案在「现在的方案」页)', v);
+        S.ok(!v.minfold && !(await has(p, '#adv-plan')) && !(await has(p, '#adv-week')) && await has(p, '#adv-go-plan') && await has(p, '#adv-go-week') && await has(p, '#adv-go-guide'), '极简:顾问首页只有对话 + 三条「→」行(没有折叠,方案、7 晚各一页)', v);
         S.ok(v.dock && v.quick.length === 2 && v.quick.every(x => !/刷酸/.test(x)), '对话在前,快捷问题是极简那两句', v.quick);
         S.ok(/^v\d+/.test(await text(p, '#adv-go-plan .nav-now')), '「现在的方案」那条右边是 v几 · 日期');
         await go(p, '#/advisor/plan');
         const v2 = await advView(p);
         S.ok(/刷酸/.test(v2.line) && v2.lad.length >= 3, '方案页:一句话、阶梯都在', v2);
-        await go(p, '#/tonight/week');
+        await go(p, '#/advisor');
+        await click(p, '#adv-go-week', 400);
         const v3 = await advView(p);
-        S.ok(v3.n7 === 7 && v3.shave === 0, '7 晚页:7 格;没开刮胡的人没有「刮」', v3);
-        const d3 = await p.eval(`return __d(2)`);
-        const b0 = await p.eval(`return document.querySelector('#adv-n7 .n7-b[data-date="${d3}"][data-k=shower]').getAttribute('aria-pressed')`);
-        await click(p, `#adv-n7 .n7-b[data-date="${d3}"][data-k=shower]`, 300);
-        const b1 = await p.eval(`return document.querySelector('#adv-n7 .n7-b[data-date="${d3}"][data-k=shower]').getAttribute('aria-pressed')`);
-        S.ok(b0 !== b1 && /\/tonight\/week$/.test(await p.eval(`return location.hash`)), '在 7 晚页点「澡」:即时改,重画后还停在这一页');
+        S.ok(v3.n7 === 7 && v3.shave === 0 && await p.eval(`return location.hash`) === '#/advisor/week', '7 晚页(从顾问首页进):7 格;没开刮胡的人没有「刮」', v3);
+        const w3 = await p.eval(`return {btns:document.querySelectorAll('#adv-n7 .n7-b').length,habit:!!document.getElementById('set-habit'),save:!!document.getElementById('adv-habit-save'),timing:!!document.getElementById('set-timing'),txt:document.getElementById('advisor').innerText}`);
+        S.ok(!w3.btns && !w3.habit && !w3.save && w3.timing && !/洗澡/.test(w3.txt.replace(/避开刚洗完澡|洗澡夜优先|刚洗完热水澡/g, '')), '极简 + 没开刮胡:7 晚格子里没有按钮、没有每周习惯,只剩刷酸时机;不提洗澡(刷酸时机的选项除外)', w3);
+        // 点日子看那晚怎么做
+        await p.eval(`document.querySelector('#adv-n7 [data-night]').click();return 1`); await sleep(250);
+        S.ok(await p.eval(`const ov=document.getElementById('night-sheet');return !!ov && !/洗澡/.test(ov.innerText)`), '点某一晚:看那晚的步骤,不写洗不洗澡');
+        await p.eval(`document.querySelectorAll('#sheet-root .sheet-ov').forEach(o=>o.remove());return 1`);
         await go(p, '#/advisor/guide');
         const v4 = await advView(p);
         S.ok(!v4.guide.includes('刮胡 = 机械性去角质') && !v4.guide.includes('HRT 和长痘') && v4.guide.includes('怎么用'), '常识:Cici 视角没有刮胡、HRT 两节', v4.guide);
@@ -280,9 +299,9 @@ await run('v2-b-advisor', [
         const th = await p.eval(`return document.documentElement.dataset.theme`);
         const pr = await design(p, '#advisor');
         S.ok(th === 'dark' && !pr.emoji.length && !pr.lowCr.length && !pr.brightN && !pr.smallN, '跟随系统进深色:对比度够、没有刺眼的亮块、触控 ≥44', pr);
-        for (const h of ['#/advisor/plan', '#/advisor/guide', '#/tonight/week']) {
+        for (const h of ['#/advisor/plan', '#/advisor/guide', '#/advisor/week']) {
             await go(p, h, 400);
-            const q2 = await design(p, h.startsWith('#/tonight') ? '#tonight' : '#advisor');
+            const q2 = await design(p, '#advisor');
             S.ok(!q2.emoji.length && !q2.lowCr.length && !q2.brightN && !q2.smallN, '深色 ' + h + ':对比度够、没有刺眼的亮块、触控 ≥44', q2);
         }
         S.ok(!p.errors.length, '0 console error', p.errors);

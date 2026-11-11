@@ -34,7 +34,9 @@ export function createAiClient(env) {
     const st = { me: null, meUid: null, meErr: null, down: false, quota: null, chain: Promise.resolve(), cur: null, pending: new Set(), gen: 0 };
     // 每个请求的总时限(毫秒):卡住的请求会把串行队列整条堵死(今晚 / 出方案 / 复盘 / 反馈全等着),到点就放弃,按连不上处理
     //   busyWait:后端回 429「上一个请求还没跑完」时最多等多久(前端超时 / 停一下之后,后端那次还在跑,一次 LLM 调用常要半分钟到一分多钟)
-    const LIMIT = Object.assign({ point: 90000, assess: 120000, shop: 150000, streamHead: 90000, streamIdle: 45000, busyWait: 90000 }, env.limits || {});
+    //   shop 240 秒:11/10 起「要不要买」每一环要查同类、逐个核成分和价、排 3~5 名,后端联网搜索上限 8 → 14 次(10/29 实测 8 次就用了 72 秒);
+    //   150 秒会在后端还在查的时候先放弃(前端写没查成,后端照样跑完扣费),所以放宽。后端自己的上限是 600 秒
+    const LIMIT = Object.assign({ point: 90000, assess: 120000, shop: 240000, streamHead: 90000, streamIdle: 45000, busyWait: 90000 }, env.limits || {});
     // 通用说法:这里不知道调用方在做什么(今晚 / 拍照分析 / 读成分表…),「今晚照离线规则」这类上下文由各屏自己补
     const TIMEOUT_MSG = '顾问这次太久没回应。';
     const DOWN_MSG = '顾问暂时连不上。';

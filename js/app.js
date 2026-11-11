@@ -1,5 +1,5 @@
 // ══ 启动 + 路由(4 个 tab)+ 登录态 ══════════════════════════════════════════════════════════════
-// 顺序(和 v1 一样,别乱):拿到窗口锁 → 打开信封 → 'system' 维护(旧键 / 档案 / 货架迁移 / 状态清洗 / 洗澡习惯对齐 / 新的一天 / 方案 / planday)
+// 顺序(和 v1 一样,别乱):拿到窗口锁 → 打开信封 → 'system' 维护(旧键 / 档案 / 货架迁移 / 状态清洗 / 洗澡习惯对齐 + 改成隔 x 天的一次性迁移 / 新的一天 / 方案 / planday)
 //   → 画外壳 → 连 Firebase(登录态到了才同步)→ 注册 SW。
 // 【要紧】所有模块 import 时都不碰存储;拿不到锁时 boot() 不跑,一个字不动(sync.js 的 startWithLock)。
 // 这里不往 window 上挂任何东西(没有测试钩子;无头测试直接 import 模块看)。
@@ -8,7 +8,7 @@ import { createSync, startWithLock } from './sync.js';
 import { today, localD, mdOf, dowOf } from './clock.js';
 import { seedProfile, loadProfile, autoMatchProfile } from './model/profile.js';
 import { applyShelfMigrations, sanitizePS } from './model/products.js';
-import { syncHabitSources, initTN } from './model/week.js';
+import { syncHabitSources, migrateShowerInterval, initTN } from './model/week.js';
 import { absorbPrescribedHistory } from './model/journal.js';
 import { syncRegimen } from './model/regimen.js';
 import { buildWorld, planNow } from './model/world.js';
@@ -17,7 +17,6 @@ import { createAiClient, aiBase } from './ai/client.js';
 import { createPush } from './ai/push.js';
 import { openSheet, closeSheet, hasSheet, toast, sysAlert, sysConfirm, download, bindEscape, esc, ico } from './ui/sheets.js';
 import { watchTheme, refreshSettings } from './ui/settings.js';
-import { openShowerSheet, showerLabel } from './ui/shower.js';
 import { photoAnalysisOn } from './ui/capture.js';
 import { onBoot as oobeOnBoot, onFirstSnapshot as oobeOnFirstSnapshot } from './ui/oobe.js';
 import { ensureShopRunner } from './ui/products.js';
@@ -61,6 +60,7 @@ function boot() {
     function maintain() {
         const t = today();
         syncHabitSources(store, t);
+        migrateShowerInterval(store, t);    // 洗澡从「每周哪几天」换成「隔 x 天」:只在 showerEvery 还没有时跑一次('system',幂等)
         applyShelfMigrations(store, t);
         sanitizePS(store);
         initTN(store, t);
@@ -79,9 +79,7 @@ function boot() {
     function renderHeader() {
         const t = today(), el = document.getElementById('hdr-date');
         if (el) el.textContent = mdOf(t) + ' ' + WEEK[dowOf(t)];
-        // 今晚洗不洗:每一页都看得到(点开是日历)
-        const sh = document.getElementById('btn-shower');
-        if (sh) try { const v = showerLabel(app.world()); sh.dataset.on = v.on ? '1' : '0'; sh.setAttribute('aria-label', '洗澡安排：' + v.text); sh.firstElementChild.textContent = v.text; } catch (e) { }
+        // 页头只有日期和印章。洗澡以前在这里有一颗「今晚洗澡」胶囊,11/10 起洗澡只有一个家:今晚页的洗澡模块 + 洗澡页(ui/shower.js)
     }
     // 印章字:和 v1 同一个字段 profile.seal(v2 早期写过 stamp,读的时候兼容);没设就退到登录名的首个汉字(v1 sealChar)
     function sealChar(p) {
@@ -102,6 +100,7 @@ function boot() {
     function parseRoute(h) {
         const parts = String(h || '').replace(/^#?\/?/, '').split('/').filter(Boolean).map(x => { try { return decodeURIComponent(x); } catch (e) { return x; } });
         let tab = parts[0] || 'tonight', page = parts[1] || '', arg = parts.slice(2).join('/');
+        if (tab === 'tonight' && page === 'week') tab = 'advisor';   // 2.3.0 起 7 晚那一页在顾问下;旧地址(书签、主屏快捷方式)照样能到
         const sc = screenOf(tab);
         if (!sc) { tab = 'tonight'; page = ''; arg = ''; }
         else if (page && !(sc.pages && sc.pages[page])) { page = ''; arg = ''; }
@@ -130,7 +129,7 @@ function boot() {
         if (moved) try { window.scrollTo(0, how === 'push' ? 0 : (scrollAt[key] || 0)); } catch (e) { }
         if (moved && (r.page || r.tab === 'settings')) { const h = document.querySelector('#' + r.tab + ' .pg-t'); if (h) try { h.focus({ preventScroll: true }); } catch (e) { } }
     }
-    // go('tonight/week') 入栈;go('advisor', {replace:true}) 换掉当前这条。tab 本身(没有页)默认 replace
+    // go('advisor/week') 入栈;go('advisor', {replace:true}) 换掉当前这条。tab 本身(没有页)默认 replace
     function go(path, o) {
         o = o || {};
         const r = parseRoute(path);
@@ -151,6 +150,8 @@ function boot() {
     }
     function onHistory() {
         const r = parseRoute(location.hash);
+        // 旧地址 #/tonight/week 改写成它现在的家(地址栏和返回键都按 #/advisor/week 走);历史里的 sk 标记原样带着
+        if (/^#\/?tonight\/week(\/|$)/.test(location.hash)) try { history.replaceState(history.state, '', hrefOf(r)); } catch (e) { }
         const cur = routes[current];
         if (cur && keyOf(cur) === keyOf(r) && current === r.tab) return;   // popstate 和 hashchange 都会来,第二次不重画
         route(r, 'pop');
@@ -188,7 +189,7 @@ function boot() {
             const b = root.querySelector('[data-reload]'); if (b) b.addEventListener('click', () => location.reload());
             try { console.error(e); } catch (x) { }
         }
-        renderHeader();   // 页头的「今晚洗澡」跟着今晚页、7 晚页的改动走
+        renderHeader();   // 页头的日期跟着翻页(凌晨 3 点算新的一天)
     }
     // 主屏 App 里没有系统的返回手势:二级页从左边缘 24px 内起手右滑,页面跟手;过 1/3 宽或甩得够快就返回(DESIGN.md §2)
     function bindEdgeSwipe() {
@@ -293,6 +294,15 @@ function boot() {
     applyVisibility();
     renderHeader();
     bindEscape();
+    // 页头下沿:内容滚上去以后无衬线页头底下出一条细线(iOS 实心导航栏滚动后那条边),交代「这里是边界」,不然字被页头硬切掉一半。
+    //   只切一个 class,不加模糊、不渐隐(Cait:「所有页面cici外观模式不要模糊淡出」);线画在 css/sans.css
+    const hdrEl = document.querySelector('.hdr');
+    if (hdrEl) {
+        let hdrRaf = 0;
+        const hdrEdge = () => { hdrRaf = 0; hdrEl.classList.toggle('scrolled', (window.scrollY || 0) > 0); };
+        window.addEventListener('scroll', () => { if (!hdrRaf) hdrRaf = requestAnimationFrame(hdrEdge); }, { passive: true });
+        hdrEdge();
+    }
     // 点 tab:切过去(不入栈);已经在这个 tab 的二级页 → 回这个 tab 首页;已在首页 → 回到顶上(HIG · Tab bars)
     document.querySelectorAll('.tab[data-tab]').forEach(t => t.addEventListener('click', () => {
         const id = t.dataset.tab, r = routes[id];
@@ -301,7 +311,6 @@ function boot() {
         else go(id);
     }));
     const sealBtn = document.getElementById('btn-settings'); if (sealBtn) sealBtn.addEventListener('click', () => { if (current !== 'settings') go('settings'); });
-    const shBtn = document.getElementById('btn-shower'); if (shBtn) shBtn.addEventListener('click', () => openShowerSheet(app));
     // 站内链接 <a href="#/…">:走 go() 入栈(带 sk 标记,返回键才知道能 history.back());返回键委托
     document.addEventListener('click', e => {
         const bk = e.target.closest && e.target.closest('[data-back]');

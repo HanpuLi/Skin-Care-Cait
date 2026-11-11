@@ -1,6 +1,6 @@
 // B 路 · 设置(印章打开的 sheet;无头 Chrome,假顾问后端,不花钱):
 //   怎么用(完整 / 极简)+ 记录页显示开关、刮胡、HRT(按人)、印章字、深浅色(默认跟随系统,只存本机)、
-//   洗澡习惯(和顾问页「存成每周习惯」同一份 sk_preset1 + showerDays 镜像)、刷酸时机、照片分析(按账号,非主账号默认关、本人同意才开)、
+//   刮胡习惯(和「接下来 7 晚」的「存成每周习惯」同一份 sk_preset1;2.3.0 起洗澡不在这里)、刷酸时机、照片分析(按账号,非主账号默认关、本人同意才开)、
 //   顾问(邀请码、记得的事、模型与用量只给主账号)、同步状态行 / 恢复副本 / 导出导入、数据说明(数据流写清楚)。
 //   跑:node t/v2-b-settings.mjs [块名关键词]
 import fs from 'node:fs';
@@ -8,7 +8,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { run, tab, click, sleep, DATA, text, has, design, setFile, OWNER_EMAIL } from './v2-b-lib.mjs';
 
-// 设置是一屏 + 5 个二级页(DESIGN.md §3);洗澡习惯 / 刷酸时机在「今晚 → 接下来 7 晚」(#/tonight/week)
+// 设置是一屏 + 5 个二级页(DESIGN.md §3);刮胡习惯 / 刷酸时机在「顾问 → 接下来 7 晚」(#/advisor/week);洗澡在今晚页的洗澡模块
 const openSet = async (p, pg) => { await p.eval(`location.hash=${JSON.stringify(pg && pg.indexOf('/') > 0 ? '#/' + pg : '#/settings' + (pg ? '/' + pg : ''))};return 1`); await sleep(400); };
 const seg = (p, name, v) => p.eval(`document.querySelector('.panel.active [data-seg=${name}] [data-v="${v}"]').click();return 1`).then(() => sleep(200));
 const sw = (p, id) => p.eval(`const el=document.getElementById('${id}');el.checked=!el.checked;el.dispatchEvent(new Event('change'));return el.checked`).then(async r => { await sleep(200); return r; });
@@ -22,7 +22,7 @@ await run('v2-b-settings', [
         S.ok(JSON.stringify(rows) === JSON.stringify(['账号与顾问', '你的皮肤', '提醒与外观', '数据', '帮助']), '设置首页 5 行,各进一个二级页', rows);
         const secs = [];
         for (const pg of ['account', 'skin', 'look', 'data', 'help']) { await openSet(p, pg); secs.push(...await p.eval(`return [...document.querySelectorAll('#settings .sheet-sec .sec-t')].map(x=>x.textContent)`)); }
-        S.ok(['账号与同步', '怎么用', '你的情况', '照片分析', '外观', '顾问', '数据'].every(x => secs.some(y => y.indexOf(x) === 0)) && !secs.some(y => /刷酸时机|洗澡/.test(y)), '二级页一段一件事;洗澡习惯 / 刷酸时机不在设置里(只在接下来 7 晚)', secs);
+        S.ok(['账号与同步', '怎么用', '你的情况', '照片分析', '外观', '顾问', '数据'].every(x => secs.some(y => y.indexOf(x) === 0)) && !secs.some(y => /刷酸时机|洗澡|刮胡习惯|哪几天/.test(y)), '二级页一段一件事;洗澡、刮胡习惯、刷酸时机都不在设置里', secs);
         await openSet(p, 'account');
         S.ok(await has(p, '#sync-line') && await has(p, '#sync-choose') && await has(p, '#auth-btn'), '同步状态行 / 选一份记录 / 登录按钮的 id 没变(sync.js 直接找它们)');
         // 怎么用:极简 → 记录页开关
@@ -79,21 +79,24 @@ await run('v2-b-settings', [
         S.ok(!pr.smallN, '可点的都 ≥44', pr.small);
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
-    ['洗澡习惯 = sk_preset1 / 刷酸时机', async ({ S, open }) => {
+    ['刮胡习惯 = sk_preset1 / 刷酸时机(都在 #/advisor/week);洗澡不在这里', async ({ S, open }) => {
         const p = await open({ seed: 'full' });
-        await openSet(p, 'tonight/week');
-        const wed = await p.eval(`return document.querySelector('#set-shower [data-hd="3"]').getAttribute('aria-pressed')`);
-        await click(p, '#set-shower [data-hd="3"]', 250);
-        const d = await p.eval(`const d=${DATA};return {pre:d.sk_preset1,sd:d.sk_profile1.showerDays,wk:d.sk_wk1}`);
+        await openSet(p, 'advisor/week');
+        S.ok(!(await has(p, '#set-shower')) && await has(p, '#set-shavedays'), '7 晚页底下只有「通常哪几天刮胡」,没有每周洗澡(洗澡按「隔几天洗」,在洗澡页)');
+        const wed = await p.eval(`return document.querySelector('#set-shavedays [data-hd="3"]').getAttribute('aria-pressed')`);
+        const sd0 = await p.eval(`return JSON.stringify(${DATA}.sk_profile1.showerDays||null)`);
+        await click(p, '#set-shavedays [data-hd="3"]', 250);
+        const d = await p.eval(`const d=${DATA};return {pre:d.sk_preset1,sd:JSON.stringify(d.sk_profile1.showerDays||null),wk:d.sk_wk1}`);
         const w3 = d.pre && d.pre.find(x => x.dow === 3);
-        S.ok(w3 && String(w3.shower) !== wed && JSON.stringify(d.sd) === JSON.stringify(d.pre.filter(x => x.shower).map(x => x.dow).sort((a, b) => a - b)), '点「三」:写 sk_preset1 + showerDays 镜像(同一份)', { w3, sd: d.sd });
+        const sh0 = JSON.parse(sd0) || [], mirror = JSON.stringify(d.pre.filter(x => x.shower).map(x => x.dow).sort((a, b) => a - b));
+        S.ok(w3 && String(w3.shave) !== wed && d.sd === mirror && JSON.parse(d.sd).length === sh0.length, '点「三」:写 sk_preset1 的刮胡位;洗澡位原样带着(showerDays 镜像照旧,天数不变)', { w3, sd: d.sd, sd0 });
         await p.eval(`document.querySelectorAll('#sheet-root .sheet-ov').forEach(o=>o.remove());return 1`);
-        await openSet(p, 'tonight/week');
-        const n7 = await p.eval(`return [...document.querySelectorAll('#adv-n7 .n7-d')].map(x=>({dow:new Date(x.dataset.day+'T12:00:00').getDay(),today:x.classList.contains('today'),sh:x.querySelector('[data-k=shower]').getAttribute('aria-pressed')==='true'}))`);
+        await openSet(p, 'advisor/week');
+        const n7 = await p.eval(`return [...document.querySelectorAll('#adv-n7 .n7-d')].map(x=>({dow:new Date(x.dataset.day+'T12:00:00').getDay(),today:x.classList.contains('today'),sv:x.querySelector('[data-k=shave]').getAttribute('aria-pressed')==='true'}))`);
         const wd = n7.find(x => x.dow === 3 && !x.today);
-        S.ok(!wd || wd.sh === w3.shower, '顾问页未来 7 晚里的周三(不是今晚)跟着习惯变', { wd, w3 });
+        S.ok(!wd || wd.sv === w3.shave, '7 晚里的周三(不是今晚)跟着刮胡习惯变', { wd, w3 });
         // 刷酸时机
-        await openSet(p, 'tonight/week');
+        await openSet(p, 'advisor/week');
         await seg(p, 'timing', 'avoid');
         S.ok((await prof(p)).acidTiming === 'avoid' && /你手动定的/.test(await text(p, '#set-timing')), '刷酸时机:手动定「避开刚洗完澡」');
         await seg(p, 'timing', '');
@@ -142,7 +145,7 @@ await run('v2-b-settings', [
         const ex = await p.eval(`const j=JSON.parse(await window.__blob.text());return {name:window.__dl,keys:Object.keys(j),meta:j._meta,n:(j.sk_jrnl1||[]).length,theme:'sk_theme' in j,chat:'sk_aichat1' in j}`);
         S.ok(/^skincare_backup_\d{4}-\d{2}-\d{2}\.json$/.test(ex.name) && ex.keys.includes('sk_jrnl1') && ex.keys.includes('sk_profile1') && ex.n === 13 && !ex.theme && !ex.chat, '导出:全部云键(v1 / v2 互相能读的格式),不含本机键', ex);
         // 恢复备份:先另存一份恢复副本,再替换
-        const bk = { _meta: { version: 3 }, sk_jrnl1: [{ date: '2026-01-02', status: ['稳定'], products: [], note: '备份里的' }], sk_profile1: { shaving: false, hrt: false, minimalMode: false, onboarded: true, tour3: true, tourIA: true, tourV2: true }, sk_theme: 'dark' };
+        const bk = { _meta: { version: 3 }, sk_jrnl1: [{ date: '2026-01-02', status: ['稳定'], products: [], note: '备份里的' }], sk_profile1: { shaving: false, hrt: false, minimalMode: false, onboarded: true, tour3: true, tourIA: true, tourV2: true, tour23: true }, sk_theme: 'dark' };
         const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'skin-b-')), 'bk.json');
         fs.writeFileSync(f, JSON.stringify(bk));
         const rc0 = await p.eval(`return Object.keys(localStorage).filter(k=>k.startsWith('sk_sync_recovery:')).length`);

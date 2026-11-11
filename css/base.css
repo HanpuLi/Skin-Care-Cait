@@ -41,7 +41,8 @@ body.minimal .adv{display:none!important}
 .panel.active{display:block}
 .page-title{font:28px/var(--lh-title) var(--serif);color:var(--ink-strong);text-wrap:balance}
 .page-title .pre{color:var(--muted)}
-.sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
+/* 只给读屏的字:字号压到正文档(h2 默认 24px 会被量字号的验收算成第 7 档) */
+.sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;font-size:14px}
 .title-row{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);margin-top:var(--sp-1)}
 .say{margin-top:var(--sp-1);color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .say .why{color:var(--faint)}

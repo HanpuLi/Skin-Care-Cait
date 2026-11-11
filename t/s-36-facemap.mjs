@@ -32,7 +32,8 @@ export default async function ({ origin, S, open }) {
     }
     // ── 极简:入口在,默认收起;今天标过位置也不自动展开 ──
     {
-        const p = await boot(`minimal({extra:{sk_jrnl1:${J({ 0: { status: ['泛红'], spots: [['口周', '泛红']] } })}}})`);
+        // 极简模式今晚页的「记一下皮肤」2.3.0 起只在记录 tab 藏起来(hideRecords)时才有(平时在记录 tab)
+        const p = await boot(`minimal({profile:{hideRecords:true},extra:{sk_jrnl1:${J({ 0: { status: ['泛红'], spots: [['口周', '泛红']] } })}}})`);
         const r = await p.eval(`document.getElementById('tn-logskin').click();${W8(200)}${FM}`);
         S.ok(r.entry && r.exp === 'false' && !r.box && /已标/.test(r.txt || ''), '极简模式:入口在(写着已标几处),默认收起,标过也不自动展开', r);
         S.ok(!p.errors.length, '极简 0 报错', p.errors);

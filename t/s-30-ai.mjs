@@ -29,7 +29,7 @@ export default async function ({ origin, S }) {
             S.ok(!tn, '登录后停在今晚页:不弹(第一次进顾问页才弹)', tn);
             // 没看过说明之前不自动外发:今晚照离线排,给「先看一下」
             const tn0 = await p.eval(`${W8(300)}return {src:(document.getElementById('tn-src')||{}).textContent||'',n:(__AIF.log||[]).filter(x=>x.p==='/api/tonight').length}`);
-            S.ok(/先看一下/.test(tn0.src) && tn0.n === 0, '没看过「顾问会看到什么」:今晚页不自动请顾问,写明离线排法 + 「先看一下」', tn0);
+            S.ok(/先看一下/.test(tn0.src) && tn0.n === 0, '没看过「顾问会看到什么」:今晚页不自动请顾问,步骤下面一行「先看一下」', tn0);
             const r = await p.eval(`${tab('advisor')}const ov=document.getElementById('ai-privacy');return ov?{t:ov.querySelector('.sheet-t').textContent,b:ov.querySelector('.sheet-b').innerText,btn:[...ov.querySelectorAll('.sheet-actions .btn')].map(x=>x.textContent)}:null`);
             S.ok(r && r.t === '顾问会看到什么' && /Anthropic/.test(r.b) && /不存对话和照片/.test(r.b) && /只存在这台设备上/.test(r.b) && /设置 › 数据说明/.test(r.b) && r.btn.includes('知道了'),
                 '第一次进顾问页:弹「顾问会看到什么」(发到哪、存什么、不存什么,详细的在设置)', r);

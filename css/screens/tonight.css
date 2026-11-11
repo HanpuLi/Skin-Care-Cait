@@ -1,30 +1,54 @@
 /* ══ 今晚 ══════════════════════════════════════════════════════════════════════════════
-   四层:① 夜型标题 + 一句为什么 ② 今晚的情况(问句开关 + 即时影响)③ 最多一张提醒卡 ④ 步骤 → 完成今晚。
-   纸墨:层级靠字号和墨色;不铺色块、没有阴影;红只在就医卡(这一屏它加 tab 点 = 两处);修订线用 --rev。
+   一页从上到下(11/10 重排):① 眉题「今晚」+ 大标题夜型 + 一句为什么 ② 就医红线卡 ③ 洗澡模块(+ 刮胡问句)④ 其余提醒(最多一张卡)
+   ⑤ 修订线 + 步骤 ⑥ 完成今晚(完整模式)⑦ 要她动手时才有的一行小字。
+   纸墨「护理手册」:层级靠字号和墨色;分组靠通栏细线和左边竖线,不铺色块、没有阴影;红只在就医卡;修订线用 --rev。
+     线的规矩:同一处不出现两条挨着的线。标题下压一条;洗澡模块自带上下两条(shower.css),刮胡问句接在它下面只补底线;
+     步骤之间一条,第一步上面不画(前面不是线就是留白),最后一步下面由「完成今晚」的顶线收住。
+   无衬线「仪器」:规则都在文件末尾 :root[data-type="sans"] 下面:inset-grouped 卡片、字重分层、8 的倍数节奏。
    只放这一屏自己的规则;token 只在 css/tokens.css。 */
-#tonight .page-title{margin-top:var(--sp-1)}
-.tn-lead{margin-top:var(--sp-1);font:16px/var(--lh-body) var(--serif);color:var(--muted)}
 
-/* 修订线:顾问改了今晚 · 撤销(单独一行,始终可见;不铺底、不加圆角、不用红)。
-   压成一行贴在「今晚的步骤」下面:390×844 主屏 App 里,改过今晚也得在第一屏看到第一步;改了什么太长就截断(整句在 title 里),
+/* ── ① 标题区:眉题(等宽 12、字距略开、淡墨)→ 夜型(宋体 28)→ 细线下压 → 一句为什么 ──
+   h1 里两段都在(读屏读「今晚修护夜」);完整模式的打卡进度像书页的页码,挂在眉题那一行右边,不另占一行 */
+.tn-head{position:relative;padding-top:var(--sp-2)}
+#tonight-h{padding-bottom:var(--sp-2);border-bottom:1px solid var(--line)}
+.tn-eb{display:block;font:12px/var(--lh-meta) var(--mono);letter-spacing:.12em;color:var(--faint)}
+.tn-type{display:block}
+.tn-prog{position:absolute;top:var(--sp-2);right:0;font:12px/var(--lh-meta) var(--mono);color:var(--faint);font-variant-numeric:tabular-nums}
+.tn-lead{margin-top:var(--sp-2);font:16px/var(--lh-body) var(--serif);color:var(--muted)}
+
+/* 修订线:一段话,小字「顾问 10:58 改了今晚」打头、接着写改了什么,最多折两行;右边撤销(始终可见;不铺底、不加圆角、不用红)。
+   贴在步骤上面:390×844 主屏 App 里,改过今晚也得在第一屏看到第一步(s-10 守着),所以两行封顶、再长截断(整句在 title 里);
    被改的那一步自己带 --rev 竖线 */
-.revbar{margin-top:var(--sp-1);border-left:2px solid var(--rev);padding:0 0 0 var(--sp-3);min-height:44px;
-  display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:var(--sp-2);align-items:center}
-.revbar .who{font:12px/var(--lh-meta) var(--mono);color:var(--rev);white-space:nowrap}
-.revbar .what{font:14px/var(--lh-note) var(--serif);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.revbar{margin-top:var(--sp-4);border-left:2px solid var(--rev);padding:var(--sp-1) 0 var(--sp-1) var(--sp-3);min-height:44px;
+  display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:var(--sp-2);align-items:center}
+.tn-steps>.sr+.revbar{margin-top:0}
+.rev-t{min-width:0;font:14px/var(--lh-note) var(--serif);color:var(--ink);overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.revbar .who{margin-right:var(--sp-2);font:12px/var(--lh-note) var(--mono);color:var(--rev)}
 .revbar+.revbar{margin-top:var(--sp-1)}
 /* 她自己点的(「看过医生了」的撤销):不是顾问的改动,不用 --rev(§3.6)*/
-.revbar.mine{margin-top:var(--sp-4);border-left-color:var(--line-ctl)}
-.revbar.mine .who{font:14px/22px var(--serif);color:var(--muted)}
+.revbar.mine{border-left-color:var(--line-ctl)}
+.revbar.mine .who{color:var(--muted)}
 /* 她自己在步骤里点的(划掉 / 换一支):标「你改了今晚」,中性竖线,不用 --rev(那是顾问的) */
 .revbar.you{border-left-color:var(--muted)}
-.revbar.you .who{font:14px/22px var(--serif);color:var(--muted)}
+.revbar.you .who{color:var(--muted)}
+
+/* ── ② 就医红线:全 App 唯一的红框,紧跟标题 ── */
+.note-medical{margin-top:var(--sp-4);border:1px solid var(--medical);border-radius:var(--r-card);padding:var(--sp-4)}
+.med-h{display:flex;justify-content:space-between;align-items:baseline;gap:var(--sp-2);flex-wrap:wrap}
+.med-eb{font:14px/22px var(--serif);color:var(--medical)}
+.note-medical p{margin-top:var(--sp-1);font:16px/var(--lh-body) var(--serif);color:var(--ink)}
+.med-acts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--sp-2);margin-top:var(--sp-3)}
+.med-acts .btn{padding:0 var(--sp-1)}
+.med-acts .btn[aria-pressed="true"]{background:var(--tint);box-shadow:inset 0 0 0 1.5px var(--ink)}
 .med-unbook{margin-top:var(--sp-2)}
 
-/* ② 今晚的情况:问句 + 两个选项;下面一行说影响 */
-.tn-sit{margin-top:var(--sp-4);border-top:1px solid var(--line);padding-top:var(--sp-1)}
-.tn-sit .sec-h .note{font-size:14px}
-.sit-q{padding:var(--sp-1) 0}
+/* ── ③ 洗澡模块(样式归 css/screens/shower.css)+ 刮胡问句 ──
+   这里只管位置和上下间距:模块自己的外边距归零,由 .tn-slot 统一给 */
+.tn-slot{margin-top:var(--sp-4)}
+#tonight .tn-slot>:first-child{margin-top:0}
+/* 刮胡问句(只给开了刮胡的人):接在洗澡模块下面就成一张两行的表,共用洗澡模块的底线,自己只补一条底线 */
+.tn-sit{margin-top:var(--sp-4);padding:var(--sp-2) 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.tn-slot+.tn-sit{margin-top:0;border-top:0}
 .sit-row{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-3)}
 .sit-l{font:18px/var(--lh-item) var(--serif);color:var(--ink)}
 .sit-btns{display:flex;gap:var(--sp-2);flex:none}
@@ -32,53 +56,49 @@
   box-shadow:inset 0 0 0 1px var(--line-ctl);transition:background-color .15s,box-shadow .15s}
 .sit-btns>button[aria-pressed="true"]{background:var(--tint);box-shadow:inset 0 0 0 1.5px var(--ink)}
 .sit-fx{margin-top:var(--sp-1)}
+.sit-fx:empty{display:none}
 .sit-fx.changed{color:var(--ink)}
 
-/* ③ 提醒卡:就医(全 App 唯一的红框)> 注意 > 其余;其余折成「还有 N 条」 */
+/* ── ④ 其余提醒:注意(赭色竖线)> 其余(淡墨竖线);最多一张,其余折成「还有 N 条」 ── */
 .tn-cards{margin-top:var(--sp-4)}
-.note-medical{border:1px solid var(--medical);border-radius:var(--r-card);padding:var(--sp-4)}
-.med-h{display:flex;justify-content:space-between;align-items:baseline;gap:var(--sp-2);flex-wrap:wrap}
-.med-eb{font:14px/22px var(--serif);color:var(--medical)}
-.note-medical p{margin-top:var(--sp-1);font:16px/var(--lh-body) var(--serif);color:var(--ink)}
-.med-acts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--sp-2);margin-top:var(--sp-3)}
-.med-acts .btn{padding:0 var(--sp-1)}
-.med-acts .btn[aria-pressed="true"]{background:var(--tint);box-shadow:inset 0 0 0 1.5px var(--ink)}
-.note-caution{border-left:2px solid var(--caution);padding:var(--sp-3) 0 var(--sp-3) var(--sp-3)}
-.note-info{border-left:2px solid var(--line-ctl);padding:var(--sp-3) 0 var(--sp-3) var(--sp-3)}
+.note-caution{border-left:2px solid var(--caution);padding:var(--sp-1) 0 var(--sp-1) var(--sp-3)}
+.note-info{border-left:2px solid var(--line-ctl);padding:var(--sp-1) 0 var(--sp-1) var(--sp-3)}
 .nc-eb{font:14px/22px var(--serif);color:var(--caution)}
 .ni-eb{font:14px/22px var(--serif);color:var(--muted)}
 .note-caution p,.note-info p{font:16px/var(--lh-body) var(--serif);color:var(--ink)}
 /* 「还有 N 条」在第一张卡的眉题那一行右边:触控区 44 高,用负边距不把这一行撑高 */
 .nc-h{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2);min-height:22px}
 .nc-h .tn-more-b{margin:-11px 0;min-height:44px;flex:none}
-.note-medical+.tn-more-b{margin-top:var(--sp-1)}
 .tn-more-b .ico{transition:transform .15s}
 .tn-more-b[aria-expanded="true"] .ico{transform:rotate(90deg)}
-.tn-more{padding-bottom:var(--sp-2)}
+.tn-more{margin-top:var(--sp-2);padding-left:var(--sp-3)}
 .tn-more li{font:14px/var(--lh-note) var(--serif);color:var(--ink)}
 .tn-more li+li{margin-top:var(--sp-1)}
 .tn-more .nc-eb{display:inline}
 
-/* ④ 步骤:整行就是一个 checkbox;序号下面是角色(页边批注栏);每步一句为什么 */
+/* ── ⑤ 步骤:页边栏(序号,下面是角色批注)+ 正文(产品名 / 怎么用 / 为什么)+ 打卡框;右边 44×44 的「调整」──
+   角色 / 产品名 / 怎么用 / 为什么都是 .step 网格的直接子元素(tonight.js stepBody),这里用 grid-template-areas 摆;
+   空的不出元素,那一行自己收起来 */
 .tn-steps{margin-top:var(--sp-4)}
-.tn-src{margin-top:0}
-.tn-src .btn-link{min-height:44px;vertical-align:middle}
-.tn-mini-hint{margin-top:var(--sp-1)}
-.steps{margin-top:var(--sp-2)}
-.step{position:relative;display:grid;grid-template-columns:2.5em minmax(0,1fr) 32px;column-gap:var(--sp-3);align-items:start;width:100%;
-  min-height:64px;padding:var(--sp-4) 0;text-align:left;color:var(--ink)}
-/* 一步 = 整行 checkbox(打卡)+ 右边 44×44 的「调整」;分隔线画在 li 上 */
+.steps{margin-top:var(--sp-1)}
+.tn-steps>.sr+.steps{margin-top:0}
+/* 一步 = 整行 checkbox(打卡)+ 右边的「调整」;分隔线画在 li 上,第一步上面不画 */
 .step-li{display:grid;grid-template-columns:minmax(0,1fr) 44px;align-items:start;border-top:1px solid var(--line)}
-.step-ops{width:44px;min-height:44px;margin-top:var(--sp-3);display:grid;place-items:center;border-radius:var(--r-ctl);color:var(--muted)}
+.steps>.step-li:first-child{border-top:0}
+/* 角色批注紧贴在序号下面(同一个页边栏):第一行只有序号那么高,产品名跨第一、二行,角色从第二行起。
+   11/11 前角色跟着「怎么用」那一行走,产品名一折成两行,「02」在上、「刷酸」掉到第三行,批注和序号分了家 */
+.step{position:relative;display:grid;grid-template-columns:2.5em minmax(0,1fr) 24px;column-gap:var(--sp-3);
+  grid-template-areas:"idx name box" "role name box" "role how ." "role why .";grid-template-rows:calc(var(--sp-1) + var(--lh-meta));align-items:start;width:100%;
+  min-height:64px;padding:var(--sp-4) 0;text-align:left;color:var(--ink)}
+.step.mini{grid-template-columns:2.5em minmax(0,1fr);grid-template-areas:"idx name" "role name" "role how" "role why" ". miss"}
+.step-idx{grid-area:idx;padding-top:var(--sp-1);font:12px/var(--lh-meta) var(--mono);color:var(--faint);font-variant-numeric:tabular-nums}
+.step-role{grid-area:role;font:14px/22px var(--serif);color:var(--muted)}
+.step-name{grid-area:name;font:18px/var(--lh-item) var(--serif);color:var(--ink);overflow-wrap:anywhere}
+.step-how{grid-area:how;font:14px/var(--lh-note) var(--serif);color:var(--muted)}
+.step-why{grid-area:why;font:14px/var(--lh-note) var(--serif);color:var(--ink)}
+.step-ops{width:44px;min-height:44px;margin-top:var(--sp-2);display:grid;place-items:center;border-radius:var(--r-ctl);color:var(--muted)}
 .step-ops:active{background:var(--tint)}
-.step.mini{grid-template-columns:2.5em minmax(0,1fr) auto}
-.step-idx{display:flex;flex-direction:column;padding-top:var(--sp-1);font:12px/var(--lh-meta) var(--mono);color:var(--faint)}
-.step-role{font:14px/22px var(--serif);color:var(--muted)}
-.step-body{display:flex;flex-direction:column;min-width:0}
-.step-name{font:18px/var(--lh-item) var(--serif);color:var(--ink);overflow-wrap:anywhere}
-.step-how{font:14px/var(--lh-note) var(--serif);color:var(--muted)}
-.step-why{font:14px/var(--lh-note) var(--serif);color:var(--ink)}
-.step-box{justify-self:end;width:24px;height:24px;margin-top:var(--sp-1);border-radius:var(--r-ctl);box-shadow:inset 0 0 0 1.5px var(--line-ctl);
+.step-box{grid-area:box;width:24px;height:24px;margin-top:var(--sp-1);border-radius:var(--r-ctl);box-shadow:inset 0 0 0 1.5px var(--line-ctl);
   display:grid;place-items:center;color:transparent;transition:background-color .15s,box-shadow .15s}
 .step[aria-checked="true"] .step-box{background:var(--ink);box-shadow:none;color:var(--paper)}
 /* 深色:选中态是 tint 底加墨色描边,不反白(§3.7,样稿 selBg / selRing) */
@@ -88,21 +108,25 @@
 .step.changed::before{content:"";position:absolute;left:calc(-1 * var(--sp-3));top:var(--sp-4);bottom:var(--sp-4);width:2px;background:var(--rev)}
 .step.changed.you::before{background:var(--muted)}
 .step.missed .step-name{color:var(--muted)}
-.step-miss{white-space:nowrap;align-self:center}
+/* 极简模式活性步骤的「今晚没做」:放在正文下面一行(320 宽时放右边会把产品名挤成一列);负边距抵掉 44 触控区多出来的高度 */
+.step-miss{grid-area:miss;justify-self:start;margin:0 0 calc(-1 * var(--sp-3));white-space:nowrap}
 .step-miss[aria-pressed="true"]{color:var(--ink)}
-.tn-steps .skips{margin-top:var(--sp-2);border-top:1px solid var(--line)}
-.tn-steps .skips .row{grid-template-columns:minmax(0,1fr) auto}
-.skip-name{color:var(--muted)}
 
-/* 完成今晚 / 记一下皮肤 */
-.tn-finish{display:flex;flex-direction:column;gap:var(--sp-2);margin-top:var(--sp-2);padding-top:var(--sp-5);border-top:1px solid var(--line)}
+/* ── ⑥ 完成今晚(完整模式)/ 记一下皮肤(极简模式只在记录 tab 藏起来时出)── */
+.tn-finish{display:flex;flex-direction:column;gap:var(--sp-2);padding-top:var(--sp-5);border-top:1px solid var(--line)}
 .tn-finish-n{text-align:center}
 .tn-finish>.btn-link{align-self:center}
+.tn-finish.quiet{padding-top:var(--sp-2);gap:0}
+.tn-finish.quiet>.btn-link{align-self:flex-start}
 .tn-done-at{color:var(--ok)}
 .tn-finish .fb-box:empty{display:none}
 #tn-empty{padding-top:var(--sp-5)}
 
-/* 单步 sheet(调整这一步):怎么用 / 为什么 → 今晚不用 / 换成货架上的 / 让顾问挑 / 问顾问 */
+/* ── ⑦ 要她动手时才有的一行小字(先看一下 / 换上 / 再试一次 / 让顾问重排):安静,贴在页尾 ── */
+.tn-src{margin-top:var(--sp-4)}
+.tn-src .btn-link{min-height:44px;vertical-align:middle}
+
+/* ── 单步 sheet(调整这一步):怎么用 / 为什么 → 今晚不用 / 换成货架上的 / 让顾问挑 / 问顾问 ── */
 .sa-role{margin:0}
 .sa-info{margin-top:var(--sp-2)}
 .sa-i{display:flex;flex-direction:column;padding:var(--sp-2) 0}
@@ -118,43 +142,88 @@
 .sa-chat{margin-top:var(--sp-2)}
 .sa-msg{margin-top:var(--sp-2)}
 .sa-msg:empty{display:none}
-#sa-note,#qk-q{display:block;width:100%;min-height:44px;border:0;border-bottom:1px solid var(--line-ctl);border-radius:0;background:transparent;
+#sa-note{display:block;width:100%;min-height:44px;border:0;border-bottom:1px solid var(--line-ctl);border-radius:0;background:transparent;
   font:16px/24px var(--serif);color:var(--ink);padding:10px 0}
-#sa-note::placeholder,#qk-q::placeholder{color:var(--faint)}
-#sa-note:focus-visible,#qk-q:focus-visible{outline:none;border-bottom-color:var(--ink)}
+#sa-note::placeholder{color:var(--faint)}
+#sa-note:focus-visible{outline:none;border-bottom-color:var(--ink)}
 
-/* 问一句:步骤下面一个就地小面板;答案边到边显示(≤60 字是后端管的) */
-.tn-quick{margin-top:var(--sp-4);border-top:1px solid var(--line);padding-top:var(--sp-3)}
-.qk-l{display:block;font:14px/22px var(--serif);color:var(--muted)}
-.qk-row{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:var(--sp-3);align-items:end}
-.qk-a{margin-top:var(--sp-2);font:16px/var(--lh-body) var(--serif);color:var(--ink);overflow-wrap:anywhere;white-space:pre-wrap}
-.qk-a.err{color:var(--muted)}
-.qk-a:empty{display:none}
+/* ══ 无衬线 ·「仪器」(DESIGN.md §5.2):像健康 / 提醒事项的大标题页 ══════════════════════════════
+   标题不压线,靠字重分层;每一块是一张 inset-grouped 卡(var(--sheet) 底、var(--r-card) 圆角),块与块 24、相关的两张 8;
+   步骤是一张卡,每步一行:左边序号小圆(打完勾变成实心勾),行间分隔线从文字起点开始、通到右边,和系统列表一样 */
+:root[data-type="sans"] #tonight-h{border-bottom:0;padding-bottom:0}
+:root[data-type="sans"] .tn-eb{font:600 14px/20px var(--serif);letter-spacing:0;color:var(--muted)}
+:root[data-type="sans"] .tn-type{font-weight:700;letter-spacing:-.02em}
+:root[data-type="sans"] .tn-prog{font:600 14px/20px var(--serif);color:var(--muted)}
+:root[data-type="sans"] .tn-lead{margin-top:var(--sp-1);font-size:16px;line-height:24px}
 
-/* ── 今晚 → 接下来 7 晚(#/tonight/week):7 晚下面接每周洗澡 / 刮胡习惯 + 刷酸时机(settings.js 的 weekSettingsHtml)──
-   这两段的控件样式原来挂在 #settings-sheet 下,搬进二级页后在这里照着补一份(只管 .wk-set 里面) */
-.wk-set{margin-top:var(--sp-2)}
-.wk-set .set-seg{margin-top:var(--sp-1)}
-.wk-set .set-seg[data-seg="timing"]{grid-auto-flow:row;grid-template-columns:repeat(2,minmax(0,1fr))}
-.wk-set .set-seg>button{padding:0 var(--sp-1);font-size:14px}
-.wk-set .sheet-sec>.note{margin-top:var(--sp-2)}
-.wk-set select{width:100%;min-height:44px;font:16px/22px var(--serif);color:var(--ink);background:transparent;border:0;border-bottom:1px solid var(--line-ctl);border-radius:0;padding:0}
-.wk-set select:focus{outline:none;border-bottom:1.5px solid var(--ink)}
-/* 还没有洗澡安排那张卡(tonight.js showerPlanHtml) */
-.tn-shplan{margin:var(--sp-3) 0;padding:var(--sp-3) 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
-.tn-shplan .chips{margin:var(--sp-2) 0}
-/* 页头「今晚洗澡」和洗澡安排日历(ui/shower.js) */
-.hdr-sh{flex:none;min-height:44px;min-width:44px;display:grid;place-items:center}
-.hdr-sh span{padding:var(--sp-1) var(--sp-2);border-radius:var(--r-ctl);box-shadow:inset 0 0 0 1px var(--line-ctl);font:14px/20px var(--serif);color:var(--muted)}
-.hdr-sh span:empty{display:none}
-.hdr-sh[data-on="1"] span{background:var(--tint);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
-.sh .lede{margin:0}
-.sh-mode{margin-top:var(--sp-3)}
-.sh-wk,.sh-cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:var(--sp-1)}
-.sh-wk{margin-top:var(--sp-3);text-align:center;font:14px/20px var(--serif);color:var(--muted)}
-.sh-cal{margin:var(--sp-1) 0 var(--sp-3)}
-.sh-d{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:52px;min-width:0;border-radius:var(--r-ctl);font:14px/20px var(--serif);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line-ctl)}
-.sh-d .sh-m{min-height:20px}
-.sh-d.past{box-shadow:none;color:var(--muted)}
-.sh-d.today{box-shadow:inset 0 0 0 1.5px var(--ink)}
-.sh-d[aria-pressed="true"]{background:var(--tint);box-shadow:inset 0 0 0 1.5px var(--ink)}
+/* 卡片:提醒、刮胡问句、折起来的其余提醒,都是同一种「共同区域」 */
+:root[data-type="sans"] :is(.note-caution,.note-info,.tn-sit,.tn-more){background:var(--sheet);border:0;border-radius:var(--r-card)}
+:root[data-type="sans"] :is(.note-caution,.note-info){padding:var(--sp-3) var(--sp-4)}
+:root[data-type="sans"] :is(.nc-eb,.ni-eb){font-size:12px;line-height:16px;font-weight:600;letter-spacing:.02em}
+:root[data-type="sans"] :is(.note-caution,.note-info) p{margin-top:var(--sp-1);font-size:16px;line-height:24px}
+:root[data-type="sans"] .tn-more{margin-top:var(--sp-2);padding:var(--sp-3) var(--sp-4)}
+:root[data-type="sans"] .tn-more li{line-height:20px}
+:root[data-type="sans"] .tn-more li+li{margin-top:var(--sp-2)}
+:root[data-type="sans"] :is(.tn-cards,.tn-slot,.tn-sit,.note-medical){margin-top:var(--sp-5)}
+/* 洗澡模块和刮胡问句连着时合成一张卡的上下两行(纸墨那边是一张两行的表,同一个道理),中间一条从文字起点开始的细线;
+   修订线和步骤卡也合成一组(修订线是步骤卡的表头)。两处各省掉一段 8 的间隔:最挤的时候第一步才留得在第一屏(s-10) */
+:root[data-type="sans"] .tn-slot+.tn-sit{margin-top:0;border-top-left-radius:0;border-top-right-radius:0;position:relative}
+:root[data-type="sans"] .tn-slot:has(+.tn-sit) .sh-card{border-bottom-left-radius:0;border-bottom-right-radius:0}
+:root[data-type="sans"] :is(.tn-slot+.tn-sit,.revbar+.steps)::before{content:"";position:absolute;left:var(--sp-4);right:0;top:0;height:1px;background:var(--line);transform:scaleY(.5);transform-origin:top}
+:root[data-type="sans"] .tn-sit{padding:var(--sp-2) var(--sp-4)}
+:root[data-type="sans"] .sit-l{font-size:16px;line-height:24px;font-weight:600}
+:root[data-type="sans"] .sit-fx{margin-top:0;padding-bottom:var(--sp-1)}
+/* 就医:浅红底的卡,不描边;三个按钮是胶囊,选中是实心 */
+:root[data-type="sans"] .note-medical{border:0;background:color-mix(in srgb,var(--medical) 8%,var(--sheet))}
+:root[data-type="sans"] .med-eb{font-weight:600}
+:root[data-type="sans"] .med-acts .btn{background:var(--sheet)}
+:root[data-type="sans"] .med-acts .btn[aria-pressed="true"]{background:var(--ink-strong);color:var(--paper)}
+:root[data-type="sans"][data-theme="dark"] .med-acts .btn[aria-pressed="true"]{color:#000}
+/* 修订线:一行小卡,谁改的用强调色 600;她自己点的用灰 */
+:root[data-type="sans"] .revbar{margin-top:var(--sp-5);background:var(--sheet);border-left:0;border-radius:var(--r-card);padding:var(--sp-1) var(--sp-2) var(--sp-1) var(--sp-4)}
+:root[data-type="sans"] .tn-steps>.sr+.revbar{margin-top:0}
+:root[data-type="sans"] .revbar+.revbar{margin-top:var(--sp-2)}
+:root[data-type="sans"] .revbar:has(+.steps){border-bottom-left-radius:0;border-bottom-right-radius:0}
+:root[data-type="sans"] .revbar+.steps{margin-top:0;border-top-left-radius:0;border-top-right-radius:0;position:relative}
+:root[data-type="sans"] .revbar .who{font:600 12px/20px var(--serif)}
+:root[data-type="sans"] :is(.revbar.you,.revbar.mine) .who{color:var(--muted)}
+:root[data-type="sans"] .rev-t{line-height:20px}
+
+/* 步骤卡:左内边距 16,右边让「…」贴着卡边;分隔线从文字起点(序号圈 28 + 间距 12)开始、通到卡的右边 */
+:root[data-type="sans"] .tn-steps{margin-top:var(--sp-5)}
+:root[data-type="sans"] .steps{margin-top:var(--sp-2);padding-left:var(--sp-4);background:var(--sheet);border-radius:var(--r-card)}
+:root[data-type="sans"] .tn-steps>.sr+.steps{margin-top:0}
+:root[data-type="sans"] .step-li{position:relative;border-top:0}
+:root[data-type="sans"] .step-li+.step-li::before{content:"";position:absolute;left:40px;right:0;top:0;height:1px;background:var(--line);transform:scaleY(.5);transform-origin:top}
+:root[data-type="sans"] :is(.step,.step.mini){grid-template-columns:28px minmax(0,1fr);column-gap:var(--sp-3);
+  grid-template-areas:"idx role" "idx name" ". how" ". why" ". miss";grid-template-rows:none;min-height:56px;padding:var(--sp-4) 0}
+:root[data-type="sans"] .step-idx{align-self:center;width:28px;height:28px;padding:0;border-radius:50%;background:var(--tint);display:grid;place-items:center;
+  font:600 14px/1 var(--serif);color:var(--ink)}
+:root[data-type="sans"] .idx0{display:none}
+:root[data-type="sans"] .step-role{padding:0;font:600 12px/16px var(--serif);letter-spacing:.02em;color:var(--muted)}
+:root[data-type="sans"] .step-name{font-size:18px;line-height:24px;font-weight:600}
+:root[data-type="sans"] .step-how{margin-top:var(--sp-1);line-height:20px}
+:root[data-type="sans"] .step-why{margin-top:var(--sp-1);line-height:20px}
+:root[data-type="sans"] .step-ops{margin-top:var(--sp-3);color:var(--faint)}
+:root[data-type="sans"] .step-ops:active{background:none;opacity:.6}
+/* 完整模式:整行就是 checkbox,序号圈本身当勾(像提醒事项),右边不再另放一个框;打了勾 = 实心圈 + 勾 */
+:root[data-type="sans"] .step-box{display:none}
+:root[data-type="sans"] .step[aria-checked="true"] .step-idx{background:var(--ink-strong);color:var(--paper)}
+:root[data-type="sans"][data-theme="dark"] .step[aria-checked="true"] .step-idx{color:#000}
+:root[data-type="sans"] .step[aria-checked="true"] .step-name{color:var(--muted)}
+:root[data-type="sans"] button.step:active{opacity:.7}
+/* 顾问改过的那一步:序号圈描一圈强调色(纸墨用页边竖线);她自己改的描灰 */
+:root[data-type="sans"] .step.changed::before{display:none}
+:root[data-type="sans"] .step.changed .step-idx{box-shadow:inset 0 0 0 1.5px var(--rev);color:var(--rev)}
+:root[data-type="sans"] .step.changed.you .step-idx{box-shadow:inset 0 0 0 1.5px var(--muted);color:var(--ink)}
+/* 改过又打了勾:实心圈上的勾要看得清,不用强调色 */
+:root[data-type="sans"] .step.changed[aria-checked="true"] .step-idx{color:var(--paper)}
+:root[data-type="sans"][data-theme="dark"] .step.changed[aria-checked="true"] .step-idx{color:#000}
+:root[data-type="sans"] .step-miss{margin-top:var(--sp-1)}
+
+/* 完成区:按钮是实心胶囊,不画顶线;做完了以后那一块是一张卡 */
+:root[data-type="sans"] .tn-finish{margin-top:var(--sp-5);padding-top:0;border-top:0}
+:root[data-type="sans"] .tn-finish.done{background:var(--sheet);border-radius:var(--r-card);padding:var(--sp-4)}
+:root[data-type="sans"] .tn-finish.quiet{margin-top:var(--sp-3)}
+:root[data-type="sans"] .tn-src{margin-top:var(--sp-3)}
+:root[data-type="sans"] #sa-note{border-bottom:0;border-radius:var(--r-ctl);background:var(--tint);padding:var(--sp-2) var(--sp-3)}

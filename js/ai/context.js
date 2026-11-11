@@ -16,6 +16,7 @@ import { regimenGaps } from '../engine/needs.js';
 import { ROLE_LABEL, traitsOf, isSchedActive, statusOf, emptyLogRows } from '../model/products.js';
 import { PHASES, userZones } from '../model/profile.js';
 import { cleanSpots } from '../model/journal.js';
+import { showerEvery } from '../model/week.js';
 
 // who = { name?(显示名第一个词), ticked?[](今晚已点了做的步骤), shown?(ai/apply.js shownTonight:她眼前那份今晚;没有就按离线排法) }
 export function buildSkincareContext(W, who) {
@@ -57,6 +58,8 @@ export function buildSkincareContext(W, who) {
     const rules0 = (reg && reg.rules) || {};
     const ctx = {
         user: Object.assign({ name: who.name || '', mode: minimal ? '极简' : '完整', makeupRemoval: !!P.useMakeupRemoval },
+            // 洗澡是「每 N 天一次」(1 = 每天,2 = 隔 1 天):week[].shower 就是按它排的,顾问要知道这是间隔、不是固定周几
+            showerEvery(P) ? { showerEvery: showerEvery(P) } : {},
             minimal ? { modeNote: '极简模式：她基本不记录；排上的酸默认按计划用了(日志里 auto=true 是推定的，不是她记的)。没记到刺激不代表耐受，不能据此加量；只有她在对话/照片里明确说了反应才算。' } : {}),
         skinType: P.skinType || '',
         concerns: (P.concerns && P.concerns.length) ? P.concerns : (P.goal && P.goal.concern ? [P.goal.concern] : []),

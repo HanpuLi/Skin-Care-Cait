@@ -1,37 +1,42 @@
 // A 路 · 今晚页(无头 Chrome,假顾问后端,不花钱):
-//   四层(夜型标题 + 一句为什么、问句开关 + 用真实排班差异说影响、最多一张提醒卡 +「还有 N 条」、步骤每步一句为什么)
+//   一页从上到下(2.3.0 重排):眉题「今晚」+ 夜型大标题 + 一句为什么、就医卡、洗澡模块(隔几天洗,ui/shower.js)+ 刮胡问句(只给开了刮胡的人)、
+//   最多一张提醒卡 +「还有 N 条」、步骤每步一句为什么;要她动手时步骤下面才有一行小字(先看一下 / 换上 / 再试一次 / 让顾问重排)
 //   完整模式:点步骤打卡、「完成今晚」→ 记皮肤 sheet(状态 / 脸部地图)→ 写进当天记录、撤回只退这次加的
-//   极简模式:不打卡,只有活性步骤的「今晚没做」(写 skipped)、不问洗澡刮胡、「记一下皮肤」
+//   极简模式:不打卡,只有活性步骤的「今晚没做」(写 skipped)、不问刮胡;「记一下皮肤」在记录 tab(记录 tab 藏起来时今晚页才留入口)
 //   就医红线卡(任何模式)、亮时不排酸、眼霜照用、「已约了 / 看过了」;安全提示任何模式都在
 //   顾问写今晚:新的一天自动调一次、按天 + 签名缓存、重画不重调、本机开关才重调(防抖)、过安全闸(刮胡夜拦酸、不在库的丢掉)、
-//   同步来的改动不调(只标「情况变了」+「让顾问重排」)、没开通 / 连不上 / 没登录 → 「离线排法」;顾问的今晚小改 + 撤销 / 重做
+//   同步来的改动不调(只标「情况变了」+「让顾问重排」)、没开通 / 连不上 / 没登录 → 离线排法(页面不写来源,#tn-plan 的 data-src 记着);顾问的今晚小改 + 撤销 / 重做
 //   单步操作(点步骤右边「调整」:今晚不用 / 换成货架上的 / 让顾问挑 /api/swap / 问顾问,全走今晚修订线 sk_tnai1,她自己改的标「你改了今晚」)
-//   + 「问一句」(/api/quick 流式、带实时状态、action 生效挂修订线);闸挡住的候选不出现、红线亮时酸类不出现
+//   闸挡住的候选不出现、红线亮时酸类不出现;今晚页没有「问一句」(2.3.0 删了,对话在顾问 tab)
+//   洗澡(2.3.0):隔几天洗、只在今晚页的模块 + #/tonight/shower;今晚不洗 → 改到明晚、临时加、撤回;日历点过去改记录、点以后改计划;别处都没有洗澡
 //   跑:node t/v2-a-tonight.mjs
 import { run, tab, click, log, sleep, W8, ENV, TODAY_EN, TONIGHT_FULL, PROBE } from './v2-a-lib.mjs';
 const SK_DATA = `JSON.parse(localStorage.getItem(Object.keys(localStorage).filter(k=>k.startsWith('sk_sync_v1:')).sort((a,b)=>b.length-a.length)[0])).data`;
 
 const ACID = "Paula's Choice 6%杏仁酸+2%乳酸", EYE = 'MZ Skin Soothe & Smooth 眼部精华';
 const VIEW = `const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];
-    const v={h1:(q('#tonight-h')||{}).textContent||'',lead:(q('#tn-lead')||{}).textContent||'',src:(q('#tn-src')||{}).textContent||'',
-      head:(q('#tn-steps-h')||{}).textContent||'',prog:(q('#tn-progress')||{}).textContent||'',
+    const pl=q('#tn-plan')||{dataset:{}};
+    const v={h1:(q('#tonight-h')||{}).textContent||'',eb:(q('#tonight-h .tn-eb')||{}).textContent||'',ty:(q('#tonight-h .tn-type')||{}).textContent||'',lead:(q('#tn-lead')||{}).textContent||'',src:(q('#tn-src')||{}).textContent||'',
+      plan:pl.dataset.src||'',state:pl.dataset.state||'',prog:(q('#tn-progress')||{}).textContent||'',
       steps:qa('#tn-plan .step-name').map(x=>x.textContent),whys:qa('#tn-plan .step').map(x=>{const w=x.querySelector('.step-why');return w?w.textContent:''}),
       boxes:qa('#tn-plan [role=checkbox]').length,miss:qa('#tn-plan [data-miss]').map(x=>x.dataset.miss),
-      sit:!!q('#tn-sit'),fxShave:(q('#tn-fx-shave')||{}).textContent||'',fxShower:(q('#tn-fx-shower')||{}).textContent||'',
+      sit:!!q('#tn-sit'),fxShave:(q('#tn-fx-shave')||{}).textContent||'',sh:(q('#tn-shower')||{dataset:{}}).dataset.st||'',shText:(q('#tn-shower')||{}).textContent||'',
+      gone:['#tn-q-shower','#tn-shplan','#tn-skips','#tn-quick','#tn-go-week','#btn-shower','#tn-logskin'].filter(s=>q(s)),
       cards:qa('#tn-cards > .note-medical, #tn-cards > .note-caution, #tn-cards > .note-info').map(x=>x.className),
       more:(q('#tn-more-b')||{}).textContent||'',moreItems:qa('#tn-more li').map(x=>x.textContent),
       allText:(q('#tonight')||{}).innerText||'',safety:qa('#tonight [data-safety]').map(x=>x.textContent),
       med:!!q('#tn-med'),medBtns:qa('#tn-med button').map(x=>x.textContent+':'+x.getAttribute('aria-pressed')),
-      rev:(q('#tn-rev')||{}).textContent||'',skips:qa('#tn-skips li').map(x=>x.textContent)};`;
+      rev:(q('#tn-rev')||{}).textContent||''};`;
 const view = p => p.eval(VIEW + 'return v');
 
 await run('v2-a-tonight', [
     ['完整模式 · 离线(没登录)', async ({ S, open }) => {
         const p = await open({ seed: 'full', seedArg: `{products:i=>[]}` });
         const v = await view(p);
-        S.ok(/^今晚 · (刷酸夜|修护夜|面膜夜|维 A 夜)$/.test(v.h1) && v.lead.length > 4, '① 标题「今晚 · 夜型」+ 一句为什么', { h1: v.h1, lead: v.lead });
-        S.ok(v.sit && /洗澡|洗手池/.test(v.fxShower) && v.fxShave, '② 今晚的情况:问句开关,下面一行说影响', v);
-        S.ok(/没登录，用的是离线排法/.test(v.src) && /离线排法/.test(v.head), '没登录:步骤标明「离线排法」', { src: v.src, head: v.head });
+        S.ok(v.eb === '今晚' && /^(刷酸夜|修护夜|面膜夜|维 A 夜)$/.test(v.ty) && v.h1 === '今晚' + v.ty && v.lead.length > 4, '① 眉题「今晚」+ 大标题夜型 + 一句为什么(不再是「今晚 · 夜型」一行)', { h1: v.h1, lead: v.lead });
+        S.ok(v.sit && v.sh === 'none' && !v.fxShave, '② 今晚的情况:洗澡模块(这颗种子还没排)+ 刮胡问句;不刮的晚上问句下面不写废话', v);
+        S.ok(!v.gone.length, '删掉的都不在:洗澡问句、还没排洗澡卡、今晚不用的、问一句、「接下来 7 晚」行、页头洗澡胶囊、完整模式没有「记一下皮肤」', v.gone);
+        S.ok(!v.src && v.plan === 'offline' && v.state === 'out' && !/离线排法|默认全做|没登录/.test(v.allText) && /^0 \/ \d+$/.test(v.prog), '没登录:用离线排法,但页面上不写来源状态(只有完整模式的进度「0 / N」)', { src: v.src, plan: v.plan, state: v.state, prog: v.prog });
         S.ok(v.steps.length >= 3 && v.whys.every(w => w.length > 3), '④ 每一步都有一句为什么', v.whys);
         S.ok(v.boxes === v.steps.length && !v.miss.length, '完整模式:整行是 checkbox,没有「今晚没做」', v);
         S.ok(v.cards.length <= 1, '③ 提醒卡最多一张', v.cards);
@@ -39,7 +44,7 @@ await run('v2-a-tonight', [
         const acid0 = v.steps.includes(ACID);
         await click(p, '#tn-shave-y', 300);
         const v2 = await view(p);
-        S.ok(v2.h1 === '今晚 · 刮胡夜' && !v2.steps.includes(ACID) && v2.steps.some(x => /凉水冲洗/.test(x)), '点「刮」:今晚变刮胡夜,酸不上,先凉水冲', v2.steps);
+        S.ok(v2.h1 === '今晚刮胡夜' && !v2.steps.includes(ACID) && v2.steps.some(x => /凉水冲洗/.test(x)), '点「刮」:今晚变刮胡夜,酸不上,先凉水冲', v2.steps);
         S.ok(/^刮胡夜：/.test(v2.fxShave) && (!acid0 || /酸今晚不上/.test(v2.fxShave)), '点了以后说出真实影响(酸今晚不上 / 下次刷酸在哪天)', v2.fxShave);
         const tn = await p.eval(`return ${ENV}.sk_tn1`);
         S.ok(tn && tn.shave === true, '开关写进今晚(sk_tn1),排班跟着改', tn);
@@ -73,11 +78,11 @@ await run('v2-a-tonight', [
         S.ok(!en2.done && !en2.doneSkipped && !(en2.skipped || []).length, '撤回:只退这次「完成」加的(done / 没做)', en2);
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
-    ['极简模式 · 不打卡、只有活性「今晚没做」、记一下皮肤', async ({ S, open }) => {
+    ['极简模式 · 不打卡、只有活性「今晚没做」;记皮肤在记录 tab', async ({ S, open }) => {
         const p = await open({ seed: 'minimal' });
         const v = await view(p);
-        S.ok(!v.boxes && !v.sit, '极简:步骤不可勾、不问洗澡刮胡', v);
-        S.ok(/默认都算做了/.test(v.allText) && /默认全做/.test(v.prog), '写明「排上的默认都算做了」', v.prog);
+        S.ok(!v.boxes && !v.sit && v.sh === 'none', '极简:步骤不可勾、不问刮胡;洗澡是模块(这颗种子还没排)', v);
+        S.ok(!/默认都算做了|默认全做|不用打勾/.test(v.allText) && !v.prog && !v.gone.length, '2.3.0 删掉的:「默认全做」「不用打勾…」、进度、记一下皮肤(记录 tab 有)都不在', { prog: v.prog, gone: v.gone });
         const kinds = await p.eval(`return [...document.querySelectorAll('#tn-plan .step')].map(x=>x.dataset.kind+':'+(!!x.querySelector('[data-miss]')))`);
         S.ok(kinds.every(k => /^(acid|mask|retinol):true$/.test(k) || /^base:false$/.test(k)), '「今晚没做」只在活性步骤上', kinds);
         if (v.miss.length) {
@@ -92,21 +97,27 @@ await run('v2-a-tonight', [
             const ts2 = await p.eval(`return ${ENV}.sk_tnsteps1`);
             S.ok(ts2 && !(ts2.skipped || []).length, '撤回后 sk_tnsteps1.skipped 也清掉(否则 v1 会把「没做」写回去)', ts2);
         } else S.ok(true, '(这颗种子今晚没排活性:没有「今晚没做」按钮)');
-        await click(p, '#tn-logskin', 300);
-        const sh = await p.eval(`const ov=document.getElementById('skin-sheet');return {t:ov&&ov.querySelector('.sheet-t').textContent,lead:(ov.querySelector('.sk-lead')||{}).textContent,fm:document.getElementById('sk-fm-t').getAttribute('aria-expanded'),fb:!!ov.querySelector('[data-fb-date]')}`);
+        S.ok(await p.eval(`return !document.getElementById('tab-record').hidden && getComputedStyle(document.getElementById('tab-record')).display!=='none'`), '极简:记录 tab 默认显示(记皮肤在那里)');
+        S.ok(!p.errors.length, '0 console error', p.errors);
+        p.done(); await sleep(200);
+        // 记录 tab 藏起来(hideRecords):她没别处可记,今晚页留一个安静的「记一下皮肤」
+        const p2 = await open({ seed: 'minimal', seedArg: `{profile:{hideRecords:true}}` });
+        S.ok(await p2.eval(`return document.body.classList.contains('hide-rec') && !!document.getElementById('tn-logskin')`), '藏了记录 tab:今晚页最下面有「记一下皮肤」');
+        await click(p2, '#tn-logskin', 300);
+        const sh = await p2.eval(`const ov=document.getElementById('skin-sheet');return {t:ov&&ov.querySelector('.sheet-t').textContent,lead:(ov.querySelector('.sk-lead')||{}).textContent,fm:document.getElementById('sk-fm-t').getAttribute('aria-expanded'),fb:!!ov.querySelector('[data-fb-date]')}`);
         S.ok(sh.t === '记一下皮肤' && /不记也没关系/.test(sh.lead) && sh.fm === 'false', '「记一下皮肤」:不催,脸部地图默认收起', sh);
         S.ok(!/顾问会看一眼/.test(sh.lead), '没登录(顾问用不了):不承诺「记完顾问会看一眼」', sh.lead);
         S.ok(!sh.fb, '没登录:不出顾问反馈区', sh);
-        await p.eval(`document.querySelector('#skin-sheet .sheet-x').click();return 1`);
-        S.ok(await p.eval(`return !document.getElementById('tab-record').hidden && getComputedStyle(document.getElementById('tab-record')).display!=='none'`), '极简:记录 tab 默认显示');
-        S.ok(!p.errors.length, '0 console error', p.errors);
+        await p2.eval(`document.querySelector('#skin-sheet .sheet-x').click();return 1`);
+        S.ok(!p2.errors.length, '0 console error', p2.errors);
     }],
     ['就医红线:任何模式都有卡,亮时不排酸,眼霜照用', async ({ S, open }) => {
         for (const who of ['full', 'minimal']) {
             // 极简这份:十天前点过「看过了」,之后又数够了天数 → 红线再亮
             const p = await open({ seed: who, seedArg: who === 'minimal' ? `{status:i=>i>=-6?['泛红']:[],profile:{medical:{state:'seen',at:__d(-10),seenAt:__d(-10)}}}` : `{status:i=>i>=-6?['泛红']:[]}` });
             const v = await view(p);
-            S.ok(v.med && v.cards[0] === 'note-medical' && v.medBtns.length === 3, `${who}:就医卡在最上面,三个按钮(已约了 / 看过了 / 先不)`, v);
+            const order = await p.eval(`return [...document.querySelectorAll('#tonight #tn-head,#tonight #tn-med,#tonight #tn-shower,#tonight #tn-cards,#tonight #tn-plan')].map(x=>x.id).join()`);
+            S.ok(v.med && /^tn-head,tn-med,tn-shower,/.test(order) && v.medBtns.length === 3, `${who}:就医卡紧跟标题(在洗澡模块、提醒、步骤上面),三个按钮(已约了 / 看过了 / 先不)`, { order, btns: v.medBtns });
             if (who === 'minimal') S.ok(v.medBtns.every(x => /:false$/.test(x)), '红线再次亮起:上一轮的「看过了」不显示成已按下', v.medBtns);
             S.ok(!v.steps.includes(ACID) && v.steps.includes(EYE) && /就医/.test(v.lead), `${who}:不排酸、眼霜照用、为什么写明`, v);
             const red = await p.eval(PROBE + `;return __probe('#tonight').red + (document.querySelector('#tab-tonight')?1:0)`);
@@ -138,75 +149,119 @@ await run('v2-a-tonight', [
             p.done(); await sleep(200);
         }
     }],
-    ['今晚首页的「→」行:接下来 7 晚(现状一句 + 点进去 + 返回)', async ({ S, open }) => {
+    ['「接下来 7 晚」不在今晚页(搬去顾问 #/advisor/week)', async ({ S, open }) => {
         const p = await open({ seed: 'full' });
-        const r = await p.eval(`const a=document.getElementById('tn-go-week');return {href:a&&a.getAttribute('href'),now:a?(a.querySelector('.nav-now')||{}).textContent:'',n7:!!document.getElementById('adv-n7'),habit:!!document.getElementById('set-habit'),h:location.hash}`);
-        S.ok(r.href === '#/tonight/week' && /^(下次刷酸 周.|这 7 晚没排酸)$/.test(r.now) && !r.n7 && !r.habit, '今晚首页:一条「接下来 7 晚」→ 行,右边写下次刷酸是哪晚;首页本身没有 7 晚和习惯', r);
-        await click(p, '#tn-go-week', 400);
-        const w = await p.eval(`return {h:location.hash,t:(document.querySelector('#tonight .pg-t')||{}).textContent,n7:document.querySelectorAll('#adv-n7 .n7-d').length,habit:!!document.getElementById('set-habit'),timing:!!document.getElementById('set-timing'),steps:!!document.getElementById('tn-plan')}`);
-        S.ok(w.h === '#/tonight/week' && w.t === '接下来 7 晚' && w.n7 === 7 && w.habit && w.timing && !w.steps, '点进去:#/tonight/week,h1「接下来 7 晚」,7 晚 + set-habit + set-timing,今晚的步骤不在这一页', w);
-        // 在这一页改刷酸时机:写进档案,不退出这一页
-        await click(p, '#set-timing [data-v="avoid"]', 300);
-        const t1 = await p.eval(`return {h:location.hash,tm:${ENV}.sk_profile1.acidTiming,n7:document.querySelectorAll('#adv-n7 .n7-d').length}`);
-        S.ok(t1.tm === 'avoid' && t1.h === '#/tonight/week' && t1.n7 === 7, '在 7 晚页改「刷酸时机」:写进档案(acidTiming),重画后还停在这一页', t1);
+        const r = await p.eval(`return {row:!!document.getElementById('tn-go-week'),n7:!!document.getElementById('adv-n7'),habit:!!document.getElementById('set-habit'),txt:document.getElementById('tonight').innerText}`);
+        S.ok(!r.row && !r.n7 && !r.habit && !/接下来 7 晚/.test(r.txt), '今晚页:没有「接下来 7 晚」那一行,也没有 7 晚和习惯', r.row);
+        await p.eval(`location.hash='#/tonight/week';return 1`); await sleep(400);
+        S.ok(await p.eval(`return location.hash==='#/advisor/week' && /接下来 7 晚/.test((document.querySelector('#advisor .pg-t')||{}).textContent||'') && document.querySelectorAll('#adv-n7 .n7-d').length===7`), '旧地址 #/tonight/week:换到顾问下的 #/advisor/week');
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
+    // ══ 洗澡(2.3.0):隔几天洗,一件事只有一个家(今晚页的模块 + #/tonight/shower)══
+    ['洗澡 · 还没排:模块里三个快选,一点从今晚排起;过去不变', async ({ S, open }) => {
+        const p = await open({ seed: 'minimal' });
+        const a = await p.eval(`const c=document.getElementById('tn-shower');return {st:c.dataset.st,t:c.innerText,picks:[...c.querySelectorAll('[data-sh=every]')].map(b=>b.textContent),go:(c.querySelector('#sh-go')||{}).getAttribute?c.querySelector('#sh-go').getAttribute('href'):'',btnInA:!!c.querySelector('a button')}`);
+        S.ok(a.st === 'none' && /隔几天洗一次/.test(a.t) && a.picks.join() === '每天,隔 1 天,隔 2 天' && a.go === '#/tonight/shower' && !a.btnInA, '还没排:「隔几天洗一次?」+ 每天 / 隔 1 天 / 隔 2 天 + 进洗澡页的入口(按钮不嵌在链接里)', a);
+        const order = await p.eval(`const ids=[...document.querySelectorAll('#tonight #tn-head, #tonight #tn-shower, #tonight #tn-plan')].map(x=>x.id);return ids`);
+        S.ok(order.join() === 'tn-head,tn-shower,tn-plan', '位置:标题之后、步骤之前', order);
+        await click(p, '#tn-shower [data-sh=every][data-n="2"]', 400);
+        const b = await p.eval(`const D=${SK_DATA},P=D.sk_profile1,c=document.getElementById('tn-shower');const m=await import('/js/model/week.js');const w={wk:D.sk_wk1,preset:D.sk_preset1,profile:P};
+            return {st:c.dataset.st,t:c.innerText,every:P.showerEvery,since:P.showerSince,tn:D.sk_tn1&&D.sk_tn1.shower,days:[-1,0,1,2,3].map(i=>m.dayState(w,__d(i)).shower),today:__d(0)}`);
+        S.ok(b.every === 2 && b.since === b.today && b.st === 'due' && /今晚洗澡/.test(b.t) && /隔 1 天/.test(b.t), '点「隔 1 天」:写进档案(showerEvery 2、从今天算),今晚洗澡,小字写隔 1 天', b);
+        S.ok(JSON.stringify(b.days) === JSON.stringify([false, true, false, true, false]) && b.tn === true, '隔 1 天:今晚洗、明晚不洗、后天洗;昨天还是没洗(过去不跟着变);sk_tn1 跟上', b.days);
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
+    ['洗澡 · 今晚不洗 → 改到明晚;撤回;不用洗的晚上临时加', async ({ S, open }) => {
+        const p = await open({ seed: 'minimal', seedArg: `{profile:{showerEvery:2,showerSince:__d(-2)}}` });
+        const C = `const c=document.getElementById('tn-shower'),D=${SK_DATA};return {st:c.dataset.st,t:c.innerText,act:(document.getElementById('sh-act')||{}).textContent,marks:D.sk_profile1.showerMarks||null,tn:D.sk_tn1&&D.sk_tn1.shower}`;
+        const a = await p.eval(C);
+        S.ok(a.st === 'due' && /今晚洗澡/.test(a.t) && /上次(前天|周.)洗的/.test(a.t) && !/·/.test(a.t) && a.act === '今晚不洗', '该洗的晚上:「今晚洗澡」+ 隔 1 天，上次哪天洗的(逗号分句,不用点号串联)+ 按钮「今晚不洗」', a);
+        const n0 = await p.eval(`return document.querySelectorAll('#tn-plan .step').length`);
+        await click(p, '#sh-act', 400);
+        const b = await p.eval(C);
+        S.ok(b.st === 'skip' && /今晚不洗，改到明晚/.test(b.t) && b.act === '撤回' && b.marks && b.marks[await p.eval('return __d(0)')] === false && b.tn === false, '点「今晚不洗」:写一条记录(今天 = false),模块写「改到明晚」,按钮换成「撤回」;sk_tn1 跟上', b);
+        const tm = await p.eval(`const m=await import('/js/model/week.js');const D=${SK_DATA};return m.dayState({wk:D.sk_wk1,preset:D.sk_preset1,profile:D.sk_profile1},__d(1)).shower`);
+        S.ok(tm === true, '明晚变成该洗', tm);
+        await click(p, '#sh-act', 400);
+        const c = await p.eval(C);
+        S.ok(c.st === 'due' && !c.marks && c.tn === true, '撤回:记录清掉,回到按间隔排的', c);
+        S.ok(await p.eval(`return document.querySelectorAll('#tn-plan .step').length`) >= 3 && n0 >= 3, '步骤照常在');
+        p.done(); await sleep(200);
+        // 不用洗的晚上:点「今晚要洗」→ 临时加的,之后从今晚重新算
+        const p2 = await open({ seed: 'minimal', seedArg: `{profile:{showerEvery:3,showerSince:__d(-1)}}` });
+        const d = await p2.eval(C);
+        S.ok(d.st === 'rest' && /今晚不用洗/.test(d.t) && /下次.+洗/.test(d.t) && d.act === '今晚要洗', '不用洗的晚上:「今晚不用洗」+ 下次哪晚 + 按钮「今晚要洗」', d);
+        await click(p2, '#sh-act', 400);
+        const e = await p2.eval(C);
+        const next = await p2.eval(`const m=await import('/js/model/week.js');const D=${SK_DATA};const w={wk:D.sk_wk1,preset:D.sk_preset1,profile:D.sk_profile1};return [1,2,3].map(i=>m.dayState(w,__d(i)).shower)`);
+        S.ok(e.st === 'extra' && /临时加的/.test(e.t) && e.act === '撤回' && e.tn === true, '点「今晚要洗」:今晚洗澡(临时加的),能撤回', e);
+        S.ok(JSON.stringify(next) === JSON.stringify([false, false, true]), '临时洗了:间隔从今晚重新算(隔 2 天 → 再过 3 天洗)', next);
+        S.ok(!p2.errors.length, '0 console error', p2.errors);
+    }],
+    ['洗澡页 #/tonight/shower:改隔几天、日历 4 周(过去改记录、以后改计划)', async ({ S, open }) => {
+        const p = await open({ seed: 'minimal', seedArg: `{profile:{showerEvery:2,showerSince:__d(-6)}}` });
+        await click(p, '#sh-go', 400);
+        const a = await p.eval(`const c=[...document.querySelectorAll('#shp-cal .shp-d')];return {h:location.hash,t:(document.querySelector('#tonight .pg-t')||{}).textContent,back:(document.querySelector('#tonight .pg-back')||{}).textContent,
+            n:c.length,today:c.filter(x=>x.classList.contains('today')).length,past:c.filter(x=>x.classList.contains('past')).length,v:(document.querySelector('#shp-every .shp-v')||{}).textContent,
+            allBtn:c.every(x=>x.tagName==='BUTTON'),first:new Date(c[0].dataset.d+'T12:00:00').getDay(),steps:!!document.getElementById('tn-plan'),wk:!!document.querySelector('[data-k=shower],#set-shower')}`);
+        S.ok(a.h === '#/tonight/shower' && a.t === '洗澡' && /今晚/.test(a.back) && !a.steps, '点模块:进洗澡页(h1「洗澡」、返回「今晚」),步骤不在这一页', a);
+        S.ok(a.n === 28 && a.today === 1 && a.past >= 14 && a.past <= 20 && a.allBtn && a.first === 1 && !a.wk, '日历:4 周 28 格、周一起排、今天一格;过去的也能点(改记录);没有「每周哪几天」', a);
+        S.ok(a.v === '隔 1 天', '间隔:隔 1 天', a.v);
+        // 步进 +:改成隔 2 天,之前的日子不变
+        const before = await p.eval(`return [...document.querySelectorAll('#shp-cal .shp-d.past')].map(x=>x.getAttribute('aria-pressed')).join()`);
+        await click(p, '#shp-every [data-sh=step][data-n="1"]', 400);
+        const b = await p.eval(`const D=${SK_DATA};return {v:document.querySelector('#shp-every .shp-v').textContent,every:D.sk_profile1.showerEvery,since:D.sk_profile1.showerSince,today:__d(0),past:[...document.querySelectorAll('#shp-cal .shp-d.past')].map(x=>x.getAttribute('aria-pressed')).join(),h:location.hash}`);
+        S.ok(b.v === '隔 2 天' && b.every === 3 && b.since === b.today && b.h === '#/tonight/shower', '点「+」:隔 2 天(showerEvery 3,从今天起算),还停在这一页', b);
+        S.ok(b.past === before, '改间隔:过去两周的格子一格都没变', { before, after: b.past });
+        // 过去某天:点了改「那天洗没洗」
+        const d = await p.eval(`return __d(-3)`);
+        const p0 = await p.eval(`return document.querySelector('#shp-cal [data-d="${d}"]').getAttribute('aria-pressed')`);
+        await click(p, `#shp-cal [data-d="${d}"]`, 400);
+        const c = await p.eval(`const D=${SK_DATA};const b=document.querySelector('#shp-cal [data-d="${d}"]');return {pr:b.getAttribute('aria-pressed'),chg:b.classList.contains('chg'),mark:(D.sk_profile1.showerMarks||{})['${d}'],label:b.getAttribute('aria-label')}`);
+        S.ok(c.pr !== p0 && c.chg && c.mark === (p0 !== 'true') && /改过的/.test(c.label), '点过去的一天:记下那天洗没洗(showerMarks),格子标「改过的」', c);
+        await click(p, `#shp-cal [data-d="${d}"]`, 400);
+        S.ok(await p.eval(`const D=${SK_DATA};return !((D.sk_profile1.showerMarks||{})['${d}']!==undefined) && document.querySelector('#shp-cal [data-d="${d}"]').getAttribute('aria-pressed')===${JSON.stringify(p0)}`), '再点一次:改回和排的一样 = 撤掉这条记录');
+        // 今天:点了 = 今晚洗不洗,今晚页同一份
+        const t0 = await p.eval(`return document.querySelector('#shp-cal .shp-d.today').getAttribute('aria-pressed')`);
+        await click(p, '#shp-cal .shp-d.today', 400);
         await click(p, '#tonight .pg-back', 400);
-        S.ok(await p.eval(`return location.hash==='#/tonight' && !!document.getElementById('tn-plan') && !document.getElementById('adv-n7')`), '返回键:回到今晚首页');
+        const st = await p.eval(`return {h:location.hash,st:document.getElementById('tn-shower').dataset.st}`);
+        S.ok(st.h === '#/tonight' && (t0 === 'true' ? st.st === 'skip' : st.st === 'extra'), '点今天那格,回今晚页:模块是同一份(改过的今晚)', { t0, st });
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
-    ['洗澡安排:还没排 → 出卡,一点排好;过去的日子不动', async ({ S, open }) => {
-        const p = await open({ seed: 'minimal' });
-        const r = await p.eval(`return {card:!!document.getElementById('tn-shplan'),q:!!document.getElementById('tn-q-shower'),off:!document.getElementById('tn-shplan-save')}`);
-        S.ok(r.card && !r.q && r.off, '极简、7 晚一次澡都没排:出卡,不写「今晚没排」,没选之前没有保存按钮', r);
-        await click(p, '[data-act=shplan-preset][data-i="0"]', 200);
-        await click(p, '#tn-shplan-save', 400);
-        const v = await p.eval(`const D=${SK_DATA};return {card:!!document.getElementById('tn-shplan'),l:(document.getElementById('tn-ql-shower')||{}).textContent,y:document.getElementById('tn-shower-y').getAttribute('aria-pressed'),preset:(D.sk_preset1||[]).filter(x=>x.shower).length,days:(D.sk_profile1.showerDays||[]).length}`);
-        S.ok(!v.card && v.l === '今晚排了洗澡' && v.y === 'true' && v.preset === 7 && v.days === 7, '选「每天」存下:卡消失,今晚页写「今晚排了洗澡」,习惯两份都写上', v);
-        const past = await p.eval(`const m=await import('/js/model/week.js');const c=await import('/js/clock.js');const D=${SK_DATA};const w={wk:D.sk_wk1,preset:D.sk_preset1,profile:D.sk_profile1},t=c.today();return [m.dayState(w,c.addDays(t,-1)).shower,m.dayState(w,c.addDays(t,1)).shower]`);
-        S.ok(past[0] === false && past[1] === true, '昨天还是没洗,明天排上了(近 14 天不多出没洗过的澡)', past);
+    ['洗澡只有一个家:页头、7 晚、记录页、设置都没有洗澡', async ({ S, open }) => {
+        const p = await open({ seed: 'full', seedArg: `{profile:{showerEvery:1,showerSince:__d(-20)}}` });
+        const r = await p.eval(`const out={};const txt=s=>((document.querySelector(s)||{}).innerText||'');
+            out.hdr=!!document.getElementById('btn-shower')||/洗/.test(txt('.hdr'));
+            location.hash='#/advisor/week';await new Promise(r=>setTimeout(r,400));out.week=!!document.querySelector('#adv-n7 [data-k=shower],#set-shower')||/「澡」|洗澡习惯|哪几天洗澡/.test(txt('#advisor'));
+            location.hash='#/record/changes';await new Promise(r=>setTimeout(r,400));out.rec=/澡/.test(txt('#rec-14'));
+            for(const pg of ['account','skin','look','data','help']){location.hash='#/settings/'+pg;await new Promise(r=>setTimeout(r,250));if(/洗澡|set-shower/.test(txt('#settings')+(document.getElementById('set-shower')?'set-shower':'')))out.set=(out.set||[]).concat(pg)}
+            location.hash='#/tonight';await new Promise(r=>setTimeout(r,300));out.tn=document.querySelectorAll('#tonight [data-sh]').length>0;
+            return out`);
+        S.ok(!r.hdr && !r.week && !r.rec && !r.set && r.tn, '洗澡只在今晚页的模块里(和它那一页);页头、接下来 7 晚、记录页近 14 天、设置里都没有', r);
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
-    ['洗澡安排:页头随时看今晚洗不洗,日历点未来哪天洗', async ({ S, open }) => {
+    ['洗澡 · 老习惯(每周几天)迁成隔几天:今天照旧,从明天起按间隔', async ({ S, open }) => {
+        // 每周只有明天那一天洗 → 每 7 天一次(round(7/1)),从明天起算;今天照旧按老数据(不洗)
         const p = await open({ seed: 'minimal', seedArg: `{profile:{showerDays:[(new Date().getDay()+1)%7]}}` });
-        const lab = () => p.eval(`return document.querySelector('#btn-shower span').textContent`);
-        S.ok(await lab() === '今晚不洗', '页头:今晚不洗', await lab());
-        await tab(p, 'products');
-        S.ok(await lab() === '今晚不洗' && await p.eval(`const r=document.getElementById('btn-shower').getBoundingClientRect();return r.height>=44&&r.width>=44&&r.top>=0`), '换一页页头还在,点击区 ≥44');
-        await click(p, '#btn-shower', 300);
-        const a = await p.eval(`const c=[...document.querySelectorAll('#sh-cal .sh-d')];return {n:c.length,past:c.filter(x=>x.classList.contains('past')).every(x=>x.tagName==='DIV'),todayBtn:!!document.querySelector('#sh-cal button.today'),head:document.getElementById('sh-today').textContent,next:document.getElementById('sh-next').textContent,last:c[27].dataset.d}`);
-        S.ok(a.n === 28 && a.past && a.todayBtn && a.head === '今晚不用洗。' && /^下次洗澡：/.test(a.next), '日历:上周到后两周 28 天,过去的只看,写今晚和下次', a);
-        await click(p, `#sh-cal [data-d="${a.last}"]`, 300);
-        const b = await p.eval(`const m=await import('/js/model/week.js');const D=${SK_DATA};return {pressed:document.querySelector('#sh-cal [data-d="${a.last}"]').getAttribute('aria-pressed'),saved:m.dayState({wk:D.sk_wk1,preset:D.sk_preset1,profile:D.sk_profile1},'${a.last}').shower}`);
-        S.ok(b.pressed === 'true' && b.saved === true, '点最后一格:存进排班(不止 7 天)', b);
-        await click(p, '#sh-cal button.today', 300);
-        S.ok(await lab() === '今晚洗澡' && await p.eval(`return document.getElementById('sh-today').textContent`) === '今晚该洗澡。', '点今天:页头和日历一起变');
-        await p.eval(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));return 1`); await sleep(200);
-        await tab(p, 'tonight');
-        S.ok(await p.eval(`return !document.getElementById('shower-sheet') && document.getElementById('tn-ql-shower').textContent==='今晚排了洗澡'`), 'Esc 关;今晚页是同一份数据');
+        const r = await p.eval(`const D=${SK_DATA},P=D.sk_profile1,c=document.getElementById('tn-shower');return {every:P.showerEvery,since:P.showerSince,tomorrow:__d(1),st:c.dataset.st,t:c.innerText}`);
+        S.ok(r.every === 7 && r.since === r.tomorrow, '迁移:每周 1 天 → 每 7 天一次,从明天起算', r);
+        S.ok(r.st === 'rest' && /下次明晚洗/.test(r.t) && /隔 6 天/.test(r.t), '今晚照旧不洗;模块写下次明晚、隔 6 天', r);
+        await p.reload(800);
+        const r2 = await p.eval(`const P=${SK_DATA}.sk_profile1;return {every:P.showerEvery,since:P.showerSince}`);
+        S.ok(r2.every === 7 && r2.since === r.since, '刷新:迁移不重跑(since 不往后挪)', r2);
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
-    ['洗澡安排:先不排 → 卡不再出,今晚页照写', async ({ S, open }) => {
-        const p = await open({ seed: 'minimal' });
-        await click(p, '[data-act=shplan-off]', 300);
-        const r = await p.eval(`return {card:!!document.getElementById('tn-shplan'),l:(document.getElementById('tn-ql-shower')||{}).textContent,flag:${SK_DATA}.sk_profile1.noShowerPlan}`);
-        S.ok(!r.card && r.l === '今晚没排洗澡' && r.flag === true, '「先不排」记进档案', r);
-    }],
-    ['洗澡安排:极简今晚页写今晚洗不洗 + 下次哪晚', async ({ S, open }) => {
-        const p = await open({ seed: 'minimal', seedArg: `{profile:{showerDays:[(new Date().getDay()+1)%7]}}` });
-        const r = await p.eval(`return {card:!!document.getElementById('tn-shplan'),l:document.getElementById('tn-ql-shower').textContent,n:document.getElementById('tn-shower-n').getAttribute('aria-pressed'),fx:document.getElementById('tn-fx-shower').textContent,wk:document.getElementById('tn-go-week').textContent}`);
-        S.ok(!r.card && r.l === '今晚没排洗澡' && r.n === 'true' && /^下次洗澡：/.test(r.fx) && /下次洗澡 周/.test(r.wk), '没排的晚上:写下次哪晚洗,7 晚入口也写', r);
-        await click(p, '#tn-shower-y', 300);
-        S.ok(await p.eval(`return document.getElementById('tn-ql-shower').textContent==='今晚排了洗澡'`), '点「洗」:今晚改成排了');
-    }],
-    ['极简 + 开了刮胡:还没排洗澡时只问「今晚刮胡吗」', async ({ S, open }) => {
+    ['极简 + 开了刮胡:今晚问刮胡,洗澡是模块;刮胡习惯在 #/advisor/week', async ({ S, open }) => {
         const p = await open({ seed: 'minimal', seedArg: `{profile:{shaving:true}}` });
-        const r = await p.eval(`return {shave:!!document.getElementById('tn-q-shave'),shower:!!document.getElementById('tn-q-shower')}`);
-        S.ok(r.shave && !r.shower, '极简 + 刮胡 + 没排洗澡:有「今晚刮胡吗」,洗澡先走排班卡', r);
+        const r = await p.eval(`return {shave:!!document.getElementById('tn-q-shave'),shower:!!document.getElementById('tn-q-shower'),card:!!document.getElementById('tn-shower')}`);
+        S.ok(r.shave && !r.shower && r.card, '极简 + 刮胡:有「今晚刮胡吗」,洗澡是模块(不是问句)', r);
         await click(p, '#tn-shave-y', 300);
         const v = await view(p);
-        S.ok(v.h1 === '今晚 · 刮胡夜' && !v.steps.includes(ACID), '点「刮」:刮胡夜,酸不上', v.steps);
-        // 洗澡 / 刮胡习惯只在 #/tonight/week 改:那一页底下的说明按极简 + 刮胡写(不指向不存在的开关,也不指向顾问页 / 设置)
-        const set = await p.eval(`location.hash='#/tonight/week';await new Promise(r=>setTimeout(r,300));return (document.querySelector('#tonight #set-habit .note')||{}).textContent||''`);
-        S.ok(!/今晚在今晚页改/.test(set) && /7 晚/.test(set) && /今晚刮胡在今晚页点/.test(set) && !/顾问|设置/.test(set), '7 晚页里的习惯说明按极简 + 刮胡写(不指向不存在的开关)', set);
+        S.ok(v.h1 === '今晚刮胡夜' && !v.steps.includes(ACID), '点「刮」:刮胡夜,酸不上', v.steps);
+        // 刮胡习惯只在 #/advisor/week 改:那一页底下的说明不指向不存在的开关,也不提洗澡
+        const set = await p.eval(`location.hash='#/advisor/week';await new Promise(r=>setTimeout(r,300));return (document.querySelector('#advisor #set-habit .note')||{}).textContent||''`);
+        S.ok(/7 晚/.test(set) && /今晚刮不刮在今晚页点/.test(set) && !/洗澡|设置/.test(set), '7 晚页里的刮胡习惯说明:今晚刮不刮在今晚页点,不提洗澡', set);
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
     ['安全提示(没有保湿)任何模式都在', async ({ S, open }) => {
@@ -222,13 +277,13 @@ await run('v2-a-tonight', [
     ['顾问写今晚:新的一天调一次、过闸、缓存、本机开关才重调', async ({ S, open }) => {
         const p = await open({ seed: 'full', seedArg: `{products:i=>[]}`, mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)}}`, login: true });
         await tab(p, 'record', 100); await tab(p, 'tonight', 100);
-        await p.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 6000);
+        await p.waitFor(`(document.getElementById('tn-plan')||{dataset:{}}).dataset.src==='ai'`, 6000);
         const v = await view(p);
         const n1 = await log(p, '/api/tonight');
         S.ok(n1 === 1, '新的一天:顾问写今晚调了一次', n1);
         S.ok(v.steps[0] === '温水把脸打湿' && v.steps.includes('Lacura 温和洗面奶') && v.steps.includes(EYE) && !v.steps.includes('不在货架上的神仙水'), '步骤是顾问写的(纯动作也在),不在货架上的丢掉', v.steps);
         S.ok(v.whys.includes('眼周不碰酸，眼霜照常。') && v.lead === TONIGHT_FULL.why, '每步的为什么、标题下那句是顾问写的', { whys: v.whys, lead: v.lead });
-        S.ok(!v.src && /顾问 \d\d:\d\d 排的/.test(v.head), '顾问版:不标离线', { src: v.src, head: v.head });
+        S.ok(!v.src && v.plan === 'ai' && v.state === 'fresh' && !/顾问 \d\d:\d\d 排的|离线排法/.test(v.allText), '顾问版:页面上不写「顾问几点排的」这种纯状态(data-src = ai)', { src: v.src, plan: v.plan, state: v.state });
         S.ok(v.allText.includes('不在货架上') , '顾问提到的产品不在货架上:说一声(提醒或「还有 N 条」)', v.moreItems.concat(v.cards));
         const body = await p.eval(`const b=(__AIF.log||[]).find(x=>x.p==='/api/tonight').body;return {acid:!!(b.context&&b.context.acid),week:(b.context.week||[]).length,steps:(b.context.tonight||{}).steps.length}`);
         S.ok(body.acid && body.week === 7 && body.steps >= 3, 'context 带了本周刷酸、未来 7 晚、离线今晚', body);
@@ -239,19 +294,19 @@ await run('v2-a-tonight', [
         // 本机开关:刮胡 → 先离线、防抖后重调;顾问还是排了酸 → 闸拦下
         await click(p, '#tn-shave-y', 200);
         const v2 = await view(p);
-        S.ok(/离线排法/.test(v2.head) && /情况变了|顾问在排/.test(v2.src), '点了刮胡:先用离线排法,标明情况变了', v2.src);
+        S.ok(v2.plan === 'offline' && (/情况变了/.test(v2.src) || /busy/.test(v2.state)) && !/顾问在排/.test(v2.allText), '点了刮胡:先用离线排法;不写「顾问在排」(纯状态),只在要她动手时出「让顾问重排」', { src: v2.src, plan: v2.plan, state: v2.state });
         await p.waitFor(`(__AIF.log||[]).filter(x=>x.p==='/api/tonight').length===2`, 5000);
-        await p.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 4000);
+        await p.waitFor(`(document.getElementById('tn-plan')||{dataset:{}}).dataset.src==='ai'`, 4000);
         const v3 = await view(p);
-        S.ok(!v3.steps.includes(ACID) && v3.skips.some(x => x.includes(ACID) && /刮胡夜不上酸/.test(x)), '顾问版过闸:刮胡夜的酸挪进「今晚不用」并写明原因', v3.skips);
+        S.ok(!v3.steps.includes(ACID) && v3.plan === 'ai', '顾问版过闸:刮胡夜的酸不上(「今晚不用的」折叠 2.3.0 删了,原因写在提醒里,见下一条)', v3.steps);
         S.ok(v3.allText.includes('顾问排了「' + ACID + '」，没上：刮胡夜不上酸'), '被闸拦下的写在提醒里', v3.cards.concat(v3.moreItems));
-        S.ok(v3.h1 === '今晚 · 刮胡夜', '夜型按过闸后的步骤算', v3.h1);
+        S.ok(v3.h1 === '今晚刮胡夜', '夜型按过闸后的步骤算', v3.h1);
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
     ['同步来的改动不调顾问,只标过时 +「让顾问重排」;今晚小改 + 撤销 / 重做', async ({ S, open }) => {
         const p = await open({ seed: 'full', seedArg: `{products:i=>[]}`, mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)}}`, login: true });
         await tab(p, 'record', 100); await tab(p, 'tonight', 100);
-        await p.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 6000);
+        await p.waitFor(`(document.getElementById('tn-plan')||{dataset:{}}).dataset.src==='ai'`, 6000);
         // 云端第一次快照 = 本机这一份(落地、不冲突)
         await p.eval(`fakeCloud.emit(${ENV});${W8(200)}return 1`);
         const base = await log(p, '/api/tonight');
@@ -259,17 +314,13 @@ await run('v2-a-tonight', [
         await p.eval(`const d=${ENV};d.sk_gone1=(d.sk_gone1||[]).concat(['cicaplast']);d._updatedAt=Date.now()+5000;fakeCloud.emit(d);${W8(2500)}return 1`);
         const v = await view(p);
         S.ok(await log(p, '/api/tonight') === base, '同步来的货架变化:不调顾问', { base });
-        S.ok(/情况变了/.test(v.src) && /让顾问重排/.test(v.src), '只标「情况变了」+「让顾问重排」', v.src);
-        S.ok(/顾问/.test(v.head) && v.steps.includes(EYE), '只是货架 / 方案变了(前提没变):还用顾问那份,按现在的情况重新过闸', { head: v.head, steps: v.steps });
-        await click(p, '#tn-src [data-act=ask]', 200);
-        await p.waitFor(`(__AIF.log||[]).filter(x=>x.p==='/api/tonight').length===${base + 1}`, 4000);
-        S.ok(true, '点「让顾问重排」:调一次');
-        await p.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 4000);
+        S.ok(v.plan === 'ai' && v.state === 'kept' && v.steps.includes(EYE), '只是货架 / 方案变了(前提没变):还用顾问那份,按现在的情况重新过闸', { plan: v.plan, state: v.state, steps: v.steps });
+        S.ok(!v.src, '这时顾问那份照样能用:不出「情况变了」那行(纯状态,2.3.0 删了)', v.src);
         // 另一台设备上顾问改了今晚(跳过眼霜)→ 同步过来:修订线 + 步骤里没了
         await p.eval(`const d=${ENV};d.sk_tnai1={date:__d(0),id:'t-sync',at:new Date().toISOString(),ops:[{op:'skip',product:${JSON.stringify(EYE)},to:'',level:'',why:'测试'}],undo:{prev:null}};d._updatedAt=Date.now()+9000;fakeCloud.emit(d);${W8(300)}return 1`);
         const r1 = await view(p);
         S.ok(/顾问.*改了今晚/.test(r1.rev) && /今晚跳过「MZ Skin/.test(r1.rev) && /撤销/.test(r1.rev), '「顾问改了今晚 · 撤销」单独一行', r1.rev);
-        S.ok(!r1.steps.includes(EYE) && r1.skips.some(x => /顾问：今晚先跳过/.test(x)), '小改叠在顾问版上(眼霜挪进今晚不用)', r1.skips);
+        S.ok(!r1.steps.includes(EYE) && r1.plan === 'ai', '小改叠在顾问版上(眼霜那步不在了)', r1.steps);
         const calls = await log(p, '/api/tonight');
         await click(p, '#tn-rev [data-act=undo]', 300);
         const r2 = await view(p);
@@ -284,14 +335,18 @@ await run('v2-a-tonight', [
         await sleep(2600);
         await p.eval(`const d=${ENV};d.sk_tn1=Object.assign({},d.sk_tn1,{shave:true,date:__d(0),manual:true});d._updatedAt=Date.now()+15000;fakeCloud.emit(d);${W8(400)}return 1`);
         const r4 = await view(p);
-        S.ok(/离线排法/.test(r4.head) && /情况变了/.test(r4.src) && r4.h1 === '今晚 · 刮胡夜', '同步来的刮胡(前提变了):先用离线排法,标「情况变了」', { head: r4.head, src: r4.src, h1: r4.h1 });
+        S.ok(r4.plan === 'offline' && /情况变了/.test(r4.src) && /让顾问重排/.test(r4.src) && r4.h1 === '今晚刮胡夜', '同步来的刮胡(前提变了):先用离线排法,步骤下面一行「情况变了 · 让顾问重排」', { plan: r4.plan, src: r4.src, h1: r4.h1 });
         S.ok(await log(p, '/api/tonight') === calls, '同步来的前提变化:也不调顾问');
+        await click(p, '#tn-src [data-act=ask]', 200);
+        await p.waitFor(`(__AIF.log||[]).filter(x=>x.p==='/api/tonight').length===${calls + 1}`, 4000);
+        await p.waitFor(`(document.getElementById('tn-plan')||{dataset:{}}).dataset.src==='ai'`, 4000);
+        S.ok(!(await view(p)).src, '点「让顾问重排」:调一次,换上顾问的,那一行小字也没了');
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
     ['顾问版:打了勾的酸不被这周额度挪走;做完了不再重排', async ({ S, open }) => {
         const p = await open({ seed: 'full', seedArg: `{products:i=>[]}`, mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)}}`, login: true });
         await tab(p, 'record', 100); await tab(p, 'tonight', 100);
-        await p.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 6000);
+        await p.waitFor(`(document.getElementById('tn-plan')||{dataset:{}}).dataset.src==='ai'`, 6000);
         const v0 = await view(p);
         const i = v0.steps.indexOf(ACID);
         S.ok(i >= 0, '顾问排了酸(这周额度 1 次,还没用)', v0.steps);
@@ -299,7 +354,7 @@ await run('v2-a-tonight', [
         const v1 = await view(p);
         const aria = await p.eval(`const b=[...document.querySelectorAll('#tn-plan [data-step]')].find(x=>x.dataset.step===${JSON.stringify(ACID)});return b?b.getAttribute('aria-checked'):null`);
         S.ok(v1.steps.includes(ACID) && aria === 'true' && !/到上限了/.test(v1.allText), '勾了酸之后:还在列表里、是勾上的;不会被「这周已经刷过 1 次」挪走', { steps: v1.steps, aria });
-        S.ok(/顾问/.test(v1.head), '还是顾问那份', v1.head);
+        S.ok(v1.plan === 'ai', '还是顾问那份', v1.plan);
         // 完成今晚之后:本机再改情况也不重调(今晚已经做完了)
         await click(p, '#tn-finish-b', 300);
         await p.eval(`document.querySelector('#skin-sheet .sheet-x').click();return 1`); await sleep(200);
@@ -351,7 +406,7 @@ await run('v2-a-tonight', [
         const noAcid = Object.assign({}, TONIGHT_FULL, { steps: TONIGHT_FULL.steps.filter(x => x.product !== ACID), skips: [{ product: ACID, why: '鼻翼这两天起皮，先停一晚' }] });
         const p = await open({ seed: 'minimal', mode: 'on', aif: `{tonight:${JSON.stringify(noAcid)}}`, login: true });
         await tab(p, 'record', 100); await tab(p, 'tonight', 100);
-        await p.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 6000);
+        await p.waitFor(`(document.getElementById('tn-plan')||{dataset:{}}).dataset.src==='ai'`, 6000);
         const r = await p.eval(VIEW + `const pd=${ENV}.sk_planday1;const st=[...document.querySelectorAll('#tn-plan .step')].find(x=>(x.querySelector('.step-name')||{}).textContent===${JSON.stringify(ACID)});return {v,pd:(pd&&pd.items||[]).map(i=>i.name),why:st?(st.querySelector('.step-why')||{}).textContent:'',miss:st?!!st.querySelector('[data-miss]'):false}`);
         S.ok(r.pd.includes(ACID), '(前提)今晚排班里有这支酸', r.pd);
         S.ok(r.v.steps.includes(ACID) && r.miss, '顾问没排:放回步骤里,带「今晚没做」', r.v.steps);
@@ -362,11 +417,12 @@ await run('v2-a-tonight', [
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
     ['顾问用不了:没开通 / 连不上 / 额度用完 → 离线排法', async ({ S, open }) => {
-        for (const [mode, re] of [['none', /顾问没开通/], ['down', /顾问连不上/], ['quota', /用完了/]]) {
+        // 2.3.0:纯状态(没开通、额度)页面上不写;连不上要她动手(再试一次)才出一行
+        for (const [mode, re] of [['none', /^$/], ['down', /顾问没连上。\s*再试一次/], ['quota', /^$/]]) {
             const p = await open({ seed: 'full', mode, login: true });
             await tab(p, 'record', 100); await tab(p, 'tonight', 900);
             const v = await view(p);
-            S.ok(re.test(v.src) && /离线排法/.test(v.src) && v.steps.length >= 3, `${mode}:今晚照常(离线排法),说清楚为什么`, v.src);
+            S.ok(re.test(v.src) && v.plan === 'offline' && v.steps.length >= 3 && !/离线排法|没开通|用完了/.test(v.allText), `${mode}:今晚照常(离线排法);${mode === 'down' ? '步骤下面一行「再试一次」' : '不写纯状态'}`, { src: v.src, plan: v.plan, state: v.state });
             S.ok(!p.errors.length, `${mode}:0 console error`, p.errors);
             p.done(); await sleep(200);
         }
@@ -388,7 +444,7 @@ await run('v2-a-tonight', [
         T2.why = '参考 ' + URL + ' 的说法'; T2.steps[2].why = '看这里：' + URL;
         const p = await open({ seed: 'full', seedArg: `{products:i=>[]}`, mode: 'on', login: true, width: 320, aif: `{tonight:${JSON.stringify(T2)},feedback:{text:'可以看看 ${URL}',note_add:'',next_adjust:[],dropped:[]}}` });
         await tab(p, 'tonight', 200);
-        await p.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 8000);
+        await p.waitFor(`(document.getElementById('tn-plan')||{dataset:{}}).dataset.src==='ai'`, 8000);
         await p.eval(`const d=${ENV};d.sk_tnai1={date:__d(0),id:'t-url',at:new Date().toISOString(),ops:[{op:'skip',product:'MZ Skin Soothe & Smooth 眼部精华',to:'',level:'',why:'见 ${URL}'}],undo:{prev:null}};d._updatedAt=Date.now()+9000;fakeCloud.emit(d);${W8(400)}return 1`);
         const hs = () => p.eval(`return {sw:document.documentElement.scrollWidth,cw:document.documentElement.clientWidth}`);
         const a = await hs();
@@ -405,7 +461,7 @@ await run('v2-a-tonight', [
     ['单步 · 面板内容、今晚不用 → 撤销 / 重做、换成货架上的(顾问版)', async ({ S, open }) => {
         const p = await open({ seed: 'full', seedArg: `{products:i=>[]}`, mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)}}`, login: true });
         await tab(p, 'tonight', 200);
-        await p.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 8000);
+        await p.waitFor(`(document.getElementById('tn-plan')||{dataset:{}}).dataset.src==='ai'`, 8000);
         const SHEET = `(()=>{const ov=document.getElementById('step-ops');if(!ov)return null;const q=s=>ov.querySelector(s);return {title:q('.sheet-t').textContent,txt:ov.innerText,skip:!!q('#sa-skip'),swap:[...ov.querySelectorAll('[data-sa=swap]')].map(x=>x.dataset.to),pick:!!q('#sa-pick'),chat:!!q('#sa-chat')}})()`;
         const opsOf = name => p.eval(`const b=[...document.querySelectorAll('.step-ops')].find(x=>x.dataset.name===${JSON.stringify(name)});if(!b)return false;b.click();await new Promise(r=>setTimeout(r,80));return true`);
         const v0 = await view(p);
@@ -420,7 +476,7 @@ await run('v2-a-tonight', [
         S.ok(a.skip && a.pick && a.chat && a.swap.length === 1 && a.swap[0] === 'REN 亮黑眼圈眼霜', '面板:今晚不用 / 换成货架上的(同角色其他一支)/ 让顾问挑 / 问顾问', a);
         await click(p, '#sa-skip', 250);
         const s1 = await view(p), o1 = await p.eval(`return ${ENV}.sk_tnai1`);
-        S.ok(!s1.steps.includes(EYE) && s1.skips.some(x => /你：今晚先跳过/.test(x)) && !(await p.eval(`return !!document.getElementById('step-ops')`)), '今晚不用:这一步挪进「今晚不用的」,面板关了', s1.skips);
+        S.ok(!s1.steps.includes(EYE) && !(await p.eval(`return !!document.getElementById('step-ops')`)), '今晚不用:这一步从步骤里拿掉,面板关了', s1.steps);
         S.ok(/^你改了今晚/.test(s1.rev) && /今晚跳过「MZ/.test(s1.rev), '修订条标「你改了今晚」(不冒充顾问)', s1.rev);
         S.ok(o1 && o1.ops.length === 1 && o1.ops[0].op === 'skip' && o1.ops[0].by === 'user' && o1.undo, '写进今晚修订线 sk_tnai1,带 by:user 和撤销所需的改前状态', o1);
         S.ok(await p.eval(`return document.getElementById('tn-rev').classList.contains('you')`), '她自己的修订条用中性竖线(.you),不是顾问的 --rev');
@@ -449,17 +505,17 @@ await run('v2-a-tonight', [
     ['单步 · 闸挡住的候选不出现(发炎禁猛酸 / 就医红线酸全停)', async ({ S, open }) => {
         const COLLECT = `const out={};for(const b of [...document.querySelectorAll('.step-ops')]){b.click();await new Promise(r=>setTimeout(r,60));const ov=document.getElementById('step-ops');out[b.dataset.name]=[...ov.querySelectorAll('[data-sa=swap]')].map(x=>x.dataset.to);ov.querySelector('.sheet-x').click();await new Promise(r=>setTimeout(r,30));}return out`;
         const p1 = await open({ seed: 'full', seedArg: `{products:i=>[]}`, mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)}}`, login: true });
-        await tab(p1, 'tonight', 200); await p1.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 8000);
+        await tab(p1, 'tonight', 200); await p1.waitFor(`(document.getElementById('tn-plan')||{dataset:{}}).dataset.src==='ai'`, 8000);
         const c0 = await p1.eval(COLLECT);
         S.ok((c0[ACID] || []).includes('Sunday Riley Good Genes'), '对照:平时酸这一步的候选里有 Good Genes', c0[ACID]);
         p1.done(); await sleep(200);
         const p2 = await open({ seed: 'full', seedArg: `{status:i=>i<=-8?['泛红']:['出油','闭口']}`, mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)}}`, login: true });
-        await tab(p2, 'tonight', 200); await p2.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 8000);
+        await tab(p2, 'tonight', 200); await p2.waitFor(`(document.getElementById('tn-plan')||{dataset:{}}).dataset.src==='ai'`, 8000);
         const c1 = await p2.eval(COLLECT);
         S.ok(c1[ACID] && !(c1[ACID] || []).includes('Sunday Riley Good Genes'), '近两周发炎:猛酸被闸挡住,不出现在候选里', c1);
         p2.done(); await sleep(200);
         const p3 = await open({ seed: 'full', seedArg: `{status:i=>i>=-6?['泛红']:[]}`, mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)}}`, login: true });
-        await tab(p3, 'tonight', 200); await p3.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 8000);
+        await tab(p3, 'tonight', 200); await p3.waitFor(`(document.getElementById('tn-plan')||{dataset:{}}).dataset.src==='ai'`, 8000);
         const c2 = await p3.eval(COLLECT);
         const all = [].concat(...Object.values(c2));
         S.ok(await p3.eval(`return !!document.getElementById('tn-med')`) && !Object.keys(c2).includes(ACID) && Object.keys(c2).includes(EYE), '就医红线亮:今晚没有酸这一步,眼霜照用', Object.keys(c2));
@@ -469,7 +525,7 @@ await run('v2-a-tonight', [
     ['单步 · 让顾问挑(/api/swap):带理由三选一 + 一句话,过闸后直接生效,标顾问', async ({ S, open }) => {
         const SWAP = { options: [{ name: '不在货架上的神仙眼霜', why: '假的' }, { name: 'REN 亮黑眼圈眼霜', why: '更温和，眼周不刺。' }], dropped: [] };
         const p = await open({ seed: 'full', seedArg: `{products:i=>[]}`, mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)},swap:${JSON.stringify(SWAP)}}`, login: true });
-        await tab(p, 'tonight', 200); await p.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 8000);
+        await tab(p, 'tonight', 200); await p.waitFor(`(document.getElementById('tn-plan')||{dataset:{}}).dataset.src==='ai'`, 8000);
         await p.eval(`[...document.querySelectorAll('.step-ops')].find(x=>x.dataset.name===${JSON.stringify(EYE)}).click();return 1`); await sleep(100);
         const n0 = await log(p, '/api/swap');
         await click(p, '#sa-pick', 80);
@@ -498,7 +554,7 @@ await run('v2-a-tonight', [
         S.ok(/今晚的「MZ Skin/.test(ad.draft) && await log(p, '/api/chat') === chats, '问顾问:预填一句进对话,不自动发', ad);
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
-    ['单步 · 没登录:只有今晚不用 / 换成货架上的,没有顾问的入口和「问一句」', async ({ S, open }) => {
+    ['单步 · 没登录:只有今晚不用 / 换成货架上的,没有顾问的入口', async ({ S, open }) => {
         const p = await open({ seed: 'full', seedArg: `{products:i=>[]}` });
         S.ok(!(await p.eval(`return !!document.getElementById('tn-quick')`)), '没登录:不出现「问一句」');
         const step = await p.eval(`return document.querySelector('.step-ops').dataset.name`);
@@ -512,74 +568,42 @@ await run('v2-a-tonight', [
         S.ok((await view(p)).steps.includes(step), '撤销回来');
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
-    ['问一句 · 带今晚实时状态、流式显示、action 生效挂修订线、闸挡住的不改', async ({ S, open }) => {
-        const ACT = { id: 'q1:tonight', message: '眼霜先停。', changes: [{ op: 'skip', product: EYE, to: '', level: '', text: '', why: '刺痛' }], dropped: [] };
-        const p = await open({ seed: 'full', seedArg: `{products:i=>[]}`, mode: 'on', login: true,
-            aif: `{tonight:${JSON.stringify(TONIGHT_FULL)},quickMs:160,quick:[['delta',{t:'先停这一步，'}],['delta',{t:'只做保湿。'}],['done',{text:'先停这一步，只做保湿。',model:'claude-test',effort:'low',cost:0.001}]]}` });
-        await tab(p, 'tonight', 200); await p.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 8000);
-        S.ok(await p.eval(`return !!document.getElementById('tn-quick') && !!document.getElementById('qk-q')`), '登录且开通顾问:今晚页有「问一句」');
-        await click(p, '#tn-step-1', 100);
-        await p.eval(`const q=document.getElementById('qk-q');q.value='刚涂完有点刺，要停吗？';q.dispatchEvent(new Event('input',{bubbles:true}));return 1`);
-        await p.eval(`document.getElementById('tn-step-4').click();return 1`); await sleep(100);
-        S.ok((await p.eval(`return document.getElementById('qk-q').value`)) === '刚涂完有点刺，要停吗？', '整屏重画(点了别的步骤)输入的字不丢');
-        await p.eval(`document.getElementById('tn-step-4').click();return 1`); await sleep(80);
-        await click(p, '#qk-go', 10);
-        await p.waitFor(`(document.getElementById('qk-a')||{}).textContent==='先停这一步，'`, 3000);
-        S.ok(await p.eval(`return document.getElementById('qk-go').textContent==='停一下'`), '流式:先到一半时按钮是「停一下」,已经显示前半句');
-        await p.waitFor(`(document.getElementById('qk-a')||{}).textContent==='先停这一步，只做保湿。'`, 3000);
-        await p.waitFor(`document.getElementById('qk-go').textContent==='问'`, 3000).catch(() => { });
-        S.ok(await p.eval(`return document.getElementById('qk-go').textContent==='问'`), '收完:按钮回「问」');
-        const q = await p.eval(`return (__AIF.log||[]).filter(x=>x.p==='/api/quick').map(x=>x.body)`);
-        const b = q[0] || {}, live = b.live || {};
-        S.ok(q.length === 1 && b.messages.length === 1 && b.messages[0].role === 'user' && /刚涂完有点刺/.test(b.messages[0].text) && b.context && Array.isArray(b.context.products), '/api/quick:一条用户消息 + 快照', { n: q.length, m: b.messages });
-        S.ok(/^\d\d:\d\d$/.test(live.now) && Array.isArray(live.ticked) && live.ticked.length === 1 && live.notYet.length === 3 && live.tonight.steps.length === 4 && live.tonightDone === false, 'live:现在几点、做了哪几步、还没做哪几步、今晚排的步骤', live);
-        S.ok(!(await p.eval(`return !!document.getElementById('tn-rev')`)), '普通问答不改今晚');
-        await p.eval(`__AIF.quick=[['delta',{t:'眼霜先停。'}],['action',${JSON.stringify(ACT)}],['done',{text:'眼霜先停。',model:'claude-test',effort:'low',cost:0.001,action:'q1:tonight'}]];__AIF.quickMs=5;return 1`);
-        await p.eval(`document.getElementById('qk-q').value='眼周刺';return 1`);
-        await click(p, '#qk-go', 10);
-        await p.waitFor(`!!document.getElementById('tn-rev')`, 3000);
-        const v = await view(p), o = await p.eval(`return ${ENV}.sk_tnai1`);
-        S.ok(!v.steps.includes(EYE) && /^顾问/.test(v.rev) && /今晚跳过「MZ/.test(v.rev) && o && o.ops[0].op === 'skip' && !o.ops[0].by, 'action 照对话那条路生效:眼霜挪走,修订条标顾问,能撤销', { rev: v.rev, o });
-        S.ok((await p.eval(`return document.getElementById('qk-a').textContent`)) === '眼霜先停。', '答案还留在面板上');
-        await click(p, '#tn-rev [data-act=undo]', 300);
-        S.ok((await view(p)).steps.includes(EYE), '撤销:眼霜回来');
+    ['今晚页没有「问一句」:登录且开通顾问也没有;对话在顾问 tab', async ({ S, open }) => {
+        const p = await open({ seed: 'full', seedArg: `{products:i=>[]}`, mode: 'on', login: true, aif: `{tonight:${JSON.stringify(TONIGHT_FULL)}}` });
+        await tab(p, 'tonight', 200); await p.waitFor(`(document.getElementById('tn-plan')||{dataset:{}}).dataset.src==='ai'`, 8000);
+        const r = await p.eval(`return {quick:!!document.getElementById('tn-quick')||!!document.getElementById('qk-q'),input:document.querySelectorAll('#tonight input[type=text],#tonight textarea').length}`);
+        S.ok(!r.quick && !r.input, '登录且开通顾问:今晚页没有「问一句」输入框', r);
+        await tab(p, 'advisor', 400);
+        await p.eval(`document.querySelectorAll('#sheet-root .sheet-ov').forEach(o=>o.remove());return 1`);
+        S.ok(await p.eval(`return !!document.getElementById('adv-text')`), '顾问 tab 有对话输入框(问的口子在那里)');
+        // 单步面板里的「问顾问」:预填进对话、不自动发
+        await tab(p, 'tonight', 300);
+        await p.eval(`[...document.querySelectorAll('.step-ops')].find(x=>x.dataset.name===${JSON.stringify(EYE)}).click();return 1`); await sleep(150);
+        const chats = await log(p, '/api/chat');
+        await click(p, '#sa-chat', 300);
+        S.ok(/今晚的「MZ Skin/.test(await p.eval(`return (document.getElementById('adv-text')||{}).value||''`)) && await log(p, '/api/chat') === chats && await log(p, '/api/quick') === 0, '单步「问顾问」:预填进对话,不自动发;今晚页从不调 /api/quick');
         S.ok(!p.errors.length, '0 console error', p.errors);
-        p.done(); await sleep(200);
-        const ADD = { id: 'q2:tonight', message: '加一支酸。', changes: [{ op: 'add', product: ACID, to: '', level: '', text: '', why: '' }], dropped: [] };
-        const p2 = await open({ seed: 'full', seedArg: `{status:i=>i>=-6?['泛红']:[]}`, mode: 'on', login: true,
-            aif: `{tonight:${JSON.stringify(TONIGHT_FULL)},quick:[['delta',{t:'加一支酸。'}],['action',${JSON.stringify(ADD)}],['done',{text:'加一支酸。',model:'claude-test',effort:'low',cost:0.001}]]}` });
-        await tab(p2, 'tonight', 200); await p2.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 8000);
-        await p2.eval(`document.getElementById('qk-q').value='今晚能刷酸吗';return 1`);
-        await click(p2, '#qk-go', 10);
-        await p2.waitFor(`/没过安全闸/.test((document.getElementById('qk-a')||{}).textContent||'')`, 3000);
-        const v2 = await view(p2);
-        S.ok(!v2.steps.includes(ACID) && v2.med && (await p2.eval(`return ${ENV}.sk_tnai1`)) == null, '就医红线亮:quick 想加酸被同一道闸拦下,今晚不动、红线卡还在', { steps: v2.steps, a: await p2.eval(`return document.getElementById('qk-a').textContent`) });
     }],
-    ['极简模式 · 能调整,不加打卡也不催;问一句不带「没做」', async ({ S, open }) => {
-        const p = await open({ seed: 'minimal', mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)},quick:[['delta',{t:'好。'}],['done',{text:'好。',model:'claude-test',effort:'low',cost:0.001}]]}`, login: true });
-        await tab(p, 'tonight', 200); await p.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 8000);
+    ['极简模式 · 能调整,不加打卡也不催', async ({ S, open }) => {
+        const p = await open({ seed: 'minimal', mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)}}`, login: true });
+        await tab(p, 'tonight', 200); await p.waitFor(`(document.getElementById('tn-plan')||{dataset:{}}).dataset.src==='ai'`, 8000);
         const v = await view(p);
         S.ok(v.boxes === 0 && (await p.eval(`return document.querySelectorAll('.step-ops').length`)) >= 2 && !/还没做|记得打|别忘了打/.test(v.allText), '极简:没有 checkbox、有「调整」、没有催促', { boxes: v.boxes });
         const first = await p.eval(`const b=[...document.querySelectorAll('.step-ops')].find(x=>x.dataset.name!==${JSON.stringify(ACID)});return b.dataset.name`);
-        await p.eval(`document.getElementById('qk-q').value='这支能上吗';return 1`);
-        await click(p, '#qk-go', 10);
-        await p.waitFor(`(document.getElementById('qk-a')||{}).textContent==='好。'`, 3000);
-        const live = await p.eval(`return (__AIF.log||[]).filter(x=>x.p==='/api/quick').map(x=>x.body)[0].live`);
-        S.ok(!('ticked' in live) && !('notYet' in live) && /极简/.test(live.mode) && Array.isArray(live.notDone), '极简:live 里没有 ticked / notYet(不把没打卡说成没做)', live);
         await p.eval(`[...document.querySelectorAll('.step-ops')].find(x=>x.dataset.name===${JSON.stringify(first)}).click();return 1`); await sleep(100);
         await click(p, '#sa-skip', 250);
         const v2 = await view(p);
         S.ok(!v2.steps.includes(first) && /^你改了今晚/.test(v2.rev) && v2.boxes === 0, '极简:能划掉,标你改了今晚,仍无打卡', { first, rev: v2.rev });
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
-    ['单步面板 / 问一句 · 美学探针(浅 / 深 × 衬线 / 无衬线)', async ({ S, open }) => {
+    ['单步面板 · 美学探针(浅 / 深 × 衬线 / 无衬线)', async ({ S, open }) => {
         for (const scheme of ['light', 'dark']) for (const type of ['serif', 'sans']) {
             const p = await open({ seed: 'full', seedArg: `{products:i=>[]}`, scheme, mode: 'on', aif: `{tonight:${JSON.stringify(TONIGHT_FULL)}}`, login: true });
             await p.eval(`document.documentElement.dataset.type='${type}';return 1`);
-            await tab(p, 'tonight', 200); await p.waitFor(`/顾问/.test((document.getElementById('tn-steps-h')||{}).textContent||'')`, 8000);
+            await tab(p, 'tonight', 200); await p.waitFor(`(document.getElementById('tn-plan')||{dataset:{}}).dataset.src==='ai'`, 8000);
             const tag = scheme + '/' + type;
             const r0 = await p.eval(PROBE + `;return __probe('#tonight')`);
-            S.ok(!r0.emoji.length && !r0.lowCr.length && !r0.smallN && !r0.styleAttrs.length && r0.sizes.every(x => [12, 14, 16, 18, 22, 28].includes(x)), `${tag}:今晚页(含调整按钮、问一句):0 emoji、对比度、≥44、无 style=、6 档字号`, { e: r0.emoji, cr: r0.lowCr, small: r0.small, st: r0.styleAttrs, sz: r0.sizes });
+            S.ok(!r0.emoji.length && !r0.lowCr.length && !r0.smallN && !r0.styleAttrs.length && r0.sizes.every(x => [12, 14, 16, 18, 22, 28].includes(x)), `${tag}:今晚页(含调整按钮、洗澡模块):0 emoji、对比度、≥44、无 style=、6 档字号`, { e: r0.emoji, cr: r0.lowCr, small: r0.small, st: r0.styleAttrs, sz: r0.sizes });
             await p.eval(`[...document.querySelectorAll('.step-ops')][1].click();return 1`); await sleep(150);
             const r1 = await p.eval(PROBE + `;return __probe('#step-ops')`);
             S.ok(!r1.emoji.length && !r1.lowCr.length && !r1.smallN && !r1.styleAttrs.length && r1.sizes.every(x => [12, 14, 16, 18, 22, 28].includes(x)), `${tag}:面板:0 emoji、对比度、≥44、无 style=、6 档字号`, { e: r1.emoji, cr: r1.lowCr, small: r1.small, st: r1.styleAttrs, sz: r1.sizes });

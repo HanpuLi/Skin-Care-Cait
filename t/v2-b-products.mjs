@@ -169,6 +169,12 @@ await run('v2-b-products', [
         S.ok(call.length === 1 && /让顾问判断/.test(call[0].t) && call[0].region === 'GB', '点了才判断一次(trigger 写明,context 带 region GB)', call);
         S.ok(JSON.stringify(v.groups) === JSON.stringify(['now:1', 'before_out:1', 'optional:1']) && /缺一支/.test(v.sum) && v.redo === '重新判断', '顾问版:一句话 + 现在就缺 / 快用完前备上 / 可买可不买', v);
         S.ok(v.links.length === 2 && v.links.every(h => /^https:\/\//.test(h)), '型号链接只认 https(没给链接的就是纯文字)', v.links);
+        // 2.3.0 同类排名:新形状画成名次 1~n + 排序依据;改规则之前存下的旧形状(没 basis)只叫「型号」,不冒充排名
+        const rk = await p.eval(`return [...document.querySelectorAll('#pr-shop-list .shop-it')].map(it=>({need:(it.querySelector('.shop-need')||{}).textContent||'',h:(it.querySelector('.shop-rank .sec-t')||{}).textContent||'',
+            basis:(it.querySelector('.shop-basis')||{}).textContent||'',nos:[...it.querySelectorAll('.pick-no')].map(x=>x.textContent).join(),whys:it.querySelectorAll('.pick-w').length,meta:[...it.querySelectorAll('.pick-m')].map(x=>x.textContent)}))`);
+        const nw = rk.find(x => /轻薄保湿/.test(x.need)), old = rk.find(x => /强清洁/.test(x.need));
+        S.ok(nw && nw.h === '同类前 4 名，第 1 名最好' && /^排序依据：按成分短/.test(nw.basis) && nw.nos === '1,2,3,4' && nw.whys === 4 && nw.meta[0] === '£18 · LookFantastic', '新形状:「同类前 4 名，第 1 名最好」+ 排序依据 + 名次 1~4,每个写价格 · 在哪买、为什么排这里', nw);
+        S.ok(old && old.h === '型号' && !old.basis && old.nos === '1,2', '旧形状(没 basis):标题只叫「型号」,没有排序依据', old);
         S.ok(/这些不用买/.test(v.skip) && /B5 修复霜/.test(v.skip), '「这些不用买」一段', v.skip);
         const rec = await p.eval(`return {local:JSON.parse(localStorage.getItem('sk_ai_shop1')||'null'),cloud:'sk_ai_shop1' in ${DATA}}`);
         S.ok(rec.local && rec.local.uid === 'u-test' && rec.local.sig && !rec.cloud, '结果按账号存本机 sk_ai_shop1(带 uid / 签名),不进云', { uid: rec.local && rec.local.uid, cloud: rec.cloud });
@@ -300,6 +306,23 @@ await run('v2-b-products', [
         const sn = await p.eval(`return (${DATA}.sk_proddefs1||[]).find(x=>x.name==='排法测试乳').schedule`);
         S.ok(sn.maxPerWeek === 2 && sn.type === 'base', '新加产品:排法默认按类别,手动改了的也带进去', sn);
         S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
+    ['要不要买 · 排名列表:浅 / 深 × 纸墨 / 无衬线', async ({ S, open }) => {
+        for (const scheme of ['light', 'dark']) for (const type of ['serif', 'sans']) {
+            const p = await open({ seed: 'full', mode: 'on', login: true, scheme });
+            await p.eval(`localStorage.setItem('sk_type','${type}');document.documentElement.dataset.type='${type}';return 1`);
+            await tab(p, 'products', 300);
+            await goShop(p);
+            await click(p, '#pr-shop-redo', 100);
+            await p.waitFor(`!!document.querySelector('#pr-shop-list .pick-no')`, 4000);
+            const tag = scheme + '/' + type;
+            const pr = await design(p, '#products');
+            S.ok(!pr.emoji.length && !pr.lowCr.length && !pr.smallN && !pr.styleAttrs.length && pr.red === 0 && (scheme === 'light' || !pr.brightN) && pr.sizes.every(x => [12, 14, 16, 18, 22, 28].includes(x)), `${tag}:排名列表 0 emoji、对比度、触控 ≥44、6 档字号、不用红${scheme === 'dark' ? '、不刺眼' : ''}`, { cr: pr.lowCr, small: pr.small, sz: pr.sizes, br: pr.bright });
+            const sh = await p.eval(`const r=[...document.querySelectorAll('#pr-shop-list .pick')].map(li=>getComputedStyle(li).boxShadow);return r.filter(x=>x&&x!=='none'&&!/inset/.test(x)).length`);
+            S.ok(sh === 0, `${tag}:排名那几行没有投影`, sh);
+            S.ok(!p.errors.length, `${tag}:0 console error`, p.errors);
+            p.done(); await sleep(150);
+        }
     }],
     ['深色 · 产品页(顾问版)', async ({ S, open }) => {
         const p = await open({ seed: 'full', mode: 'on', login: true, scheme: 'dark' });

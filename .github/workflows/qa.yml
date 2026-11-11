@@ -52,6 +52,9 @@ jobs:
       - name: 引擎 / 安全闸 / 顾问层回归（不需要浏览器：直接 import js/engine、js/model、js/ai）
         run: npm run test:engine
 
+      - name: 洗澡「隔几天洗」回归（不需要浏览器：model/week.js 的模拟、记录、改间隔、迁移，今晚页模块的 HTML）
+        run: npm run test:shower
+
       - name: 关键功能存在性（防止误删）
         run: |
           node -e '

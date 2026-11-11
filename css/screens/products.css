@@ -1,6 +1,7 @@
 /* ══ 产品屏(js/ui/products.js)═════════════════════════════════════════════════════════════
    货架一行一件:左边两字角色、右边名字 + 状态点 + 开封几周。状态点只用 --ok / --caution / 空心,不用红。
-   「要不要买新的」:summary 一句 → 按紧急程度分组(现在就缺带一个 --caution 点)→ 型号可点 → 这些不用买。 */
+   「要不要买新的」:summary 一句 → 按紧急程度分组(现在就缺带一个 --caution 点)→ 每一环带排序依据和同类前 3~5 名(名次 + 可点的名字
+   + 价钱和在哪买 + 为什么排这里)→ 这些不用买。 */
 #products .note.ink{color:var(--ink)}
 .pr-top{margin-top:var(--sp-3);column-gap:var(--sp-4)}
 .pr-h{font:18px/var(--lh-item) var(--serif);color:var(--ink)}
@@ -20,17 +21,43 @@
 #pr-shop-meta{margin-top:var(--sp-1)}
 #pr-shop .shop-st{margin-top:var(--sp-1)}
 .pr-shop-sum{margin-top:var(--sp-2)}
-.shop-g{margin-top:var(--sp-4)}
-.shop-gh{display:flex;align-items:center;gap:6px}
+.shop-g{margin-top:var(--sp-5)}
+.shop-gh{display:flex;align-items:center;gap:var(--sp-2)}
 .shop-gh .dot{margin:0}
-.shop-it{display:flex;flex-direction:column;padding-top:var(--sp-1)}
-.shop-it+.shop-it{margin-top:var(--sp-3)}
+.shop-it{display:flex;flex-direction:column;padding-top:var(--sp-2)}
+.shop-it+.shop-it{margin-top:var(--sp-5)}
 .shop-need{font:18px/var(--lh-item) var(--serif);color:var(--ink)}
-.picks{margin-top:var(--sp-1)}
-/* 型号链接整行 44 高可点(链接本身撑高,不靠 li 的内边距) */
-.picks li{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:var(--sp-3);align-items:center;padding:0;border-bottom:1px solid var(--line)}
-.picks a,.pick-n{display:flex;align-items:center;min-height:44px;padding:var(--sp-1) 0;font:16px/var(--lh-item) var(--serif);color:var(--ink);overflow-wrap:anywhere}
-.picks a{text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:1px;text-decoration-color:var(--line-ctl)}
+/* 条目头部几行(买哪类 / 为什么 / 买到之前)之间留 4,不挤成一坨,也不比下面的排名行松 */
+.shop-it>p{margin-top:var(--sp-1)}
+.shop-it>.shop-basis{margin-top:var(--sp-2)}
+
+/* 同类排名(纸墨):左边一栏名次,行与行之间通栏细线。第 1 名的名次用实墨、其余淡墨,层级只靠墨色,不加框不加底。
+   名字、价格 · 在哪买、为什么三行贴在一起(一个型号的信息不被拆开);名次和名字第一行对齐:两边都从行顶下 12px 起。
+   名字是链接时命中区用 ::after 上下各扩 12px 凑够 44(11/11 前是 min-height:44 + 内边距,把名字和它自己的价格撑开了) */
+.shop-rank{margin-top:var(--sp-3)}
+.shop-rank .shop-basis{margin-top:var(--sp-1)}
+.picks{margin-top:var(--sp-2);border-bottom:1px solid var(--line)}
+.picks>.pick{display:grid;grid-template-columns:2em minmax(0,1fr);column-gap:var(--sp-3);padding:var(--sp-3) 0;border-top:1px solid var(--line)}
+.pick-no{font:18px/var(--lh-item) var(--serif);color:var(--faint);font-variant-numeric:lining-nums tabular-nums}
+.picks>.pick:first-child .pick-no{color:var(--ink-strong)}
+.pick-b{display:flex;flex-direction:column;min-width:0}
+.pick-n{font:16px/var(--lh-item) var(--serif);color:var(--ink);overflow-wrap:anywhere}
+a.pick-n{position:relative;text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:1px;text-decoration-color:var(--line-ctl)}
+a.pick-n::after{content:"";position:absolute;left:0;right:0;top:calc(-1 * var(--sp-3));bottom:calc(-1 * var(--sp-3))}
+.pick-m{font:14px/var(--lh-note) var(--serif);color:var(--muted);font-variant-numeric:lining-nums}
+.pick-w{margin-top:var(--sp-1);font:14px/var(--lh-note) var(--serif);color:var(--ink)}
+
+/* 同类排名(无衬线 ·「仪器」):在 #pr-shop 那张卡片里,名次是小圆标(第 1 名墨色实心,其余浅灰底),
+   行与行之间是从文字起点开始的半像素线(和卡片里的 nav-row 同一种),不画通栏线。圆标 20 高,和名字第一行(22 高)一起从行顶下 12px 起 */
+:root[data-type="sans"] .shop-need{font-weight:600}
+:root[data-type="sans"] .picks{border-bottom:0}
+:root[data-type="sans"] .picks>.pick{grid-template-columns:20px minmax(0,1fr);border-top:0;position:relative}
+:root[data-type="sans"] .picks>.pick+.pick::before{content:"";position:absolute;left:calc(20px + var(--sp-3));right:0;top:0;height:1px;background:var(--line);transform:scaleY(.5);transform-origin:top}
+:root[data-type="sans"] .pick-no{width:20px;height:20px;margin-top:0;padding:0;border-radius:50%;background:var(--tint);color:var(--ink);font:600 12px/20px var(--serif);text-align:center}
+:root[data-type="sans"] .picks>.pick:first-child .pick-no{background:var(--ink-strong);color:var(--paper)}
+:root[data-type="sans"] .pick-n{font-weight:600}   /* §5.2 只有 700 / 600 / 400 三档 */
+:root[data-type="sans"] a.pick-n{color:var(--accent);text-decoration:none}
+:root[data-type="sans"] .pick-m{font-variant-numeric:tabular-nums}
 .shop-skip{margin-top:var(--sp-4)}
 .shop-skip .list{margin-top:var(--sp-1)}
 .shop-off{margin-top:var(--sp-2);counter-reset:so}

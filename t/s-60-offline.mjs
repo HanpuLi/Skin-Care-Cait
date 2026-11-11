@@ -61,7 +61,7 @@ export default async function ({ origin, S, open }) {
         const h=document.getElementById('tonight-h');
         return {online:navigator.onLine,boot:document.documentElement.dataset.boot,steps:document.querySelectorAll('#tn-plan [data-step], #tn-plan li').length,title:h&&h.textContent,
             serif:document.fonts.check('16px "Skin Serif SC"','今晚'),loaded,fam:h&&getComputedStyle(h).fontFamily.split(',')[0]}`);
-    S.ok(off.boot === 'ok' && off.steps >= 3 && /^今晚 · \S/.test(off.title || ''), '断网重开:今晚页照常(标题 + 步骤)', off);
+    S.ok(off.boot === 'ok' && off.steps >= 3 && /^今晚\S/.test(off.title || ''), '断网重开:今晚页照常(标题 + 步骤)', off);
     S.ok(off.loaded.indexOf('Skin Serif SC') >= 0 && off.serif, '断网重开:宋体子集从缓存加载', off);
     S.ok(off.loaded.indexOf('Skin Garamond') >= 0 || off.loaded.indexOf('Skin Mono') >= 0, '断网重开:西文字体也从缓存加载', off.loaded);
     S.ok(!p.errors.filter(e => !/ERR_INTERNET_DISCONNECTED|Failed to fetch|net::/.test(e)).length, '断网 0 报错(网络错误除外)', p.errors);

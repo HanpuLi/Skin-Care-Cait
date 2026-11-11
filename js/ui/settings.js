@@ -1,9 +1,10 @@
 // ══ 设置(页头右上角印章打开)═══════════════════════════════════════════════════════════
 // 一个 sheet,从上到下:账号与同步 → 怎么用(完整 / 极简、记录页开关)→ 你的情况(刮胡、HRT、卸妆、肤质、想解决的、避开的区域)
-//   → 洗澡习惯(和顾问页「存成每周习惯」同一份 sk_preset1)→ 刷酸时机 + 高级手动覆盖 → 照片分析(按账号,非主账号默认关、本人同意才开)
+//   → 刮胡习惯(和「接下来 7 晚」的「存成每周习惯」同一份 sk_preset1)→ 刷酸时机 + 高级手动覆盖 → 照片分析(按账号,非主账号默认关、本人同意才开)
+//   (洗澡 11/10 起只在今晚页的洗澡模块 / 洗澡页,ui/shower.js;这里一处都没有)
 //   → 提醒(「主动找你」推送,ai/push.js;默认关)
 //   → 外观(深浅色默认跟随系统、印章字)→ 顾问(开通、记得的事、模型)→ 数据(导出 / 恢复备份 / 恢复副本)→ 数据说明 → 重新做引导 / 改版说明。
-// 写档案一律走 model/profile.js 的 updateProfile(读 → 改 → 写回,别拿内存旧档案盖掉刚同步来的);洗澡习惯走 model/week.js。
+// 写档案一律走 model/profile.js 的 updateProfile(读 → 改 → 写回,别拿内存旧档案盖掉刚同步来的);刮胡习惯走 model/week.js。
 // 【要紧】#sync-line / #sync-choose / #auth-btn 这几个 id 不能改:sync.js 的状态回调和整页同步测试(s-85)直接找它们。
 import { LOCAL_KEYS, CLOUD_KEYS } from '../store.js';
 import { openSheet, closeSheet, esc, ico, toast, sysConfirm, download } from './sheets.js';
@@ -140,16 +141,14 @@ function groups(app) {
         ${sw('set-care', '在看医生 / 用药', P.startState === 'care' && !!P.careAt)}
         <p class="note set-hint">打开时护肤只排清洁、保湿、修护和眼霜，酸、面膜、维 A、精华、面油都先不上，医生开的药优先；顾问也会看到。</p>
         ${skinChipsHtml(P)}</div>`;
-    G.week = `<div class="sheet-sec" id="set-habit"><div class="sec-t">通常哪几天洗澡${P.shaving ? '、刮胡' : ''}</div>
-        ${P.shaving ? '<div class="set-days-l">洗澡</div>' : ''}
-        <div class="chips set-days" id="set-shower" role="group" aria-label="洗澡">${WEEK_ORDER.map(d => chip(!!(hp.find(x => x.dow === d) || {}).shower, WD[d], `data-hd="${d}" data-hk="shower" aria-label="周${WD[d]}洗澡"`)).join('')}</div>
-        ${P.shaving ? `<div class="set-days-l">刮胡</div><div class="chips set-days" id="set-shavedays" role="group" aria-label="刮胡">${WEEK_ORDER.map(d => chip(!!(hp.find(x => x.dow === d) || {}).shave, WD[d], `data-hd="${d}" data-hk="shave" aria-label="周${WD[d]}刮胡"`)).join('')}</div>` : ''}
-        <p class="note">和上面 7 晚里的「存成每周习惯」是同一份。改了以后，明天起两周按新习惯排；${minimal ? (P.shaving ? '今晚洗澡在上面的 7 晚里点，今晚刮胡在今晚页点。' : '今晚的在上面的 7 晚里点。') : '今晚在今晚页改。'}</p></div>
-
+    // 「接下来 7 晚」页底下:每周刮胡习惯(只有开了刮胡的人才有)+ 刷酸时机。洗澡不在这里(隔 x 天,在洗澡页)
+    G.week = `${P.shaving ? `<div class="sheet-sec" id="set-habit"><div class="sec-t">通常哪几天刮胡</div>
+        <div class="chips set-days" id="set-shavedays" role="group" aria-label="刮胡">${WEEK_ORDER.map(d => chip(!!(hp.find(x => x.dow === d) || {}).shave, WD[d], `data-hd="${d}" data-hk="shave" aria-label="周${WD[d]}刮胡"`)).join('')}</div>
+        <p class="note">和上面 7 晚里的「存成每周习惯」是同一份。改了以后，明天起两周按新习惯排；今晚刮不刮在今晚页点。</p></div>` : ''}
     <div class="sheet-sec" id="set-timing"><div class="sec-t">刷酸时机</div>
         ${seg('timing', P.acidTiming || '', [['', '交给方案'], ['avoid', '避开刚洗完澡'], ['prefer', '洗澡夜优先'], ['neutral', '无所谓']], '刷酸时机')}
         <p class="note">${P.acidTiming ? '你手动定的。' : '交给方案：现在是「' + esc(TIMING_TXT[at] || at) + '」' + (at === 'avoid' ? '（有要避开的区域，或近两周泛红、刺痛过）' : '') + '。'}热水泡过的皮肤屏障会短暂变弱，易泛红的人别在那时刷。</p>
-        <details class="fold set-adv"><summary><span class="fold-sum"><span class="lede">高级 · 手动覆盖</span><span class="note">默认交给方案</span></span></summary><div class="fold-body">
+        <details class="fold set-adv"><summary><span class="fold-sum"><span class="lede">手动覆盖</span><span class="note">${P.repairUse || P.acidLevel ? '改过' : '交给方案'}</span></span></summary><div class="fold-body">
             <label class="field"><span>修护霜用法</span><select id="set-repairuse"><option value="">交给方案</option><option value="full"${P.repairUse === 'full' ? ' selected' : ''}>全脸薄涂</option><option value="spot"${P.repairUse === 'spot' ? ' selected' : ''}>只点涂</option></select></label>
             <label class="field"><span>没连上顾问时的刷酸档位</span><select id="set-acidlevel"><option value="">${minimal ? '自动（停在每周 1 次，不会自己加）' : '自动（没刺激就一档档加）'}</option>${[1, 2, 3].map(n => `<option value="${n}"${+P.acidLevel === n ? ' selected' : ''}>每周 ${n} 次</option>`).join('')}</select></label>
         </div></details></div>`;
@@ -189,7 +188,7 @@ function groups(app) {
     };
     return G;
 }
-// ── 设置 = 一屏 + 5 个二级页(DESIGN.md §3)。洗澡 / 刮胡习惯和刷酸时机不在这里:全 App 只在「今晚 → 接下来 7 晚」改 ──
+// ── 设置 = 一屏 + 5 个二级页(DESIGN.md §3)。刮胡习惯和刷酸时机不在这里:全 App 只在「顾问 → 接下来 7 晚」改;洗澡在今晚页的洗澡模块 ──
 export const id = 'settings';
 export const title = '设置';
 const PAGES = [['account', '账号与顾问'], ['skin', '你的皮肤'], ['look', '提醒与外观'], ['data', '数据'], ['help', '帮助']];
@@ -202,7 +201,7 @@ function pageOf(k) {
     return { title: PAGES.find(x => x[0] === k)[1], render: app => `<div class="set-page" id="set-page-${k}">${groups(app)[k]}</div>`, mount: (root, app) => { bind(root, app); if (k === 'account') probeMe(app); } };
 }
 export const pages = { account: pageOf('account'), skin: pageOf('skin'), look: pageOf('look'), data: pageOf('data'), help: pageOf('help') };
-// 「今晚 → 接下来 7 晚」用:每周洗澡 / 刮胡习惯 + 刷酸时机(id 照旧 set-habit / set-timing)。bindWeekSettings 只挂在包住这两段的那个元素上
+// 「顾问 → 接下来 7 晚」(#/advisor/week)用:每周刮胡习惯(开了刮胡才有)+ 刷酸时机(id 照旧 set-habit / set-timing)。bindWeekSettings 只挂在包住这两段的那个元素上
 export function weekSettingsHtml(app) { return groups(app).week; }
 export function bindWeekSettings(el, app) { bind(el, app); }
 // 「→」行:整行可点 ≥52px,左主文案 + 右一句现状 + chevron(各屏共用)
@@ -287,18 +286,18 @@ function bind(ov, app) {
     on('set-model', () => saveOpts(app, ov));
     on('set-effort', () => saveOpts(app, ov));
     on('set-import', el => { const f = el.files && el.files[0]; el.value = ''; if (f) importBackup(app, f); });
-    // 洗澡 / 刮胡习惯:改 sk_preset1(+ showerDays 镜像),明天起两周按新习惯排(今晚在今晚页改,不动)
+    // 刮胡习惯:改 sk_preset1(洗澡位和 showerDays 镜像原样带着),明天起两周按新习惯排(今晚在今晚页改,不动)
     ov.querySelectorAll('[data-hd]').forEach(b => b.addEventListener('click', () => {
-        const d = +b.dataset.hd, k = b.dataset.hk, W = app.world();
+        const d = +b.dataset.hd, W = app.world();
+        if (b.dataset.hk !== 'shave') return;   // 洗澡不再按周几排(隔 x 天,ui/shower.js)
         const hp = habitPreset(W.preset, W.profile).map(x => Object.assign({}, x));
         const e = hp.find(x => x.dow === d); if (!e) return;
-        e[k] = !e[k];
+        e.shave = !e.shave;
         saveHabit(app.store, hp);
         for (let i = 1; i <= 13; i++) {
             const ds = addDays(W.today, i);
             if (dowOf(ds) !== d) continue;
-            const st = getDayState(app.store, ds);
-            setDayState(app.store, ds, k === 'shower' ? e.shower : st.shower, k === 'shave' ? e.shave : st.shave, W.today);
+            setDayState(app.store, ds, getDayState(app.store, ds).shower, e.shave, W.today);
         }
         changed(app);
     }));

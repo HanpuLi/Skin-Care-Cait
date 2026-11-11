@@ -8,7 +8,7 @@
 // 别同时跑两轮:两个无头 Chrome 抢资源会互相拖死。
 //
 // 另起进程跑的(各自有自己的骨架和 run(),在这里按顺序一个一个跑):
-//   sync-unit · engine-unit          不开浏览器:同步信封 / 引擎 / 顾问层
+//   sync-unit · engine-unit · shower-unit   不开浏览器:同步信封 / 引擎 / 顾问层 / 洗澡「隔几天洗」(2.3.0)
 //   v2-boot                          外壳:四个 tab、深链、锁、离线、深色、0 全局
 //   v2-a-tonight · v2-a-record · v2-a-capture   A 路:今晚(顾问写今晚 + 缓存 + 过闸)、记录(随时记一笔、脸部地图、反馈)、拍照分析
 //   v2-b-advisor · v2-b-products · v2-b-settings · v2-b-oobe   B 路:顾问(对话、修订线、7 晚、常识)、产品(要不要买)、设置、新用户引导
@@ -16,8 +16,9 @@
 //
 // t/s-*.mjs(v1 时代的整页场景,P3 迁到 v2:等待条件改成 <html data-boot="ok">,读全局的地方改成读信封 / 点真 DOM,断言不删):
 //   s-00-load      两种模式 + 新用户能打开、0 报错、四屏都画得出来
-//   s-10-tonight   今晚页:首屏(第一步整个在第一屏)、没有分数 / 「屏障」、标题是夜型、点状态不出新版本、完成后没点的记「没做」不划线、没防晒是注意卡
-//   s-15-ia        印章不压标题(390 / 375 / 320 + 刘海)、页头贴顶、问句 + 即时影响、不写「洗完澡适合刷酸」、四个 tab、空货架
+//   s-10-tonight   今晚页:首屏(第一步整个在第一屏,纸墨 / 无衬线都量)、没有分数 / 「屏障」、标题是眉题 + 夜型、点状态不出新版本、完成后没点的记「没做」不划线、没防晒是注意卡
+//   s-15-ia        印章不压标题(390 / 375 / 320 + 刘海)、页头贴顶且只有日期和印章、刮胡问句 + 即时影响、洗澡模块、不写「洗完澡适合刷酸」、
+//                  无衬线页头 / 标签栏实心不模糊、四个 tab、空货架
 //   s-16-week-guide 洗澡习惯两份合一的旧数据迁移(不丢、不重跑)+ 常识的内容口径(不开浏览器)
 //   s-20-gate      爆痘时今晚页说为什么、猛酸不排;极简阶梯写明「不会自己加」
 //   s-30-ai        数据说明第一次进顾问页弹一次(按账号);对话里撤销「改了今晚」→ 今晚页也能「重做」
@@ -39,6 +40,22 @@
 //   · 「ai.js 没加载」(s-30、s-33)和「ai.js 排在 App 后面加载」(s-70):v2 没有单独的 ai.js,顾问层是 js/ai/*.js 模块。
 //   · CSV 导出(s-70)、产品 tab 上的保质期小点(s-70):v2 备份只导 JSON;保质期在货架那一行标 caution 点(v2-b-products 测)。
 //   · v1 读全局变量的同步 / 规则断言:全部换成 engine-unit / sync-unit 的等价单测(P1 已迁)。
+//
+// 2.3.0(11/10 Cait「洗澡单独一个模块、隔 x 天洗」「蓝圈里的都删」「今晚 · 护肤这种排版不要」)退役的断言,都换成了新行为的断言:
+//   · 洗澡问句 + 点了说影响(s-15 第 2、3 段,v2-a-tonight)、「还没排洗澡」卡 + 选每周几天 +「先不排」(noShowerPlan)、页头洗澡胶囊 + 洗澡日历 sheet、
+//     7 晚格子里的「澡」和每周洗澡习惯(v2-b-advisor、v2-b-settings)、记录页近 14 天的「澡」标记(v2-a-record):洗澡改成「隔几天洗」,只在今晚页的洗澡模块和 #/tonight/shower。
+//     换成:v2-a-tonight 洗澡那几块(还没排 / 今晚不洗改到明晚 / 临时加 / 洗澡页步进和日历 / 别处都没有 / 老习惯迁移)+ shower-unit(模拟、记录、改间隔、迁移)
+//     + s-15 页头只有日期和印章;刷酸说法的口径(不写「洗完澡适合刷酸」)改在洗澡模块上点。
+//   · 「今晚不用的 N 样」里的条目和原因(v2-a-tonight、s-10):折叠删了。被闸拦下的原因仍断言写在提醒里;s-10 改断言今晚页没有这个折叠。
+//   · 来源状态行的纯状态文案(没登录 / 离线排法 / 没开通 / 额度用完 / 顾问几点排的,v2-a-tonight、s-30)和步骤小标题 #tn-steps-h 里的「顾问 / 离线排法」:
+//     页面上不再写。改断言 #tn-plan 的 data-src / data-state,页面上没有这些字;要她动手的(先看一下 / 再试一次 / 情况变了 · 让顾问重排)照旧断言。
+//   · 极简「默认全做」「排上的默认都算做了」(v2-a-tonight):删了,改断言不出现。
+//   · 极简模式今晚页的「记一下皮肤」(v2-a-tonight、s-36、s-50):记录 tab 有;只在 hideRecords 时留在今晚页,这几处改用藏了记录 tab 的种子。
+//   · 今晚页「问一句」(v2-a-tonight 两块:流式、live 状态、action 生效、闸拦下):顾问 tab 的对话就是这个口子。改断言今晚页没有输入框、不调 /api/quick,
+//     单步「问顾问」预填进对话;对话里 action 生效 / 过闸 / 修订线由 v2-b-advisor、s-30 守着。
+//   · 标题「今晚 · 夜型」一行(s-00、s-10、s-15、s-60、v2-boot、v2-a-tonight):改成眉题「今晚」+ 大标题夜型两段(h1 文字「今晚修护夜」)。
+//   · 「接下来 7 晚」在 #/tonight/week、今晚首页一条「→」行(v2-a-tonight、v2-b-advisor、v2-b-settings):搬到 #/advisor/week,顾问首页第三条「→」行;
+//     旧地址自动换过去(断言了)。
 // 其余 v1 断言的新家写在各个 s-*.mjs 的文件头里。
 import fs from 'node:fs';
 import path from 'node:path';
@@ -51,7 +68,7 @@ const want = process.argv.slice(2);
 const pick = f => !want.length || want.some(w => f.includes(w));
 const files = fs.readdirSync(DIR).filter(f => /^s-.*\.mjs$/.test(f)).sort().filter(pick);
 // 另起进程跑的几份(它们自己 process.exit,不能 import 进来)
-const SUITES = ['sync-unit', 'engine-unit', 'v2-boot', 'v2-a-tonight', 'v2-a-record', 'v2-a-capture', 'v2-b-advisor', 'v2-b-products', 'v2-b-settings', 'v2-b-oobe', 'v1-parity', 'v2-version'].filter(pick);
+const SUITES = ['sync-unit', 'engine-unit', 'shower-unit', 'v2-boot', 'v2-a-tonight', 'v2-a-record', 'v2-a-capture', 'v2-b-advisor', 'v2-b-products', 'v2-b-settings', 'v2-b-oobe', 'v1-parity', 'v2-version'].filter(pick);
 
 const srv = await serve();
 const origin = 'http://127.0.0.1:' + srv.address().port;

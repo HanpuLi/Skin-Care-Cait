@@ -1,7 +1,8 @@
 // ══ 顾问 ══════════════════════════════════════════════════════════════════════════════
 // 一屏四块(样稿 Main.dc.html「顾问」):
 //   ① 现在的方案:一句话 + 为什么这么排 + 按周怎么往前走(刷酸阶梯)+ 版本与撤销 —— 全部离线算,顾问没开通 / 连不上照样有
-//   ② 未来 7 晚:每晚点「澡」「刮」(刮只给开了刮胡的人),酸和面膜即时重排;「存成每周习惯 / 按习惯填」(单一来源 sk_preset1)
+//   ② 接下来 7 晚(二级页 #/advisor/week,首页一条「→」行):每晚排什么;开了刮胡的人点「刮」,酸和面膜即时重排;
+//      「存成每周习惯 / 按习惯重填」只管刮胡(sk_preset1)。洗澡 11/10 起不在这里(隔 x 天,今晚页的洗澡模块 / 洗澡页)
 //   ③ 问顾问:对话(SSE)。顾问改了今晚 / 方案 → 直接生效,挂一条修订线(撤销 / 重做);今晚页那条和这里是同一件事:
 //      修订线的状态不存在对话里,每次都从 sk_tnai1 / sk_regimen1 现算,所以哪边撤的,另一边都跟着变。出方案 / 每周复盘也在这里。
 //   ④ 常识(guide.js):写死,离线可看,每节「问顾问这一条」预填。
@@ -10,9 +11,9 @@
 import { K, LOCAL_KEYS } from '../store.js';
 import { esc, ico, openSheet, closeSheet, toast, sysConfirm } from './sheets.js';
 import { renderGuide, bindGuide } from './guide.js';
-import { navRow } from './settings.js';
+import { navRow, weekSettingsHtml, bindWeekSettings } from './settings.js';
 import { ensureShopRunner, readLabelFromFile, imageToDataURL } from './products.js';
-import { regimenRules, maxAcidPerWeek, repairUse, repairReason, zonesAvoiding, acidTiming, currentRegimen } from '../engine/rules.js';
+import { regimenRules, maxAcidPerWeek, repairUse, repairReason, zonesAvoiding, currentRegimen } from '../engine/rules.js';
 import { safetyGate } from '../engine/gate.js';
 import { acidLadder, LADDER_STEP_N, LADDER_MAX } from '../engine/ladder.js';
 import { next7, buildNightSteps, slotFor } from '../engine/schedule.js';
@@ -221,7 +222,7 @@ function ladderHtml(W) {
     const level = ai ? Math.max(0, Math.round(+rr.acidCap || 0)) : L.level;
     const gentle = acids.filter(p => !hasTrait(p, 'strong-exfo')), strong = acids.filter(p => hasTrait(p, 'strong-exfo'));
     const gname = shortName(rr.acidName || (gentle[0] && gentle[0].name) || '温和酸');
-    const nextNote = ai ? '看前两周的反应，顾问再定' : L.minimal ? '极简模式不会自己加；想加跟顾问说，或到今晚页「接下来 7 晚」底下的「高级」里改' : '再干净 ' + (LADDER_STEP_N - (L.streak || 0)) + ' 次（刷完两天内记了状态、没泛红没新痘）就加';
+    const nextNote = ai ? '看前两周的反应，顾问再定' : L.minimal ? '极简模式不会自己加；想加跟顾问说，或到「接下来 7 晚」底下的「高级」里改' : '再干净 ' + (LADDER_STEP_N - (L.streak || 0)) + ' 次（刷完两天内记了状态、没泛红没新痘）就加';
     const stages = [
         { when: '第一档', what: '每周 1 次 ' + gname, n: 1 },
         { when: '第二档', what: '每周 2 次', n: 2 },
@@ -285,7 +286,7 @@ function planHtml(app, W) {
     </section>`;
 }
 
-// ── 接下来 7 晚(今晚 → 接下来 7 晚 那一页用;tonight.js 的 pages.week 调 weekHtml / bindWeek)──
+// ── 接下来 7 晚(二级页 #/advisor/week:pages.week 调 weekHtml / bindWeek;别的模块也可能 import,别改名)──
 function nightLabel(d) {
     const it = d.items || [];
     if (it.some(i => i.type === 'acid')) return '酸';
@@ -309,12 +310,10 @@ function n7Note(W, days) {
         if (changed.length) return { text: changed.map(d => name(d) + '：' + prev[d.date].split('|')[0] + ' 改成 ' + nightLabel(d)).join('；') + '。', moved: true };
         if (tapped) return { text: name(tapped) + '改了，排的没变。', moved: false };
     }
-    const tm = acidTiming(W);
-    const bits = [];
-    if (P.shaving) bits.push('刮胡那晚不排酸，改了会自动挪');
-    if (tm === 'prefer') bits.push('洗澡夜优先排酸');
-    else if (tm === 'avoid') bits.push('酸避开刚洗完热水澡的晚上');
-    return { text: bits.length ? bits.join('；') + '。' : '哪晚洗澡在这里点，酸和面膜会跟着重排。', moved: false };
+    // 洗澡不在这一页说(它的家是洗澡页;刷酸怎么避开洗澡夜写在下面「刷酸时机」里)
+    if (P.shaving) return { text: '刮胡那晚不排酸，点「刮」改了会自动挪。点日子看那晚怎么做。', moved: false };
+    // 没开刮胡的人这一页没有能点的开关:说清楚这 7 晚是怎么来的、想改去哪改
+    return { text: '酸和面膜按方案错开排，哪晚刷酸跟着下面的「刷酸时机」走。点日子看那晚怎么做。', moved: false };
 }
 // 未来 7 晚:今晚那格按她眼前那份今晚(顾问版有酸就标「酸」),其余按离线排班
 const days7 = (app, W) => next7Shown(W, shownOf(app, W));
@@ -322,19 +321,20 @@ export function weekHtml(W, app) {
     if (!(W.products || []).some(p => !p.hidden)) return '';
     const P = W.profile || {}, days = days7(app, W);
     const preset = presetOk(W.preset) ? W.preset : null;
-    const same = !!preset && days.every(d => { const x = preset.find(p => p.dow === dowOf(d.date)); return x && !!x.shower === !!d.shower && (!P.shaving || !!x.shave === !!d.shave); });
+    // 习惯只剩刮胡:和存过的每周刮胡日一样就标「已存成每周习惯」
+    const same = !!preset && days.every(d => { const x = preset.find(p => p.dow === dowOf(d.date)); return x && !!x.shave === !!d.shave; });
     const note = n7Note(W, days);
-    const tg = (d, k, on, label) => `<button type="button" class="n7-b" data-date="${esc(d.date)}" data-k="${k}" aria-pressed="${on}" aria-label="${esc((d.date === W.today ? '今晚' : d.dayName) + label)}">${k === 'shower' ? '澡' : '刮'}</button>`;
+    const tg = d => `<button type="button" class="n7-b" data-date="${esc(d.date)}" data-k="shave" aria-pressed="${!!d.shave}" aria-label="${esc((d.date === W.today ? '今晚' : d.dayName) + '刮胡')}">刮</button>`;
     // 日期只在第一格和跨月那格写「月/日」,其余只写几号(像日历;12px 的小字少一半,整页 <14px 的字不超 15%)
     const moved = ST.n7Prev ? days.filter(d => ST.n7Prev[d.date] !== undefined && ST.n7Prev[d.date] !== nightKey(d)).map(d => d.date) : [];
     return `<section class="sec adv-week" id="adv-week">
-        <div class="sec-h"><h2 class="sec-t">每晚排什么</h2><span class="note faint">点「澡」${P.shaving ? '「刮」' : ''}直接改</span></div>
+        <div class="sec-h"><h2 class="sec-t">每晚排什么</h2>${P.shaving ? '<span class="note faint">点「刮」直接改</span>' : ''}</div>
         <div class="n7" id="adv-n7" role="group" aria-label="未来 7 晚">${days.map((d, i) => `<div class="n7-d${d.date === W.today ? ' today' : ''}${moved.indexOf(d.date) >= 0 ? ' moved' : ''}" data-day="${esc(d.date)}">
             <button type="button" class="n7-go" data-night="${esc(d.date)}" aria-label="${esc((d.date === W.today ? '今晚' : d.dayName) + '：' + nightLabel(d) + '，看那晚的步骤')}"><span class="n7-date">${esc(i === 0 || d.date.slice(8) === '01' ? mdShort(d.date) : String(Number(d.date.slice(8, 10))))}</span><span class="n7-dow">${esc(d.date === W.today ? '今晚' : d.dayName)}</span><span class="n7-type${nightLabel(d) === '修' ? '' : ' act'}">${esc(nightLabel(d))}</span></button>
-            ${tg(d, 'shower', !!d.shower, '洗澡')}${P.shaving ? tg(d, 'shave', !!d.shave, '刮胡') : ''}</div>`).join('')}</div>
+            ${P.shaving ? tg(d) : ''}</div>`).join('')}</div>
         <p class="note${note.moved ? ' rev' : ''}" id="adv-n7-note" role="status">${esc(note.text)}</p>
-        <div class="btn-row adv-habit"><button type="button" class="btn-link sm" id="adv-habit-save"${same ? ' aria-disabled="true"' : ''}>${same ? '已存成每周习惯' : '存成每周习惯'}</button>
-            <button type="button" class="btn-link sm quiet" id="adv-habit-fill">按习惯重填</button></div>
+        ${P.shaving ? `<div class="btn-row adv-habit"><button type="button" class="btn-link sm" id="adv-habit-save"${same ? ' aria-disabled="true"' : ''}>${same ? '已存成每周习惯' : '存成每周习惯'}</button>
+            <button type="button" class="btn-link sm quiet" id="adv-habit-fill">按习惯重填</button></div>` : ''}
     </section>`;
 }
 function nightSheet(app, date) {
@@ -342,9 +342,10 @@ function nightSheet(app, date) {
     let r = buildNightSteps(W, d.shower, d.shave, slotFor(W, date));
     const sh = date === W.today ? shownOf(app, W) : null;
     if (sh && sh.source === 'ai') r = { steps: sh.steps.map(x => ({ p: x.product || x.how, h: x.product ? x.how : '' })), skips: sh.skips.map(x => x.product), warnings: sh.warnings || [], ai: true };
+    // 标题写成一句「周三 11/12，修护夜」,不用「A · B」点号串联(Cait 不要那种排版)
     const when = date === W.today ? '今晚' : d.dayName + ' ' + mdShort(date);
-    openSheet({ id: 'night-sheet', title: when + ' · ' + (nightLabel(d) === '修' ? '修护夜' : nightLabel(d) + '夜'),
-        html: `<p class="note">${d.shower ? '洗澡' : '不洗澡'}${(W.profile || {}).shaving ? (d.shave ? ' · 刮胡' : ' · 不刮胡') : ''}。${r.ai ? '今晚页上顾问排的那份。' : '离线规则排的，那天顾问可能会再调。'}</p>
+    openSheet({ id: 'night-sheet', title: when + '，' + (nightLabel(d) === '修' ? '修护夜' : nightLabel(d) + '夜'),
+        html: `<p class="note">${(W.profile || {}).shaving ? (d.shave ? '刮胡。' : '不刮胡。') : ''}${r.ai ? '今晚页上顾问排的那份。' : '离线规则排的，那天顾问可能会再调。'}</p>
             <ol class="night-steps">${r.steps.map(s => `<li><span class="lede">${esc(s.p)}</span>${s.h ? `<span class="note">${esc(s.h)}</span>` : ''}</li>`).join('')}</ol>
             ${r.skips.length ? `<p class="note">那晚不用：${esc(r.skips.join('、'))}</p>` : ''}
             ${(r.warnings || []).length ? `<div class="adv-warn">${r.warnings.map(w => `<p class="note ink">${esc(w.text)}</p>`).join('')}</div>` : ''}`,
@@ -353,40 +354,41 @@ function nightSheet(app, date) {
 function snapNights(app, W, tapped) { const o = {}; days7(app, W).forEach(d => { o[d.date] = nightKey(d); }); o.__t = tapped || ''; return o; }
 function toggleNight(app, date, k) {
     const W = app.world(), t = W.today;
-    if (date < t) return;
+    if (date < t || k !== 'shave') return;   // 7 晚格子里只剩「刮」;洗澡在洗澡页
     ST.n7Prev = snapNights(app, W, date);
     const d = next7(W).find(x => x.date === date); if (!d) return;
-    if (date === t) toggleTn(app.store, k, !d[k], t);
-    else setDayState(app.store, date, k === 'shower' ? !d.shower : d.shower, k === 'shave' ? !d.shave : d.shave, t);
+    if (date === t) toggleTn(app.store, 'shave', !d.shave, t);
+    else setDayState(app.store, date, d.shower, !d.shave, t);
     app.renderAll();
-    if (date === t && app.tonightChanged) app.tonightChanged('今晚' + (k === 'shower' ? '洗澡' : '刮胡') + '在「接下来 7 晚」改了');   // 今晚的前提变了:顾问重排(签名变了才调)
+    if (date === t && app.tonightChanged) app.tonightChanged('今晚刮胡在「接下来 7 晚」改了');   // 今晚的前提变了:顾问重排(签名变了才调)
     const b = document.querySelector(`#adv-n7 .n7-b[data-date="${date}"][data-k="${k}"]`);
     if (b) try { b.focus({ preventScroll: true }); } catch (e) { }
 }
 function saveWeekHabit(app) {
-    const W = app.world(), P = W.profile || {};
-    const preset = next7(W).map(d => ({ dow: dowOf(d.date), shower: !!d.shower, shave: !!d.shave }));
+    const W = app.world(), n7 = next7(W);
+    // 只存刮胡;sk_preset1 里的洗澡位是老数据(给 showerSince 之前的日子和旧版本用),原样带着
+    const preset = habitPreset(W.preset, W.profile).map(x => { const d = n7.find(y => dowOf(y.date) === x.dow); return Object.assign({}, x, { shave: d ? !!d.shave : !!x.shave }); });
     saveHabit(app.store, preset);
     ST.n7Prev = null;
     app.renderAll();
-    toast('存好了：以后点「按习惯重填」就照这 7 晚的' + (P.shaving ? '洗澡、刮胡' : '洗澡') + '排');
+    toast('存好了：以后点「按习惯重填」就照这 7 晚的刮胡排');
 }
 function fillWeekHabit(app) {
-    const W = app.world(), P = W.profile || {};
+    const W = app.world();
     if (!presetOk(W.preset)) {
-        openSheet({ id: 'habit-none', title: '还没存过习惯', text: '先把这 7 晚哪晚洗澡' + (P.shaving ? '、刮胡' : '') + '点好，再点「存成每周习惯」；也可以直接在下面的「通常哪几天洗澡」里选。', actions: [{ label: '好', primary: true }] });
+        openSheet({ id: 'habit-none', title: '还没存过习惯', text: '先把这 7 晚哪晚刮胡点好，再点「存成每周习惯」；也可以直接在下面的「通常哪几天刮胡」里选。', actions: [{ label: '好', primary: true }] });
         return;
     }
-    sysConfirm('接下来 7 晚（含今晚）的' + (P.shaving ? '洗澡和刮胡' : '洗澡') + '按存过的习惯重填，现在点过的会被盖掉。酸和面膜跟着重排。', () => {
-        const W2 = app.world(), t = W2.today, pre = habitPreset(W2.preset, W2.profile);
+    sysConfirm('接下来 7 晚（含今晚）的刮胡按存过的习惯重填，现在点过的会被盖掉。酸和面膜跟着重排。', () => {
+        const W2 = app.world(), t = W2.today, pre = habitPreset(W2.preset, W2.profile), n7 = next7(W2);
         ST.n7Prev = snapNights(app, W2, '');
         for (let i = 0; i < 7; i++) {
-            const ds = addDays(t, i), x = pre.find(p => p.dow === dowOf(ds)) || { shower: false, shave: false };
-            if (i === 0) { toggleTn(app.store, 'shower', !!x.shower, t); toggleTn(app.store, 'shave', !!x.shave, t); }
-            else setDayState(app.store, ds, !!x.shower, !!x.shave, t);
+            const ds = addDays(t, i), x = pre.find(p => p.dow === dowOf(ds)) || { shave: false }, d = n7.find(y => y.date === ds) || {};
+            if (i === 0) toggleTn(app.store, 'shave', !!x.shave, t);
+            else setDayState(app.store, ds, !!d.shower, !!x.shave, t);   // 洗澡位照写当天排的(间隔模式下它不起作用)
         }
         app.renderAll();
-        if (app.tonightChanged) app.tonightChanged('今晚洗澡 / 刮胡按习惯重填了');
+        if (app.tonightChanged) app.tonightChanged('今晚刮胡按习惯重填了');
     }, { title: '按习惯重填？', ok: '按习惯填' });
 }
 
@@ -394,7 +396,7 @@ function fillWeekHabit(app) {
 function accessHtml(app) {
     const a = app.ai.access();
     if (a === 'out' && app.sync && app.sync.state && app.sync.state.sdkMissing && app.store.state.owner) return `<div class="adv-access" id="adv-access" data-acc="out"><p class="lede">现在连不上登录服务。</p><p class="note">离线或网络不好时登录服务加载不出来；你的记录照常存在这台设备上，连上网重新打开就能问顾问。上面的方案和今晚的步骤不受影响。</p></div>`;
-    if (a === 'out') return `<div class="adv-access" id="adv-access" data-acc="out"><p class="lede">问顾问要先登录。</p><p class="note">登录后能问护肤问题、拍成分表认产品、让顾问出方案和每周复盘。没登录也不影响上面的方案和今晚的步骤。</p>
+    if (a === 'out') return `<div class="adv-access" id="adv-access" data-acc="out"><p class="lede">问顾问要先登录。</p><p class="note">登录后能问护肤问题、拍成分表认产品、让顾问出方案和每周复盘。没登录也不影响方案和今晚的步骤。</p>
         <div class="btn-row"><button type="button" class="btn btn-primary" data-act="signin">用 Google 登录</button></div></div>`;
     if (a === 'mismatch') return `<div class="adv-access" id="adv-access" data-acc="mismatch"><p class="lede">这个账号用不了顾问。</p><p class="note">这个邮箱已经绑定了另一个账号，换回第一次用的登录方式试试。上面的方案和今晚的步骤照常排。</p></div>`;
     if (a === 'none') return `<div class="adv-access" id="adv-access" data-acc="none"><p class="lede">顾问是邀请制。</p><p class="note">每次调用都要花钱，现在只对受邀的人开放。没有邀请码也不影响上面的方案和今晚的步骤。</p>
@@ -688,12 +690,22 @@ function planNow(W) {
     const reg = currentRegimen(W);
     return reg ? 'v' + reg.v + ' · ' + (mdAt(reg.at) || mdShort(reg.date)) : '';
 }
-// 顾问首页 = 对话(复盘卡、「复盘这周」在对话区)+ 两条「→」行;方案、常识各自一页(pages)
+// 「接下来 7 晚」那条 navRow 的右边一句:最近一次刷酸是哪晚,今晚也算(和点进去的 7 晚格子一致;今晚那格按她眼前那份今晚)。
+//   11/11 前跳过今晚、找不到就说「这 7 晚没排酸」,可 7 晚页第一格就是「今晚 酸」,两边对不上。不提洗澡:洗澡的家在今晚页
+function weekNow(app, W) {
+    if (!(W.products || []).some(p => !p.hidden)) return '还没有产品';
+    try {
+        const d = days7(app, W).find(x => (x.items || []).some(i => i.type === 'acid'));
+        return !d ? '这 7 晚没排酸' : d.date === W.today ? '今晚刷酸' : '下次刷酸 ' + d.dayName;
+    } catch (e) { return ''; }
+}
+// 顾问首页 = 对话(复盘卡、「复盘这周」在对话区)+ 三条「→」行;方案、7 晚、常识各自一页(pages)。
+//   极简模式下这一屏照样在(base.css 的 .adv 规则这里没用上),Cici 从这里进 7 晚页
 export function render(app) {
     const W = app.world();
     return `<h1 class="page-title" id="advisor-h">${esc(title)}</h1>
         ${chatHtml(app, W)}
-        <nav class="grp nav-list" aria-label="顾问">${navRow('#/advisor/plan', '现在的方案', planNow(W), 'adv-go-plan')}${navRow('#/advisor/guide', '护肤常识', '', 'adv-go-guide')}</nav>
+        <nav class="grp nav-list" aria-label="顾问">${navRow('#/advisor/plan', '现在的方案', planNow(W), 'adv-go-plan')}${navRow('#/advisor/week', '接下来 7 晚', weekNow(app, W), 'adv-go-week')}${navRow('#/advisor/guide', '护肤常识', '', 'adv-go-guide')}</nav>
         ${dockHtml(app)}`;
 }
 // 方案页:阶梯、这一版的细则、版本与撤销、重排(原来在顾问首页顶上,极简模式收在 adv-minfold 里)
@@ -724,15 +736,26 @@ function bindPlan(root, app) {
         else if (b.dataset.act === 'plan') askPlan(app);
     }));
 }
-// 接下来 7 晚:点「澡」「刮」直接改、点日期看那晚的步骤、存成每周习惯 / 按习惯重填
+// 接下来 7 晚:点「刮」直接改、点日期看那晚的步骤、存成每周习惯 / 按习惯重填
 export function bindWeek(root, app) {
     root.querySelectorAll('.n7-b').forEach(b => b.addEventListener('click', () => toggleNight(app, b.dataset.date, b.dataset.k)));
     root.querySelectorAll('[data-night]').forEach(b => b.addEventListener('click', () => nightSheet(app, b.dataset.night)));
     const hs = root.querySelector('#adv-habit-save'); if (hs) hs.addEventListener('click', () => saveWeekHabit(app));
     const hf = root.querySelector('#adv-habit-fill'); if (hf) hf.addEventListener('click', () => fillWeekHabit(app));
 }
+// 二级页 #/advisor/week(11/10 从今晚页搬来):7 晚 + 每周刮胡习惯(开了刮胡才有)+ 刷酸时机。洗澡不在这一页(隔 x 天,洗澡页)
+function weekPageHtml(app) {
+    const W = app.world();
+    const wk = weekHtml(W, app) || `<section class="sec" id="adv-week"><div class="empty"><p class="lede">还没有产品，排不出 7 晚。</p><p class="note">先在「产品」里加一支洁面和一支保湿。</p></div></section>`;
+    return wk + `<div class="wk-set" id="wk-set">${weekSettingsHtml(app)}</div>`;
+}
 export const pages = {
     plan: { title: '现在的方案', render: app => planHtml(app, app.world()), mount: (body, app) => bindPlan(body, app) },
+    week: {
+        title: '接下来 7 晚',
+        render: app => weekPageHtml(app),
+        mount: (body, app) => { bindWeek(body, app); const el = body.querySelector('#wk-set'); if (el) bindWeekSettings(el, app); }
+    },
     guide: {
         title: '护肤常识',
         render: app => `<section class="sec adv-guide-sec">${renderGuide(app.world().profile || {}, { canAsk: canTalk(app) })}</section>`,

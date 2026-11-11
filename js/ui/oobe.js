@@ -3,6 +3,8 @@
 //   新账号从**空货架**起步(不灌内置的那批);做完记 oobeAt = 今天 → 安全闸「第一晚不上任何活性」(engine/gate.js firstNight)。
 //   老账号(有日志 / 存过货架 / 引导过)不进引导。
 // 改版说明:v2 第一次打开弹一次,已读按账号记在档案 tourV2(sk_profile1 里,不新增云键;另一台设备看过就不再弹);走过引导的新用户直接记已读。
+//   2.3.0 另记一个 tour23:看过 v2 说明的老账号(Cait、Cici 都是)只弹 2.3 那几条(洗澡改成隔几天、7 晚搬到顾问、要不要买排名次)。
+//   11/11 前只认 tourV2,她俩一条都看不到(测试种子没有 tourV2,截图里每次都弹,看着像生效了)。
 // 什么时候弹(整合时 app.js 接):没登录 → 启动 1.8 秒后(onBoot);登录了 → 第一份服务器快照落地之后(onFirstSnapshot,用云端的档案判断)。
 import { K } from '../store.js';
 import { openSheet, closeSheet, hasSheet, esc, ico, toast } from './sheets.js';
@@ -15,6 +17,8 @@ import { buildSkincareContext } from '../ai/context.js';
 import { dataNoticeSeen, openDataNotice } from './advisor.js';
 import { openAddSheet, readLabelFromFile, holdShop } from './products.js';
 import { MINIMAL_DESC, FULL_DESC, skinChipsHtml, bindSkinChips } from './settings.js';
+import { everyText } from './shower.js';
+import { showerEvery } from '../model/week.js';
 
 export const OOBE_STEPS = ['welcome', 'invite', 'mode', 'shelf', 'skin', 'first'];
 let O = null;   // 正在走的引导 {redo, step}
@@ -178,7 +182,7 @@ export async function finishOobe(app) {
     const redo = !!(O && O.redo);
     closeSheet('oobe'); O = null;
     const t = app.today();
-    updateProfile(app.store, p => { p.onboarded = true; delete p.oobe; if (!redo) p.oobeAt = t; p.tour3 = true; p.tourIA = true; p.tourV2 = true; });
+    updateProfile(app.store, p => { p.onboarded = true; delete p.oobe; if (!redo) p.oobeAt = t; p.tour3 = true; p.tourIA = true; p.tourV2 = true; p.tour23 = true; });
     // 重新做引导:不出「第一版」(货架、皮肤都没变就不该凭空多一版,也别把顾问方案那条「撤销」挤成 superseded);
     //   真有变化(模式改了这类)由启动维护按签名自己重出
     if (!redo) syncRegimen(app.store, '第一版：按家里现有的东西和你说的皮肤情况', true, t);
@@ -207,23 +211,39 @@ export function whatsNewCards(P) {
     const shave = !!(P && P.shaving);
     if (P && P.minimalMode) return [
         ['护肤品不用打卡', '排上的默认都算用了；哪一步没做，点一下「今晚没做」。'],
-        ['想记皮肤就点「记一下皮肤」', '「记录」页顶上也能随时记一笔，一句话或一张照片。不记也不会催。'],
+        ['想记一下皮肤，到「记录」页', '顶上随时记一笔，一句话或一张照片。不记也不会催。'],
         ['顾问改了什么，直接生效', '今晚页和对话里各有一条修订线，哪边点「撤销」都是同一件事。'],
-        ['洗澡在今晚页的「接下来 7 晚」里排', '每晚点一下，可以存成每周习惯；每周洗澡习惯也在那里改。']];
+        ['洗澡在今晚页标题下面', '按隔几天洗来排，排上的晚上默认算洗了；点进去能改隔几天、看前后两周。']];
     return [
         ['今晚由顾问写', '每一步带一句为什么；顾问连不上的时候照离线规则排，一样能用。'],
         ['顾问改了什么，直接生效', '今晚页和对话里各有一条修订线，哪边点「撤销」都是同一件事。'],
         ['「记录」顶上随时记一笔', '一句话或一张照片；「完成今晚」之后也进同一个记录。'],
-        ['接下来 7 晚在今晚页底下', '哪晚洗澡' + (shave ? '、刮胡' : '') + '、哪晚刷酸，点一下就改；每周习惯和刷酸时机也在那里。'],
+        ['洗澡在今晚页标题下面', '按隔几天洗来排；今晚不想洗点一下，自动挪到明晚。'],
+        ['接下来 7 晚在「顾问」页', '哪晚刷酸' + (shave ? '、哪晚刮胡（点一下就改）' : '') + '；刷酸时机' + (shave ? '和每周刮胡习惯' : '') + '也在那里。'],
         ['方案在「顾问」页里', '「现在的方案」说为什么这么排、刷酸怎么一档档往前走。'],
         ['设置在右上角的印章里', '深浅色、照片分析、数据说明都在那。']];
+}
+// 2.3.0 这一版:给已经看过 v2 说明的老账号。洗澡从「每周哪几天」折算过来的,说清楚折成了多少(她不知道「隔 3 天」是哪来的)
+export function whatsNew23Cards(P) {
+    P = P || {};
+    const n = showerEvery(P), from = P.showerFrom;
+    const shower = n && from > 0 ? '原来每周洗 ' + from + ' 次，已经折算成' + everyText(n) + '，不对点进去改。' : '在今晚页标题下面，点进去定隔几天洗。';
+    const cards = [
+        ['洗澡改成隔几天洗', shower + '排上的晚上默认算洗了；今晚不想洗点一下，自动挪到明晚。'],
+        ['洗澡只在今晚页这一处', '页头、记录页、设置里都不再有洗澡；另一台设备也更新到这一版，洗澡才对得上。'],
+        ['接下来 7 晚搬到「顾问」页', '哪晚刷酸' + (P.shaving ? '、哪晚刮胡' : '') + '在那里看；今晚页只留今晚要做的。'],
+        ['要不要买：同类排前 3 到 5 名', '产品页「要不要买」里，每样要买的按好坏排了名次，写了为什么、在哪买、多少钱。']];
+    return cards;
 }
 export function showWhatsNew(app, opts) {
     opts = opts || {};
     const P = loadProfile(app.store);
-    if (!opts.force && (P.tourV2 || !hasLegacyData(app.store) || O || hasSheet('oobe') || hasSheet('whatsnew'))) return false;
-    const done = () => { if (!loadProfile(app.store).tourV2) updateProfile(app.store, p => { p.tourV2 = true; }); };
-    openSheet({ id: 'whatsnew', title: '这一版改了什么', html: `<div class="rows wn">${whatsNewCards(P).map((c, i) => `<div class="row"><span class="row-main"><span class="meta">${String(i + 1).padStart(2, '0')}</span><span class="lede">${esc(c[0])}</span><span class="note">${esc(c[1])}</span></span></div>`).join('')}</div>`,
+    // 没看过 v2 的:v2 那几条(已经含洗澡和 7 晚),看完两个都记已读;看过 v2、没看过 2.3 的:只弹 2.3 那几条;设置里点的(force)给这一版的
+    const v2 = !P.tourV2 && !opts.force;
+    if (!opts.force && ((P.tourV2 && P.tour23) || !hasLegacyData(app.store) || O || hasSheet('oobe') || hasSheet('whatsnew'))) return false;
+    const cards = v2 ? whatsNewCards(P) : whatsNew23Cards(P);
+    const done = () => { const q = loadProfile(app.store); if (!q.tourV2 || !q.tour23) updateProfile(app.store, p => { p.tourV2 = true; p.tour23 = true; }); };
+    openSheet({ id: 'whatsnew', title: '这一版改了什么', html: `<div class="rows wn">${cards.map((c, i) => `<div class="row"><span class="row-main"><span class="meta">${String(i + 1).padStart(2, '0')}</span><span class="lede">${esc(c[0])}</span><span class="note">${esc(c[1])}</span></span></div>`).join('')}</div>`,
         actions: [{ label: '知道了', primary: true, fn: done }], onClose: done });
     return true;
 }

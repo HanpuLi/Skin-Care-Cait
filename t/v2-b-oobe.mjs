@@ -124,6 +124,17 @@ await run('v2-b-oobe', [
         S.ok(await has(p, '#whatsnew'), '设置里「这一版改了什么」能再看');
         S.ok(!p.errors.length, '0 console error', p.errors);
     }],
+    ['看过 v2 的老账号 · 2.3 只弹这一版的几条(洗澡折算说清楚),记 tour23', async ({ S, open }) => {
+        const p = await open({ seed: 'minimal', seedArg: `{profile:{tourV2:true,showerDays:[1,4]}}`, keepSheets: true });
+        await p.waitFor(`!!document.getElementById('whatsnew')`, 4000);
+        const w = await text(p, '#whatsnew');
+        S.ok(/隔几天洗/.test(w) && /原来每周洗 2 次，已经折算成隔 3 天/.test(w) && /7 晚搬到「顾问」/.test(w) && !/护肤品不用打卡/.test(w), '只讲 2.3 的几条;洗澡说清楚是按以前每周 2 次折算的', w);
+        await p.eval(`document.querySelector('#whatsnew .btn-primary').click();return 1`); await sleep(200);
+        S.ok((await prof(p)).tour23 === true, '点「知道了」:档案记 tour23');
+        await p.send('Page.reload', {}); await sleep(2400);
+        S.ok(!(await has(p, '#whatsnew')), '再打开:不弹');
+        S.ok(!p.errors.length, '0 console error', p.errors);
+    }],
     ['重新做引导:皮肤步点「没有」不抹掉今天记的泛红,做完不凭空多一版方案', async ({ S, open }) => {
         const p = await open({ seed: 'full', seedArg: `{today:true,status:i=>i===0?['泛红']:['出油']}` });
         const before = await p.eval(`const d=${DATA};return {st:((d.sk_jrnl1||[]).find(e=>e.date===__d(0))||{}).status||[],n:(d.sk_regimen1||[]).length}`);

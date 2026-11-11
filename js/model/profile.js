@@ -1,7 +1,9 @@
 // ══ 每人档案 sk_profile1 ═══════════════════════════════════════════════════════════════════
 // 双人差异全靠它(不写死任何人的情况):
 //   shaving / hrt / minimalMode / hideRecords / skinType / baseTraits / concerns / goal / zones / excluded /
-//   acidTiming / repairUse / acidLevel / acidLevelAt / useMakeupRemoval / showerDays(镜像,见 model/week.js) /
+//   acidTiming / repairUse / acidLevel / acidLevelAt / useMakeupRemoval / showerDays(旧的每周洗澡日镜像,见 model/week.js) /
+//   showerEvery(1..7,每几天洗一次)/ showerSince('YYYY-MM-DD',从这天起按间隔算)/ showerMarks({日期: true|false},记下的洗了 / 没洗)/ showerHist(since 挪走时冻结的排法)/ showerFrom(迁移时折算前每周几次)
+//     —— 洗澡 11/10 起是「隔 x 天」,读写只走 model/week.js(showerDay / setShowerMark / setShowerEvery);noShowerPlan 不再用 /
 //   medical {state:'booked'|'seen'|'later', at, date?, seenAt?, note?, until?} / oobe / oobeAt / tourIA / stamp / firstSeen / autoMatched /
 //   startState('ok'|'irritated'|'care',引导里的起点)/ careAt(v2 引导或设置里打开「在看医生 / 用药」那天;有它安全闸才只排基础几样)
 // 纯函数直接用;要读写存储的函数第一个参数传 store(这个模块不 import store,也没有全局状态)。

@@ -1,34 +1,31 @@
-// ══ 今晚页:单步操作(健身 App「换 / 划掉」面板的对应物)+「问一句」(对应健身陪练 /api/quick)══════════════════════
+// ══ 今晚页:单步操作(健身 App「换 / 划掉」面板的对应物)══════════════════════════════════════════
 // 【单步】点步骤右边的「调整」→ 一个 sheet:怎么用 / 为什么 · 今晚不用这步 · 换成货架上的… · 让顾问挑(/api/swap)· 问顾问(预填进对话,不自动发)。
 //   所有改动都写进今晚修订线(sk_tnai1,ai/apply.js applyTonight)—— 和顾问 change_tonight 同一套撤销 / 重做;她自己点的带 by:'user',
 //   修订条标「你改了今晚」;「让顾问挑」选出来的是顾问的改动,标顾问。
 //   【闸】不另写一套:候选和落地都走 ai/apply.js 的 validateTonight(顾问写今晚用的同一道),再把「假如这么改,今晚会是什么样」交给
 //   shownTonight 跑一遍(叠改 → gateTonightPlan 过闸 → 保湿补位…),候选必须真的排得进去;落地后再核一遍,对不上就当场撤回。
 //   打了勾 / 已经做完的步骤是事实,不给改(keepDone 也会把它放回来)。极简模式:一样能调整,不加打卡、不催。
-//   没登录 / 没开通顾问(app.ai.access() !== 'on')时「让顾问挑」「问顾问」「问一句」都不出现。
-// 【问一句】今晚页上的小面板:带今晚实时状态(哪些做了 / 没做、现在几点、她眼前那份步骤)发 /api/quick,边到边显示;
-//   ≤60 字是后端提示词管的,这里不截断。quick 回了 change_today 类的 action,照对话那条路 applyTonight 生效并挂修订线。
-//   状态只放内存(换账号 / 过零点清掉),不写任何存储。
+//   没登录 / 没开通顾问(app.ai.access() !== 'on')时「让顾问挑」「问顾问」都不出现。
+// 【问一句】(今晚页步骤下面的 /api/quick 小面板)11/10 拿掉了:顾问 tab 就是对话,今晚页再放一个输入框是重复(Cait「狠狠做」那一轮)。
+//   单步 sheet 里的「问顾问」把这一步预填进顾问对话,问的口子还在。
 import { prodByName, derive } from '../engine/util.js';
 import { tonightOverride } from '../engine/rules.js';
 import { safetyGate } from '../engine/gate.js';
 import { applyTonight, undoTonightChange, validateTonight, shownTonight, tonightTicks } from '../ai/apply.js';
-import { buildSkincareContext, liveContext } from '../ai/context.js';
+import { buildSkincareContext } from '../ai/context.js';
 import { esc, toast, openSheet, closeSheet, hasSheet } from './sheets.js';
 import { askAdvisor, dataNoticeSeen, openDataNotice } from './advisor.js';
 
 const SHEET = 'step-ops';
 const REASONS = [['used_up', '用完了'], ['uncomfortable', '刺痛 / 不舒服'], ['dont_want', '不想用']];
-const Q = { q: '', ans: '', err: '', busy: false, date: '', owner: '' };
 let pickBusy = false;
 
 const ownerOf = app => (app.store && app.store.state && app.store.state.owner) || '';
 const aiOn = app => { try { return !!app.ai && app.ai.access() === 'on'; } catch (e) { return false; } };
-const hm = ms => { const d = new Date(ms); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
 const doneToday = W => { const en = (W.journal || []).find(e => e && e.date === W.today); return !!(en && en.done); };
 const userName = app => { const u = app.sync && app.sync.state && app.sync.state.user; return u && u.displayName ? String(u.displayName).split(' ')[0] : ''; };
-export function setQuickDraft(v) { Q.q = String(v || '').slice(0, 120); }
-export function resetStep() { Object.assign(Q, { q: '', ans: '', err: '', busy: false, date: '', owner: '' }); pickBusy = false; closeSheet(SHEET); }
+// 换账号:关掉上一个人的单步面板(tonight.js resetForUser 调)
+export function resetStep() { pickBusy = false; closeSheet(SHEET); }
 
 // ── 假如再加这几条小改,今晚会是什么样(同一条流水线,不动存档)──
 function sim(app, W, ops) {
@@ -81,7 +78,8 @@ export function openStepSheet(app, st) {
     }
     const ai = aiOn(app);
     const info = [['怎么用', st.how], ['为什么', st.why]].filter(x => x[1]).map(([k, v]) => `<div class="sa-i"><span class="sa-k">${k}</span><span class="sa-v">${esc(v)}</span></div>`).join('');
-    let h = `<p class="meta sa-role">${esc(st.role || '')}${st.role ? ' · ' : ''}第 ${idx + 1} 步</p>${info ? `<div class="sa-info">${info}</div>` : ''}`;
+    // 「第 2 步，修护」一句话,不用「修护 · 第 2 步」点号串联(Cait 不要那种排版)
+    let h = `<p class="meta sa-role">第 ${idx + 1} 步${st.role ? '，' + esc(st.role) : ''}</p>${info ? `<div class="sa-info">${info}</div>` : ''}`;
     if (locked) h += `<p class="note sa-lock">${esc(locked)}</p>`;
     else {
         h += '<div class="sa-acts">';
@@ -155,59 +153,4 @@ async function pickSwap(app, name, reason, note, owner, msg, sync) {
     } catch (e) {
         if (ownerOf(app) === owner) fail(e && e.message ? e.message : '顾问出错了。');
     } finally { pickBusy = false; sync(); }
-}
-
-// ══ 问一句 ════════════════════════════════════════════════════════════════════════════════
-// 面板的 HTML(没登录 / 没开通 → '');状态从 Q 读,所以整屏重画也不丢字、不丢答案
-export function quickHtml(app, t) {
-    if (!aiOn(app)) return '';
-    if (Q.date && (Q.date !== t || Q.owner !== ownerOf(app))) Object.assign(Q, { q: '', ans: '', err: '', busy: false, date: '' });
-    return `<section class="tn-quick" id="tn-quick" aria-label="问顾问一句"><label class="qk-l" for="qk-q">问一句</label>
-        <div class="qk-row"><input type="text" id="qk-q" maxlength="120" autocomplete="off" enterkeyhint="send" placeholder="比如：刚涂完有点刺，要停吗？" value="${esc(Q.q)}">
-        <button type="button" class="btn" data-act="qk-go" id="qk-go">${Q.busy ? '停一下' : '问'}</button></div>
-        <p class="qk-a${Q.err ? ' err' : ''}" id="qk-a" aria-live="polite">${esc(Q.err || Q.ans || (Q.busy ? '顾问在想…' : ''))}</p></section>`;
-}
-function paintQuick() {
-    const a = document.getElementById('qk-a'), b = document.getElementById('qk-go');
-    if (a) { a.textContent = Q.err || Q.ans || (Q.busy ? '顾问在想…' : ''); a.classList.toggle('err', !!Q.err); }
-    if (b) b.textContent = Q.busy ? '停一下' : '问';
-}
-// 带上今晚的实时状态:现在几点、她眼前那份步骤、哪些做了 / 没做(极简模式不打卡:只带「她点了今晚没做」的)
-function liveOf(app, W, shown) {
-    const tk = tonightTicks(W), minimal = !!(W.profile || {}).minimalMode, en = (W.journal || []).find(e => e && e.date === W.today);
-    const steps = shown.steps.filter(s => s.product).map(s => s.product);
-    const o = Object.assign({}, liveContext(W, shown), { now: hm(app.store.now()), tonightDone: !!(en && en.done), mode: minimal ? '极简（不打卡，排上的默认都用了）' : '完整' });
-    if (minimal) o.notDone = [...tk.skipped];
-    else Object.assign(o, { ticked: steps.filter(n => tk.done.has(n)), notYet: steps.filter(n => !tk.done.has(n) && !tk.skipped.has(n)), notDone: [...tk.skipped] });
-    return o;
-}
-export async function askQuick(app) {
-    const ai = app.ai;
-    if (Q.busy) { try { ai.abort(); } catch (e) { } return; }   // 「停一下」
-    if (!aiOn(app)) return;
-    const el = document.getElementById('qk-q');
-    const text = String(el ? el.value : Q.q).trim().slice(0, 120);
-    if (!text) return;
-    Q.q = text;
-    if (!dataNoticeSeen(app)) { openDataNotice(app, () => askQuick(app)); return; }
-    if (!ai.ready()) { try { await ai.probe(); } catch (e) { } }
-    if (!ai.ready()) { Q.err = ai.state && ai.state.down ? '顾问连不上。' : (ai.quotaText && ai.quotaText()) || '顾问还没开通。'; Q.ans = ''; paintQuick(); return; }
-    const owner = ownerOf(app), W = app.world(), t = W.today, shown = app.shownTonight(W);
-    Object.assign(Q, { busy: true, ans: '', err: '', date: t, owner });
-    paintQuick();
-    const ctx = buildSkincareContext(W, { name: userName(app), shown, ticked: [...tonightTicks(W).done] });
-    const res = await ai.api.quick({ messages: [{ role: 'user', text }], context: ctx, live: liveOf(app, W, shown) },
-        txt => { if (ownerOf(app) !== owner || Q.date !== t) return; Q.ans = txt; paintQuick(); });
-    if (ownerOf(app) !== owner || Q.date !== t) return;   // 等的时候换了账号 / 过了零点
-    Q.busy = false;
-    if (res.aborted) { Q.ans = res.text || ''; Q.err = ''; paintQuick(); return; }
-    if (res.err && !res.text) { Q.err = res.err; Q.ans = ''; paintQuick(); return; }
-    Q.ans = res.text || ''; Q.err = res.partial ? '没说完就断了，可以再问一次。' : '';
-    // quick 回了 change_today:和对话里一样直接生效 + 挂修订线(同一道闸,同一套撤销)
-    if (res.act && !(res.partial && !res.act)) {
-        const r = applyTonight(app.store, res.act, app.today(), { aiData: app.aiTonightData(app.world()) });
-        if (r && r.state === 'failed') Q.err = '顾问想改今晚，没过安全闸：' + (r.result || []).filter(Boolean).join('；') + '。';
-        app.renderAll(); return;
-    }
-    paintQuick();
 }

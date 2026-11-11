@@ -13,9 +13,14 @@
 :root[data-type="sans"] .eyebrow{font-weight:600;color:var(--muted)}
 :root[data-type="sans"] .seal span{font-weight:600;box-shadow:none;background:var(--tint)}
 
-/* ── 骨架:页头和标签栏是半透明材质,内容从下面滑过 ── */
-:root[data-type="sans"] :is(.hdr,.tabbar){background:color-mix(in srgb,var(--paper) 78%,transparent);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px)}
+/* ── 骨架:页头和标签栏是实心的页面底色 ──
+   11/10 前是半透明毛玻璃(内容从下面模糊着透出来)。Cici 用的是深色 + 无衬线,卡片滑到页头 / 标签栏下面变成一团糊影,
+   读起来像没加载完;Cait:「所有页面cici外观模式不要模糊淡出」。所以任何页、任何深浅色都是实心,不透、不模糊 */
+:root[data-type="sans"] :is(.hdr,.tabbar){background:var(--paper);-webkit-backdrop-filter:none;backdrop-filter:none}
 :root[data-type="sans"] .tabbar{border-top:.5px solid var(--line)}
+/* 内容滚上去以后页头下沿一条细线(app.js 切 .scrolled;没有过渡:不渐隐) */
+:root[data-type="sans"] .hdr::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--line);transform:scaleY(.5);transform-origin:bottom;visibility:hidden}
+:root[data-type="sans"] .hdr.scrolled::after{visibility:visible}
 :root[data-type="sans"] .tab{color:var(--muted)}
 :root[data-type="sans"] .tab[aria-selected="true"]{color:var(--ink-strong)}
 :root[data-type="sans"] .tab::after{width:18px;height:3px;border-radius:2px}
@@ -57,7 +62,7 @@
 :root[data-type="sans"][data-theme="dark"] .btn-primary{background:var(--ink-strong);color:#000}
 :root[data-type="sans"] .btn-danger{background:color-mix(in srgb,var(--medical) 12%,var(--sheet));color:var(--medical);box-shadow:none}
 :root[data-type="sans"] :is(.btn,.chip,.nav-row,.seg>button):active{transform:scale(.97)}
-:root[data-type="sans"] .btn-link{color:var(--accent)}
+:root[data-type="sans"] .btn-link{color:var(--accent);text-decoration:none}   /* iOS 的文字按钮:强调色、不加下划线(下划线是纸墨的链接语言) */
 :root[data-type="sans"] .btn-link.quiet{color:var(--muted)}
 :root[data-type="sans"] .btn-link.danger-link{color:var(--medical)}
 /* chip:浅灰底胶囊;选中是墨色实心 */
@@ -83,14 +88,10 @@
 :root[data-type="sans"] .toast{border-radius:999px;box-shadow:0 4px 16px rgba(0,0,0,.12);background:var(--ink-strong);color:var(--paper)}
 :root[data-type="sans"][data-theme="dark"] .toast{background:var(--tint);color:var(--ink)}
 
-/* ── 入栈从右滑入(跟系统导航的方向一致),出栈从左;减少动态效果时 base.css 统一关掉 ── */
+/* ── 入栈从右滑入(跟系统导航的方向一致),出栈从左;减少动态效果时 base.css 统一关掉 ──
+   只平移、不带透明度:11/11 前入栈从 0 淡入、出栈从 .4 淡入,Cait 说「所有页面cici外观模式不要模糊淡出」,切页也一起去掉(UIKit 的 push 本来也不淡) */
 :root[data-type="sans"] .panel.pg-push{animation:sans-push .28s var(--ease)}
 :root[data-type="sans"] .panel.pg-pop{animation:sans-pop .24s var(--ease)}
-@keyframes sans-push{from{opacity:0;transform:translateX(40px)}}
-@keyframes sans-pop{from{opacity:.4;transform:translateX(-24px)}}
+@keyframes sans-push{from{transform:translateX(40px)}}
+@keyframes sans-pop{from{transform:translateX(-24px)}}
 :root[data-type="sans"] .panel:not(.pg-drag){transition:transform .28s var(--ease)}
-:root[data-type="sans"] .hdr-sh span{border-radius:999px;box-shadow:none;background:var(--tint)}
-:root[data-type="sans"] .hdr-sh[data-on="1"] span{font-weight:600}
-:root[data-type="sans"] .sh-d{box-shadow:none;background:var(--tint)}
-:root[data-type="sans"] .sh-d.past{background:none}
-:root[data-type="sans"] .sh-d.today,:root[data-type="sans"] .sh-d[aria-pressed="true"]{box-shadow:inset 0 0 0 1.5px var(--ink)}

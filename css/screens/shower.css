@@ -1,0 +1,86 @@
+/* ══ 洗澡(js/ui/shower.js):今晚页的洗澡模块 .sh-card + 洗澡页 #/tonight/shower(.shp-*)══════════════════
+   一件事只有一个家:洗澡只在这两处。模块要矮(390×844 第一屏还要看得到第一步):左边整块是进洗澡页的入口,右边一个按钮。
+   纸墨:通栏细线上下压住,层级靠字号和墨色,没有阴影、没有动效;她自己改过的(今晚不洗 / 临时加的)左边一道中性竖线,
+     和今晚页「你改了今晚」同一个语言(不用 --rev,那是顾问的)。
+   无衬线:inset-grouped 卡片、字重分层、实心块表示「排上了」;规则都写在 :root[data-type="sans"] 下面。
+   token 只在 css/tokens.css 定义,这里只用。 */
+
+/* ── 今晚页的模块 ── */
+.sh-card{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:var(--sp-3);align-items:center;margin-top:var(--sp-4);padding:var(--sp-2) 0;
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.sh-go{display:flex;flex-direction:column;justify-content:center;min-width:0;min-height:44px;color:var(--ink);text-decoration:none;-webkit-touch-callout:none}
+.sh-go:active{background:var(--tint)}
+.sh-k{font:14px/22px var(--serif);color:var(--muted);margin-right:var(--sp-2)}
+.sh-main{font:18px/var(--lh-item) var(--serif);color:var(--ink);overflow-wrap:anywhere}
+.sh-chev{color:var(--faint);margin-left:var(--sp-1)}
+.sh-sub{font:14px/var(--lh-note) var(--serif);color:var(--muted)}
+.sh-btn{padding:0 var(--sp-3)}
+/* 撤回:和「今晚不洗 / 今晚要洗」同一个位置、同一种按钮,纸墨里字放淡(这是退一步,不是主动作) */
+.sh-undo{color:var(--muted)}
+.sh-card:is([data-st="skip"],[data-st="extra"]) .sh-go{border-left:2px solid var(--muted);padding-left:var(--sp-3)}
+/* 还没排:三个快选占一整行 */
+.sh-picks{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--sp-2);margin:var(--sp-1) 0}
+.sh-picks .btn{padding:0 var(--sp-1)}
+
+/* ── 洗澡页 ── */
+.shp-now{font:22px/var(--lh-head) var(--serif);color:var(--ink-strong)}
+.shp-top .note{margin-top:var(--sp-1)}
+/* 多久洗一次:− 值 +(两头 44×44;到头了字换成 --faint(两套外观里对比度都还够 4.5:1)、框线放淡) */
+.shp-step{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;column-gap:var(--sp-3);margin:var(--sp-3) 0 var(--sp-2)}
+.shp-sb{width:44px;height:44px;display:grid;place-items:center;border-radius:var(--r-ctl);box-shadow:inset 0 0 0 1px var(--line-ctl);font:22px/1 var(--serif);color:var(--ink)}
+.shp-sb:active{background:var(--tint)}
+.shp-sb[aria-disabled="true"]{color:var(--faint);box-shadow:inset 0 0 0 1px var(--line);cursor:default}
+.shp-sb[aria-disabled="true"]:active{background:none}
+.shp-val{display:flex;flex-direction:column;align-items:center;text-align:center}
+.shp-v{font:22px/var(--lh-head) var(--serif);color:var(--ink)}
+.shp-vn{font:14px/var(--lh-note) var(--serif);color:var(--muted)}
+.shp-picks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-2);margin:var(--sp-3) 0 var(--sp-2)}
+/* 前后两周:周一起排,4 行;「澡」字和底色一起表示洗澡(不只靠颜色) */
+.shp-wk,.shp-cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:var(--sp-1)}
+.shp-wk{margin-top:var(--sp-3);text-align:center;font:14px/20px var(--serif);color:var(--muted)}
+.shp-cal{margin-top:var(--sp-1)}
+.shp-d{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;min-height:52px;border-radius:var(--r-ctl);
+  font:14px/20px var(--serif);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.shp-m{min-height:20px}
+.shp-d[aria-pressed="true"]{background:var(--tint);box-shadow:inset 0 0 0 1px var(--line-ctl)}
+/* 过去的日子同样有框(四行一样密),字是淡墨:那是记录,不是计划 */
+.shp-d.past{color:var(--muted)}
+.shp-d.today{box-shadow:inset 0 0 0 1.5px var(--ink)}
+/* 改过的(不是按间隔排的):右上角一个小点,跟着字色走 */
+.shp-d.chg::after{content:"";position:absolute;top:var(--sp-1);right:var(--sp-1);width:4px;height:4px;border-radius:50%;background:currentColor}
+.shp-legend{margin-top:var(--sp-3)}
+
+/* ══ 无衬线 ·「仪器」══ */
+:root[data-type="sans"] .sh-card{background:var(--sheet);border:0;border-radius:var(--r-card);padding:var(--sp-2) var(--sp-4)}
+:root[data-type="sans"] .sh-go:active{background:none;opacity:.6}
+:root[data-type="sans"] .sh-k{font-weight:600;letter-spacing:.02em}
+:root[data-type="sans"] .sh-main{font-size:16px;line-height:var(--lh-item);font-weight:600}
+:root[data-type="sans"] .sh-chev{color:var(--line-ctl);stroke-width:2.2}
+:root[data-type="sans"] .sh-card:is([data-st="skip"],[data-st="extra"]) .sh-go{border-left:0;padding-left:0}
+:root[data-type="sans"] .sh-card:is([data-st="skip"],[data-st="extra"]) .sh-main{color:var(--accent)}
+:root[data-type="sans"] .shp-now{font-weight:600;letter-spacing:-.01em}
+:root[data-type="sans"] .shp-sb{box-shadow:none;background:var(--tint);border-radius:999px;font-weight:500;transition:transform .12s var(--ease)}
+:root[data-type="sans"] .shp-sb:active{transform:scale(.94)}
+:root[data-type="sans"] .shp-sb[aria-disabled="true"]{background:none;box-shadow:inset 0 0 0 1px var(--line);transform:none}
+:root[data-type="sans"] .shp-v{font-weight:600;font-variant-numeric:tabular-nums}
+/* 日历:每一格都有一个淡框,四行一样密(过去没洗的日子不再只剩一个数字,前两行不会看着像两条空白带);
+   洗澡的晚上是 tint 底 + 正文色,和今晚页步骤序号的 tint 小圆一个语言(11/11 前是纯白实心块,深色下在纯黑底上太刺眼);
+   今天以后的字 600(计划),过去的灰字 400(记录);今天一圈强调色 */
+:root[data-type="sans"] .shp-d{box-shadow:inset 0 0 0 1px var(--line);background:none;font-variant-numeric:tabular-nums}
+:root[data-type="sans"] .shp-d[aria-pressed="true"]{background:var(--tint);box-shadow:none;color:var(--ink);font-weight:600}
+:root[data-type="sans"] .shp-d.past[aria-pressed="true"]{color:var(--muted);font-weight:400}
+:root[data-type="sans"] .shp-d.today{box-shadow:inset 0 0 0 2px var(--accent)}
+/* 卡片左右 16 的内边距会把 7 格挤到 43 宽(390 屏):日历这一张卡左右只留 8、格间 2,375 屏也够 44;标题和图例照旧缩进 16 */
+:root[data-type="sans"] #shp-cal{padding-left:var(--sp-2);padding-right:var(--sp-2)}
+:root[data-type="sans"] #shp-cal>:is(.sec-h,.shp-legend){padding-left:var(--sp-2);padding-right:var(--sp-2)}
+:root[data-type="sans"] :is(.shp-wk,.shp-cal){gap:2px}   /* 间距 4 倍数的例外(DESIGN §5 记着):375 屏格间 4 会把格子挤到 43 宽 */
+
+/* 放在最后:窄屏的规则要盖过上面无衬线的卡片内边距 */
+/* 窄屏(320):7 格每格放不下 44(纸墨内容宽 280,每格 37)。和「接下来 7 晚」一样:日历通栏、格间 1px(320 / 7 ≈ 45) */
+@media(max-width:360px){
+  .shp-wk,.shp-cal{margin-left:calc(-1 * var(--gutter));margin-right:calc(-1 * var(--gutter));gap:1px}
+  /* 无衬线的这一段本来是一张卡(左右各 16 内边距):窄屏时卡片铺满整行、不留圆角,日历才能通栏 */
+  :root[data-type="sans"] #shp-cal{margin-left:calc(-1 * var(--gutter));margin-right:calc(-1 * var(--gutter));border-radius:0;padding-left:var(--gutter);padding-right:var(--gutter)}
+  :root[data-type="sans"] #shp-cal>:is(.sec-h,.shp-legend){padding-left:0;padding-right:0}
+  :root[data-type="sans"] :is(.shp-wk,.shp-cal){gap:1px}
+}

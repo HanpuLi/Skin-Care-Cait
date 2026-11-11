@@ -101,8 +101,13 @@
             { need: '强清洁洁面', urgency: 'now', what: '洗澡夜用的清洁力强一点的洁面，无香精', why: '近两周常出油，洗澡夜要洗干净', cover: '暂时用温和洁面洗两遍',
               replaces: '', picks: [{ name: 'CeraVe Foaming Cleanser 236ml', where: 'Boots', price: '£12', why: '无香精、清洁力够', url: 'https://www.boots.com/cerave-foaming-cleanser' },
                                     { name: 'La Roche-Posay Effaclar Gel', where: 'Superdrug', price: '£15', why: '控油', url: '' }] },
+            // 2.3.0 新形状:同类排名(basis 一句排序依据 + 按名次排的 3~5 个,第 1 名最好);上面那条是旧形状(没 basis),两种都要画得对
             { need: '轻薄保湿', urgency: 'before_out', what: '无香精的 fluid', why: '你标了它快用完了', cover: '用完前照常用', replaces: 'La Roche-Posay Toleriane Sensitive Fluide',
-              picks: [{ name: 'Avène Tolérance Hydra-10 Fluid', where: 'LookFantastic', price: '£18', why: '9 个成分', url: 'https://www.lookfantastic.com/avene-hydra-10' }] },
+              basis: '按成分短、无香精、对闭口友好排；第 1 名成分最少、有耐受性数据。这是判断，不是检测结果。',
+              picks: [{ name: 'Avène Tolérance Hydra-10 Fluid', where: 'LookFantastic', price: '£18', why: '9 个成分，无香精', url: 'https://www.lookfantastic.com/avene-hydra-10' },
+                      { name: 'La Roche-Posay Toleriane Dermallergo Fluid', where: 'Boots', price: '£21', why: '成分也短，略贵', url: '' },
+                      { name: 'Bioderma Sensibio Light', where: 'Superdrug', price: '£15', why: '质地最轻，保湿弱一点', url: '' },
+                      { name: 'CeraVe PM Lotion', where: 'Boots', price: '£14', why: '有烟酰胺，个别人会刺', url: '' }] },
             { need: '防晒备用', urgency: 'optional', what: 'SPF50 清爽型', why: '现在这支还够用两个月', cover: '现在这支', replaces: '', picks: [] }
         ],
         skip: [{ name: 'B5 修复霜', why: '只点涂，用得很慢' }, { name: '杏仁酸', why: '家里这支还有大半瓶' }]

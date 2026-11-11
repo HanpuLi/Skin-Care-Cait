@@ -25,7 +25,11 @@ const SCREENS = [
     ['products', `document.getElementById('pr-add').click();${W8(200)}document.querySelector('#add-sheet [data-role="acid"]').click()`, '编辑产品 · 刷酸'],
     // 某天的记录:历史里有那一天就点那一行;没有(极简模式的推定记录)就走「补记某一天」挑前天
     ['record', `location.hash='#/record/history';${W8(300)}const d=document.querySelector('#record [data-act="day"]');if(d)d.click();else{document.querySelector('#record [data-act="day-pick"]').click();${W8(200)}document.querySelector('#day-pick [data-d="'+__d(-2)+'"]').click()}`, '某天的记录'],
-    ['tonight', `document.querySelector('#tonight [data-act="skin"]').click()`, '记皮肤']
+    // 极简模式的今晚页 2.3.0 起没有「记一下皮肤」(在记录 tab):从记录页的「加状态和位置」开同一个 sheet
+    ['tonight', `const b=document.querySelector('#tonight [data-act="skin"]');if(b)b.click();else{${TAB('record')}document.getElementById('rec-more').click()}`, '记皮肤'],
+    // 2.3.0:洗澡页(今晚的二级页)和「接下来 7 晚」(搬到顾问下)
+    ['tonight', `location.hash='#/tonight/shower'`, '洗澡页'],
+    ['advisor', `location.hash='#/advisor/week'`, '接下来 7 晚']
 ];
 const pass = (r, scheme) => !r.emoji.length && r.minFs >= 12 && r.pctLt14 <= 15 && !r.lowCr.length && !r.smallN && !r.inputsLt16 && r.red <= 2 && (scheme === 'light' || !r.brightN) && !r.styleAttrs.length;
 export default async function ({ origin, S, open }) {
@@ -65,7 +69,7 @@ export default async function ({ origin, S, open }) {
         await p.eval(`return __seed.full({profile:{showJournal:true},status:i=>i>=-9?['闭口']:['出油']})`);
         await p.reload(900);
         await p.eval(PROBE + ';return 1');
-        for (const [tab, act, name] of [['advisor', ''], ['tonight', `document.getElementById('btn-settings').click()`, '设置'], ['record', '']]) {
+        for (const [tab, act, name] of [['advisor', `location.hash='#/advisor/week'`, '接下来 7 晚'], ['tonight', `document.getElementById('btn-settings').click()`, '设置'], ['record', ''], ['tonight', `location.hash='#/tonight/shower'`, '洗澡页']]) {
             const tag = `full/light/${width}/${tab}${name ? ' + ' + name : ''}`;
             const r = await p.eval(`${CLEAR}${TAB(tab)}try{${act ? act + ';' + W8(250) : ''}}catch(e){return {miss:String(e.message)}}const o=__probe();o.hscroll=document.documentElement.scrollWidth>document.documentElement.clientWidth;
                 o.trendH=Math.max(0,...[...document.querySelectorAll('#rec-trend .trend-rows li')].map(li=>li.getBoundingClientRect().height));return o`);
@@ -81,11 +85,17 @@ export default async function ({ origin, S, open }) {
         ['minimal', '就医红线', `minimal({status:i=>i>=-6?['泛红']:[]})`, TAB('tonight')],
         ['full', '提醒卡 · 「还有 N 条」展开', `full({status:i=>i>=-6?['泛红']:['出油'],extra:{sk_gone1:['avene','toleriane','sunscreen']}})`, `${TAB('tonight')}const m=document.getElementById('tn-more');if(m)m.open=true`],
         ['full', '今晚的情况 · 点了刮胡', `full()`, `document.getElementById('tn-shave-y').click()`],
-        ['minimal', '极简 · 记一下皮肤', `minimal()`, `document.getElementById('tn-logskin').click()`],
+        // 极简模式记皮肤在记录 tab;记录 tab 藏起来(hideRecords)时今晚页才有这个入口(2.3.0)
+        ['minimal', '极简 · 藏了记录 · 记一下皮肤', `minimal({profile:{hideRecords:true}})`, `document.getElementById('tn-logskin').click()`],
+        // 洗澡模块的几种状态:该洗的晚上点了「今晚不洗」/ 不用洗的晚上临时加了;洗澡页里有改过的日子
+        ['minimal', '洗澡 · 今晚不洗(改到明晚)', `minimal({profile:{showerEvery:2,showerSince:__d(-4),showerMarks:{[__d(0)]:false}}})`, TAB('tonight')],
+        ['full', '洗澡 · 临时加的', `full({profile:{showerEvery:3,showerSince:__d(-1),showerMarks:{[__d(0)]:true}}})`, TAB('tonight')],
+        ['minimal', '洗澡页 · 改过的日子', `minimal({profile:{showerEvery:2,showerSince:__d(-10),showerMarks:{[__d(-3)]:true,[__d(2)]:false}}})`, `location.hash='#/tonight/shower'`],
         ['full', '改版说明', `full({profile:{tourV2:false}})`, `for(let i=0;i<40&&!document.getElementById('whatsnew');i++)${W8(100)}`],
         ['full', '只记皮肤 + 脸部地图', `full({today:true,status:i=>i===0?['爆痘']:['出油']})`, `document.querySelector('#tonight [data-act="skin"]').click();${W8(200)}const z=document.querySelector('#skin-sheet .fm-b');if(z)z.click()`],
         ['full', '完成今晚之后', `full()`, `document.querySelector('#tn-plan [data-step]').click();${W8(100)}document.getElementById('tn-finish-b').click();${W8(200)}${CLEAR}`],
-        ['full', '顾问页 · 7 晚点过 + 常识展开', `full()`, `${TAB('advisor')}const b=[...document.querySelectorAll('#adv-n7 .n7-b')].slice(-2)[0];if(b)b.click();${W8(200)}document.querySelectorAll('#advisor details').forEach(d=>d.open=true)`],
+        ['full', '顾问 · 7 晚点过「刮」', `full()`, `location.hash='#/advisor/week';${W8(300)}const b=[...document.querySelectorAll('#adv-n7 .n7-b')].slice(-2)[0];if(b)b.click();${W8(200)}`],
+        ['full', '顾问 · 常识展开', `full()`, `location.hash='#/advisor/guide';${W8(300)}document.querySelectorAll('#advisor details').forEach(d=>d.open=true)`],
         ['minimal', '极简 · 顾问页(方案折叠展开)', `minimal()`, `${TAB('advisor')}const f=document.getElementById('adv-minfold');if(f)f.open=true`]
     ];
     for (const scheme of PART === 'screens' ? [] : ['light', 'dark']) {

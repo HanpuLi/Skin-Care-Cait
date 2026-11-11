@@ -9,7 +9,7 @@ js/clock.js           local dates; a day rolls over at 03:00
 js/store.js           storage keys, the only localStorage read/write path, sync envelope, recovery copies
 js/sync.js            Firestore sync, conflict and recovery UI, the one-window Web Lock
 js/firebase-config.js public Firebase client configuration (not a credential; see SECURITY.md)
-js/model/*.js         records: profile, products, journal, week (shower/shave schedule), regimen, photos, world
+js/model/*.js         records: profile, products, journal, week (shower interval and shave habit), regimen, photos, world
 js/engine/*.js        pure rules: gate, redline, ladder, rules, schedule, needs, score, assess, regimen
 js/ai/*.js            advisor: HTTP client, context snapshot, applying advisor changes through the gate; push.js = reminders (Web Push)
 js/ui/*.js            one module per screen plus shared sheets; each exports id, title, render(app), mount(root, app)
@@ -55,7 +55,7 @@ Nothing is sent to the advisor automatically (tonight's plan, feedback after log
 
 - Cache: device-only key `sk_ai_tonight1` = `{uid, date, sig, data | err, quota, down, at, model, why}`. It is in `LOCAL_KEYS`, not in `CLOUD_KEYS`, so each device keeps its own copy and nothing is synced.
 - `sig` = `date | shower | shave | minimal mode | routine version id | shelfSignature`. The first four parts are the premise of the advisor's answer. If only the last two change (a new routine version or a shelf change), the cached answer is gated again against the current state and kept, with a note and a "let the advisor re-plan" button. If the premise changes, the page falls back to the offline schedule until the advisor is asked again.
-- When it calls: once on a new day, only while the page is visible (`document.hidden` is false); after a local change (this page's shower/shave buttons, "let the advisor re-plan", or `app.tonightChanged(why)` / the local-change notice from other screens), debounced, and only if `sig` changed; never because of a synced change or an automatic routine regeneration; never after tonight is marked done.
+- When it calls: once on a new day, only while the page is visible (`document.hidden` is false); after a local change (this page's shave buttons, the shower block, "let the advisor re-plan", or `app.tonightChanged(why)` / the local-change notice from other screens), debounced, and only if `sig` changed; never because of a synced change or an automatic routine regeneration; never after tonight is marked done.
 - Steps the person already ticked, and steps already logged today, are facts: the gate does not move them into "not tonight".
 - In minimal mode the advisor's active steps are aligned with today's plan (`sk_planday1`), because tomorrow's presumed history follows that plan: actives outside the plan are not shown, and planned actives the advisor left out stay as steps with the advisor's reason, so only her "not done tonight" marks them as skipped.
 - What tonight's page shows is computed in one place, `ai/apply.js` `shownTonight(W, aiData)` (tonight changes → gate → ticked steps put back → minimal-mode alignment → "something on the whole face" check, which adds a moisturiser if the advisor left none, or raises the safety notice). The chat and feedback context, `change_tonight` validation and the "next seven nights" cell for today all use the same function (`app.shownTonight()`), so the advisor talks about, and changes, the list she is looking at. Safety notices are recomputed for the shown steps (`engine/schedule.js` `stepWarnings`).
@@ -63,14 +63,20 @@ Nothing is sent to the advisor automatically (tonight's plan, feedback after log
 
 Other device-only keys added in v2: `sk_aiprivacy1` (`{uid, at}`: the data notice shown the first time this account opens the advisor screen on this device; same format as v1) and the photo-analysis switch, which is a profile field (`photoAnalysis`, synced): unset means on only for the owner account, other accounts must turn it on themselves.
 
-## Tonight: per-step actions and "ask one thing"
+## Tonight: per-step actions
 
-`ui/tonight-step.js` (opened from the "adjust" button at the right of every product step on `ui/tonight.js`; the row itself is still the tick checkbox) adds two things, both only through existing paths:
+`ui/tonight-step.js` (opened from the "adjust" button at the right of every product step on `ui/tonight.js`; the row itself is still the tick checkbox) changes one step, only through existing paths:
 
 - **Step sheet.** How to use / why, "not tonight", "swap for one on the shelf", "let the advisor pick" (`/api/swap`, reason used_up / uncomfortable / dont_want plus an optional line), "ask the advisor" (prefills the chat, never sends). Every change is written to the same tonight revision line as the advisor's (`sk_tnai1`, `ai/apply.js` `applyTonight`), so undo / redo are one mechanism. Her own changes carry `by: 'user'` on the op: the revision bar says "你改了今晚" (neutral rule, not the advisor's `--rev`), `withOverride` / the offline schedule word the reasons as "你". An advisor pick is the advisor's change (no `by`).
 - **The gate is not duplicated.** Candidates (same role, on the shelf, usable at night) must pass `validateTonight` (the check the advisor's tonight changes use) and then `shownTonight` is run on a derived world with the hypothetical op (`derive(W, {tnai})`), so the whole pipeline (override, `gateTonightPlan`, kept ticks, minimal-mode alignment, moisturiser cover) decides whether the product really gets a step. After a change is applied the shown plan is checked once more and the change is undone on the spot if it did not take. Ticked steps and a finished night cannot be edited. With the medical red line on there is no acid step and no acid candidate.
-- **Ask one thing.** A panel under the steps sends `/api/quick` with `live` = now, ticked / not yet / marked "not done" (minimal mode sends no ticks, only what she marked not done), and the steps she sees. The answer streams in; a `change_today` action goes through `applyTonight` (same gate, same revision line). State is in memory only (cleared on account switch and at midnight); no new storage key.
-- Both are hidden when `app.ai.access() !== 'on'` (signed out, not invited); "not tonight" and the shelf swap work offline. The first send asks for the "what the advisor sees" notice like every other request.
+- "Let the advisor pick" and "ask the advisor" are hidden when `app.ai.access() !== 'on'` (signed out, not invited); "not tonight" and the shelf swap work offline. The first request asks for the "what the advisor sees" notice like every other request.
+- The "ask one thing" panel (`/api/quick`) was removed from tonight's page in 2.3.0: the advisor tab is the conversation. The client endpoint stays.
+
+## Shower: every N days
+
+Showers are scheduled by interval, not by weekday (2.3.0). Everything lives in the synced profile (`sk_profile1`), so there is no new cloud key: `showerEvery` (1..7, every N days), `showerSince` (the interval applies from this date; earlier days still read `sk_wk1` / `sk_preset1`), `showerMarks` (`{date: true|false}`, explicit "showered / skipped", highest priority, trimmed after 90 days). `model/week.js` `showerDay(w, date)` simulates day by day from `showerSince` (pure, deterministic, cached per world object); a scheduled night counts as showered unless marked otherwise. Changing the interval freezes the last 30 days into marks first, so history does not move. `migrateShowerInterval` runs in startup maintenance as `'system'` and only while `showerEvery` is unset (weekly n showers → every round(7/n) days, starting tomorrow; with an empty weekly habit it uses the density of shower days tapped in `sk_wk1` over the last 3 and next 2 weeks; `showerFrom` keeps the old weekly count so the UI can say the interval was converted). Because a `'system'` write is not pushed, every cloud snapshot overwrites the profile with the unmigrated copy until some pushed write happens, and maintenance migrates again; the first `showerSince` is therefore kept in the device-only key `sk_shmig1` (`{uid, since}`) and reused, so it does not move one day later on every open. Shaving keeps the weekly habit.
+
+The only UI is `ui/shower.js`: a short block on tonight's page (`showerCardHtml` / `bindShowerCard`) and the page `#/tonight/shower` (interval stepper and a four-week calendar). A change that affects tonight writes `sk_tn1` and calls `app.tonightChanged(why)`. `engine/schedule.js` `tonight()` takes tonight's shower from the schedule (marks included) once an interval is set.
 
 ## Reminders (Web Push)
 
@@ -110,13 +116,16 @@ Startup: lock, open envelope, migrate older keys, seed profile, then `'system'` 
 
 ## Advisor service
 
-`js/ai/client.js` talks to the advisor service with the signed-in user's Firebase ID token. Endpoints used: chat (streaming), quick, plan, review, note, feedback, swap, vision, tonight, assess, shop, memory. `js/ai/context.js` builds the snapshot sent with a request: profile, products, recent logs (with spots and photo results), acid history (this week's acid nights and recent dates), the next seven nights' shower/shave schedule, low and emptied products, and the offline ladder and gate. Fields that only apply to some users are included only when that user has turned them on.
+`js/ai/client.js` talks to the advisor service with the signed-in user's Firebase ID token. Endpoints used: chat (streaming), quick, plan, review, note, feedback, swap, vision, tonight, assess, shop, memory. `js/ai/context.js` builds the snapshot sent with a request: profile (including `showerEvery`), products, recent logs (with spots and photo results), acid history (this week's acid nights and recent dates), the next seven nights' shower/shave schedule, low and emptied products, and the offline ladder and gate. Fields that only apply to some users are included only when that user has turned them on.
+
+The "should I buy something" answer (`/api/shop`, rendered by `ui/products.js`) is a ranking: which category to buy still follows the routine's gaps and the safety gate, but within a category the advisor ranks 3 to 5 models it has checked (UK, online and offline, no budget or brand limit, judged only on how good the product is for this face), first is best, with one `basis` line per item. The request may take a few minutes (up to 14 web searches), so the client allows it 240 seconds.
 
 ## Tests
 
 ```sh
 npm run test:sync      # sync envelope and lock, no browser (imports js/store.js + js/sync.js)
 npm run test:engine    # gate, redline, ladder, schedule, needs, routine versions, advisor apply/context, file table
+node t/shower-unit.mjs # shower interval: simulation, marks, interval changes, migration, tonight mirror (no browser)
 npm run test:rules     # Firestore security rules and round trip, needs Java for the emulator
 node t/run.mjs         # everything that runs on this machine, one after another (needs Google Chrome; about 10 to 15 minutes)
 ```
@@ -128,7 +137,7 @@ node t/v2-boot.mjs        # shell loads, four tabs switch, deep links, lock, dar
 node t/v2-a-tonight.mjs   # tonight: advisor-written plan, cache and gate, offline fallback, minimal mode, safety notices
 node t/v2-a-record.mjs    # record: quick note, skin sheet, face map, advisor feedback, HRT
 node t/v2-a-capture.mjs   # photo analysis: per-account switch, camera fallbacks, retake, confirm before writing
-node t/v2-b-advisor.mjs   # advisor: chat, revision lines, routine versions, next seven nights, guide
+node t/v2-b-advisor.mjs   # advisor: chat, revision lines, routine versions, next seven nights (#/advisor/week), guide
 node t/v2-b-products.mjs  # shelf, run out / bought again / running low, add, label reading, "should I buy something"
 node t/v2-b-settings.mjs  # settings: mode, habits, photo consent, owner options, backup and data notes
 node t/v2-b-oobe.mjs      # new-user setup and the one-time "what changed" note

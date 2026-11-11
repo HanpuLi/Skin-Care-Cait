@@ -7,7 +7,7 @@ import { safetyGate, gateBlocks } from './gate.js';
 import { regimenRules, maxAcidPerWeek, allowRetinol, allowMask, restedNow, includedNow, usableTonight, acidTiming, zoneHintFor,
          repairUse, irritatedNow, blockedNow, pickCleanser, cleanserReason, introNightsLeft, introHint, tonightOverride } from './rules.js';
 import { isSchedActive, statusOf, hasTrait, visNotes, ROLE_ORDER } from '../model/products.js';
-import { dayState } from '../model/week.js';
+import { dayState, showerDay, showerEvery } from '../model/week.js';
 import { daysBetween, addDays } from '../clock.js';
 
 const DAY_NAMES = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
@@ -367,11 +367,13 @@ export function stepWarnings(W, steps) {
     if (!faceCoveredBy(W, names) && (W.products || []).some(p => !p.hidden)) out.push({ key: 'cover', text: COVER_WARN, after: 0 });
     return out;
 }
-// 今晚(按 W.tn 的洗澡 / 刮胡;没有就按排班)
+// 今晚。刮胡按 W.tn(今晚页的开关);洗澡:排了间隔(或今天有记录)就以排班为准 —— slot.shower 来自 dayState,
+//   已经含了 showerMarks 里今晚的手动改动,sk_tn1 只是它的镜像(另一台设备晚到的 tn 不该盖过记录);还没排间隔的照旧按 W.tn
 export function tonight(W) {
     const slot = slotFor(W, W.today);
-    const tn = W.tn || {};
-    const shower = tn.date === W.today ? !!tn.shower : slot.shower, shave = tn.date === W.today ? !!tn.shave : slot.shave;
+    const tn = W.tn || {}, P = W.profile || {}, tnToday = tn.date === W.today;
+    const byPlan = !!showerEvery(P) || showerDay(W, W.today).mark !== undefined;
+    const shower = byPlan || !tnToday ? !!slot.shower : !!tn.shower, shave = tnToday ? !!tn.shave : slot.shave;
     return Object.assign({ slot, shower, shave: shave && !!(W.profile || {}).shaving }, buildNightSteps(W, shower, shave, slot));
 }
 // 顾问页「接下来 7 晚」:今天起 7 晚,每晚排了什么活性、洗不洗澡 / 刮不刮

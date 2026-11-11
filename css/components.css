@@ -65,10 +65,10 @@
 .sheet-sec:first-child{border-top:0;margin-top:0}
 .sheet-sec .sec-t{margin-bottom:var(--sp-2)}
 .sheet-sec>.sw-row:first-child{margin-top:calc(-1 * var(--sp-2))}
-.skips>summary,.fold>summary{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);min-height:48px;padding:var(--sp-2) 0;cursor:pointer;list-style:none;color:var(--muted);font:14px/22px var(--serif)}
-.skips>summary::-webkit-details-marker,.fold>summary::-webkit-details-marker{display:none}
-.skips>summary::after,.fold>summary::after{content:"›";color:var(--faint);transition:transform .15s;flex:none}
-.skips[open]>summary::after,.fold[open]>summary::after{transform:rotate(90deg)}
+.fold>summary{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);min-height:48px;padding:var(--sp-2) 0;cursor:pointer;list-style:none;color:var(--muted);font:14px/22px var(--serif)}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary::after{content:"›";color:var(--faint);transition:transform .15s;flex:none}
+.fold[open]>summary::after{transform:rotate(90deg)}
 .fold{border-top:1px solid var(--line)}
 .fold>summary{color:var(--ink)}
 .fold-sum{flex:1;min-width:0}

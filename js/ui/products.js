@@ -8,6 +8,8 @@
 // 【要紧 · 要不要买】只在本机操作后防抖触发(onShopLocalChange 的监听方就在这里);同步来的 / 方案自动重出 / 第一次打开都不调,
 //    签名对不上只标「货架变了,结果可能过时」;没结果给「让顾问判断」;顾问用不了 → engine/needs 的离线清单。
 //    结果按账号存本机 sk_ai_shop1(LOCAL_KEYS.aiShop),不进 CLOUD_KEYS。
+//    买哪一类仍由方案缺口和安全闸定;类里不设预算、不限品牌,英国能买到的线上线下都算,顾问只按好坏排前 3~5 名(Cait 11/10 定;11/11 定不查中国渠道。规则写在后端 SHOP_SYS),
+//    这里照名次画出来,每一环带一句排序依据。
 import { K, LOCAL_KEYS } from '../store.js';
 import { esc, ico, openSheet, closeSheet, toast, sysAlert } from './sheets.js';
 import { shelfSeeded, DEFAULT_PD, ROLE_LABEL, ROLE_ORDER, TRAIT_DEFS, TRAIT_MAP, cleanTraits, traitsOf, hasTrait, statusOf, isSchedActive,
@@ -287,14 +289,18 @@ export function shopRedo() {
     clearTimeout(R.timer); R.timer = null; R.whyQ = [];
     return shopRun(R.app && shopRec(R.app) ? '她点了「重新判断」' : '她点了「让顾问判断」');
 }
-// 后端已经 clean_shop 过;这里只保证形状,url 只认 https
+// 后端已经 clean_shop 过;这里只保证形状,url 只认 https。
+//   picks 是同类排名(只查英国能买到的,线上线下混排,只按好坏排;11/11 Cait 定不查中国):数组顺序就是名次,第一个最好,最多 5 个;basis = 这一环的排序依据一句。
+//   11/10 之前存在本机的旧结果没有 basis、最多 3 个型号,照样能画(basis 缺就不显示那一行)。
+//   新旧怎么分:后端 clean_shop 给每条带 ranked: true(11/11 起);只看 basis 有没有字不稳(strict schema 只保证字段在,模型偶尔交空串,
+//   排好名次的新结果就会被当成旧的)。没有 ranked 的(本机缓存、测试替身)才退回看 basis
 export function normShop(d) {
     if (!d || typeof d !== 'object') return null;
     const str = x => String(x == null ? '' : x).trim();
     const items = (Array.isArray(d.items) ? d.items : []).filter(x => x && typeof x === 'object' && (str(x.need) || str(x.what))).map(x => ({
         need: str(x.need), urgency: URG.some(u => u[0] === x.urgency) ? x.urgency : 'optional',
-        what: str(x.what), why: str(x.why), cover: str(x.cover), replaces: str(x.replaces),
-        picks: (Array.isArray(x.picks) ? x.picks : []).filter(k => k && str(k.name)).slice(0, 4).map(k => ({
+        what: str(x.what), why: str(x.why), cover: str(x.cover), replaces: str(x.replaces), basis: str(x.basis), ranked: x.ranked === true || !!str(x.basis),
+        picks: (Array.isArray(x.picks) ? x.picks : []).filter(k => k && str(k.name)).slice(0, 5).map(k => ({
             name: str(k.name), where: str(k.where), price: str(k.price), why: str(k.why), url: /^https:\/\//.test(str(k.url)) ? str(k.url) : '' }))
     }));
     const skip = (Array.isArray(d.skip) ? d.skip : []).filter(x => x && str(x.name)).map(x => ({ name: str(x.name), why: str(x.why) }));
@@ -328,12 +334,36 @@ function shopOfflineHtml(W) {
             ${g.how ? `<span class="note">挑选标准：${esc(g.how)}</span>` : ''}
             ${g.pick ? `<span class="note">参考：${esc(g.pick.name)}${g.pick.price ? '（' + esc(g.pick.price) + '）' : ''}，${esc(g.pick.why)}</span>` : ''}</li>`).join('')}</ol>`;
 }
+// 一条要买的:缺哪一环(h3)→ 买哪类 / 为什么 / 买到之前谁顶 → 同类排名(排序依据一句 + 名次 1~5 的列表,第 1 名最好)。
+//   名次是顾问按「这一支对她这张脸好不好」排的,不按价格:所以价钱和在哪买退到名字下面一行,不跟名次抢位置。
+//   顾问一个都没查实时 picks 是空的,basis 里写了查过哪些渠道,照实给出来,不留一个空的排名标题
+function shopItemHtml(x) {
+    const n = x.picks.length;
+    // 没排名次的是改规则之前存下的旧结果(最多 3 个、没按名次排):只叫「型号」,不冒充排名
+    const hd = !x.ranked ? '型号' : n > 1 ? '同类前 ' + n + ' 名，第 1 名最好' : '同类只查实了 1 个';
+    const rank = !n ? (x.basis ? `<p class="note shop-basis">型号没查实：${esc(x.basis)}</p>` : '')
+        : `<div class="shop-rank"><p class="sec-t">${hd}</p>
+            ${x.basis ? `<p class="note ink shop-basis">排序依据：${esc(x.basis)}</p>` : ''}
+            <ol class="picks">${x.picks.map((k, i) => {
+                const pw = [k.price, k.where].filter(Boolean).join(' · ');
+                return `<li class="pick"><span class="pick-no">${i + 1}</span><div class="pick-b">${k.url
+                    ? `<a class="pick-n" href="${esc(k.url)}" target="_blank" rel="noopener noreferrer">${esc(k.name)}</a>`
+                    : `<span class="pick-n">${esc(k.name)}</span>`}${pw ? `<span class="pick-m">${esc(pw)}</span>` : ''}${k.why ? `<span class="pick-w">${esc(k.why)}</span>` : ''}</div></li>`;
+            }).join('')}</ol></div>`;
+    return `<div class="shop-it">
+            <h3 class="shop-need">${esc(x.need || x.what)}${x.replaces ? `<span class="note">，接班「${esc(x.replaces)}」</span>` : ''}</h3>
+            ${x.what && x.need ? `<p class="note">${esc(x.what)}</p>` : ''}
+            ${x.why ? `<p class="note ink">为什么：${esc(x.why)}</p>` : ''}
+            ${x.cover ? `<p class="note">买到之前：${esc(x.cover)}</p>` : ''}
+            ${rank}
+        </div>`;
+}
 export function shopHtml(app, W) {
     const acc = app.ai.access(), ready = app.ai.ready();
     const head = (btn, meta) => `<div class="sec-h"><h2 class="pr-h">要不要买新的</h2>${btn}</div>${meta ? `<p class="meta" id="pr-shop-meta">${meta}</p>` : ''}`;
     const copy = `<button type="button" class="btn-link sm quiet" id="pr-shop-copy">复制清单</button>`;
     if (acc !== 'on') {
-        const why = acc === 'out' ? '登录并开通顾问后，顾问会联网查英国有售的型号。下面是离线判断。' : acc === 'none' ? '顾问还没开通（邀请制），下面是离线判断。' : '这个账号用不了顾问，下面是离线判断。';
+        const why = acc === 'out' ? '登录并开通顾问后，顾问会联网查英国能买到的同类型号，按好坏排出前几名。下面是离线判断。' : acc === 'none' ? '顾问还没开通（邀请制），下面是离线判断。' : '这个账号用不了顾问，下面是离线判断。';
         return head(copy, '') + `<p class="note faint" id="pr-shop-st">${esc(why)}</p><div id="pr-shop-off">${shopOfflineHtml(W)}</div>`;
     }
     const uid = (curUser(app) || {}).uid, rec = shopRec(app);
@@ -342,30 +372,28 @@ export function shopHtml(app, W) {
     const fresh = !!rec && rec.sig === shopSig(W);
     const redo = ready ? `<button type="button" class="btn-link sm" id="pr-shop-redo"${busy ? ' disabled' : ''}>${busy ? '在查…' : rec ? '重新判断' : '让顾问判断'}</button>` : '';
     if (!rec || (!fresh && err && !busy)) {
-        const line = busy ? '顾问在查英国有售的型号，大约一分钟。下面先按离线规则看。'
+        const line = busy ? '顾问在查英国能买到的同类型号、排名次，要一分钟以上。下面先按离线规则看。'
             : err ? '顾问这次没查成（' + err.msg + '），下面先按离线规则看。'
                 : queued ? '货架变了，过几秒让顾问判断。下面先按离线规则看。'
-                    : ready ? '还没让顾问判断过。下面先按离线规则看。' : '顾问连上之后能联网查型号。下面先按离线规则看。';
+                    : ready ? '还没让顾问判断过。下面先按离线规则看。' : '顾问连上之后能联网查同类型号、排出前几名。下面先按离线规则看。';
         return head(`<span class="btn-row">${redo}${copy}</span>`, '') + `<p class="note" id="pr-shop-st" role="status">${esc(line)}</p><div id="pr-shop-off">${shopOfflineHtml(W)}</div>`;
     }
     const d = rec.data;
     const st = busy ? '顾问在查…（上次的结果先留着）' : !fresh ? '货架变了，结果可能过时' + (queued ? '，过几秒重判' : '') : '';
-    const meta = esc('顾问 · ' + md(rec.at) + ' ' + hm(rec.at) + ' 判断 · 联网查的英国型号 · 货架变了会自动重判');
+    // meta 照实说这份结果是哪种:改规则之前存在本机的旧结果没排名次,不能写「同类按好坏排名」。
+    //   旧结果不自动重判(货架没变就不花这笔钱),只把话说清楚,要排名她点「重新判断」。用逗号分句,不用「A · B · C」串联
+    const ranked = d.items.some(x => x.ranked), oldShape = d.verdict === 'buy' && !ranked;
+    const meta = esc(md(rec.at) + ' ' + hm(rec.at) + ' 顾问判断的，' + (oldShape ? '这是改规则之前的结果，型号没排名次' : '同类按好坏排了名次') + '，货架变了会自动重判。');
     let h = head(`<span class="btn-row">${redo}${copy}</span>`, meta);
     if (st) h += `<p class="note shop-st" id="pr-shop-st" role="status">${esc(st)}</p>`;
+    else if (oldShape && ready) h += `<p class="note shop-st" id="pr-shop-st" role="status">规则改了：现在同类按好坏排前 3 到 5 名。点「重新判断」看排名。</p>`;
     h += `<p class="lede pr-shop-sum">${d.verdict === 'none' ? '现在不用买。' : ''}${esc(d.summary || '')}</p>`;
     if (rec.trigger) h += `<p class="note faint">这次判断是因为：${esc(rec.trigger)}</p>`;
     h += '<div id="pr-shop-list">';
     URG.forEach(([u, label]) => {
         const list = d.items.filter(x => x.urgency === u);
         if (!list.length) return;
-        h += `<div class="shop-g" data-urg="${u}"><div class="shop-gh"><span class="dot ${u === 'now' ? 'caution' : 'hollow'}"></span><span class="sec-t">${label}</span></div>${list.map(x => `<div class="shop-it">
-            <span class="shop-need">${esc(x.need || x.what)}${x.replaces ? `<span class="note">，接班「${esc(x.replaces)}」</span>` : ''}</span>
-            ${x.what && x.need ? `<span class="note">${esc(x.what)}</span>` : ''}
-            ${x.why ? `<span class="note ink">为什么：${esc(x.why)}</span>` : ''}
-            ${x.cover ? `<span class="note">买到之前：${esc(x.cover)}</span>` : ''}
-            ${x.picks.length ? `<ul class="picks">${x.picks.map(k => `<li>${k.url ? `<a href="${esc(k.url)}" target="_blank" rel="noopener noreferrer">${esc(k.name)}</a>` : `<span class="pick-n">${esc(k.name)}</span>`}<span class="note nowrap">${esc([k.price, k.where].filter(Boolean).join(' · '))}</span></li>`).join('')}</ul>` : ''}
-        </div>`).join('')}</div>`;
+        h += `<div class="shop-g" data-urg="${u}"><div class="shop-gh"><span class="dot ${u === 'now' ? 'caution' : 'hollow'}"></span><span class="sec-t">${label}</span></div>${list.map(shopItemHtml).join('')}</div>`;
     });
     h += '</div>';
     if (d.skip.length) h += `<div class="shop-skip" id="pr-shop-skip"><span class="sec-t">这些不用买</span><ul class="list note">${d.skip.map(x => `<li>${esc(x.name)}${x.why ? '：' + esc(x.why) : ''}</li>`).join('')}</ul></div>`;
@@ -380,10 +408,17 @@ function shopCopyText(app, W) {
         URG.forEach(([u, label]) => {
             const list = d.items.filter(x => x.urgency === u); if (!list.length) return;
             lines.push('', label);
+            // 发给对方一起挑:每个型号带名次(第 1 名最好)和为什么排这里,一环的排序依据写在型号前面
             list.forEach((x, i) => {
                 lines.push((i + 1) + '. ' + (x.need || x.what) + (x.replaces ? '（接班「' + x.replaces + '」）' : ''));
+                if (x.what && x.need) lines.push('   买哪类：' + x.what);
                 if (x.why) lines.push('   为什么：' + x.why);
-                x.picks.forEach(k => lines.push('   型号：' + k.name + ([k.price, k.where].filter(Boolean).length ? '（' + [k.price, k.where].filter(Boolean).join('，') + '）' : '') + (k.url ? ' ' + k.url : '')));
+                if (x.basis) lines.push((x.picks.length ? '   排序依据：' : '   型号没查实：') + x.basis);
+                x.picks.forEach((k, j) => {
+                    const pw = [k.price, k.where].filter(Boolean), rk = x.ranked ? '第 ' + (j + 1) + ' 名 ' : '';   // 旧结果没排名次,不写「第几名」
+                    lines.push('   ' + rk + '型号：' + k.name + (pw.length ? '（' + pw.join('，') + '）' : '') + (k.url ? ' ' + k.url : ''));
+                    if (k.why) lines.push('      理由：' + k.why);
+                });
             });
         });
         if (d.skip.length) lines.push('', '这些不用买：' + d.skip.map(x => x.name).join('、'));

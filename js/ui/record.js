@@ -1,5 +1,5 @@
 // ══ 记录 ══════════════════════════════════════════════════════════════════════════════
-// 顶部随时记一笔(一句话或一张照片),下面回看:今天记下的、近 14 天(含刷酸 / 洗澡 / 刮胡标记)、脸部热度、走势、
+// 顶部随时记一笔(一句话或一张照片),下面回看:今天记下的、近 14 天(含刷酸 / 刮胡标记;洗澡只在洗澡页)、脸部热度、走势、
 // HRT(只在本人开了 HRT 时)、历史。「完成今晚」「只记皮肤」「记一下皮肤」也进这里的同一个 sheet(openSkinSheet)。
 // 记皮肤的 sheet:状态标签 + 脸部地图(11 区,只点区域)+ 照片 + 备注;关掉之后要顾问反馈(requestFeedback)。
 // 【要紧】
@@ -519,20 +519,20 @@ function changesHtml(app) {
         .concat(ms.streak !== undefined ? [['连续完成', ms.streak + ' 晚', ms.streak ? '今晚做完接着算' : '']] : []);
     h += `<section class="sec" id="rec-month"><div class="sec-h"><span class="sec-t">本月 · ${ms.month} 月</span></div><ul class="rows">${msRows.map(([k, v, n]) =>
         `<li class="row"><span class="row-main"><span class="lede">${esc(k)}</span>${n ? `<span class="note">${esc(n)}</span>` : ''}</span><span class="note">${esc(v)}</span></li>`).join('')}</ul></section>`;
-    // ③ 近 14 天(刷酸 / 洗澡 / 刮胡标记)
+    // ③ 近 14 天(刷酸 / 刮胡标记)。洗澡 11/10 起不在这里标:它只有一个家,洗澡页的日历(过去两周洗没洗在那里看、在那里改)
     const shaving = !!P.shaving;
     const days = Array.from({ length: 14 }, (_, i) => addDays(t, i - 13)).map(d => {
-        const e = entryOf(W, d), ds = dayState(W, d);
-        return { d, e, tr: trendOf(e), acid: !!(e && (e.products || []).some(x => aT.indexOf(x) >= 0)), shower: !!ds.shower, shave: shaving && !!ds.shave };
+        const e = entryOf(W, d);
+        return { d, e, tr: trendOf(e), acid: !!(e && (e.products || []).some(x => aT.indexOf(x) >= 0)), shave: shaving && !!dayState(W, d).shave };
     });
     // 标记只画这 14 天里真出现过的那几行(没刷过酸就不留一行空格)
-    const MK = [['acid', '酸', '「酸」是刷酸夜'], ['shower', '澡', '「澡」是洗澡'], ['shave', '刮', '「刮」是刮胡']].filter(([k]) => days.some(x => x[k]));
+    const MK = [['acid', '酸', '「酸」是刷酸夜'], ['shave', '刮', '「刮」是刮胡']].filter(([k]) => days.some(x => x[k]));
     // 记了但没选好坏的天(v1 形状的旧记录都是这种)画成灰实心点:出现过就在图例里写明「记了」,别被当成「差不多」
     const anyFaint = days.some(x => !x.tr && hasLog(x.e));
     h += `<section class="sec" id="rec-14"><div class="sec-h"><span class="sec-t">近 14 天</span><span class="legend"><span><i class="dot ok"></i>好些</span><span><i class="dot hollow"></i>差不多</span><span><i class="dot caution"></i>差些</span>${anyFaint ? '<span><i class="dot faint"></i>记了</span>' : ''}</span></div>
         <div class="d14" role="list">${days.map(x => {
             const st = x.tr ? tagLabel(TREND_TAGS[x.tr]) : hasLog(x.e) ? '记了' : (P.minimalMode ? '' : '没记');   // 极简不说「没记」
-            const aria = dayLabel(x.d, t) + (st ? '：' + st : '') + [x.acid ? '刷了酸' : '', x.shower ? '洗澡' : '', x.shave ? '刮胡' : ''].filter(Boolean).map((v, i) => (i || st ? '，' : '：') + v).join('');
+            const aria = dayLabel(x.d, t) + (st ? '：' + st : '') + [x.acid ? '刷了酸' : '', x.shave ? '刮胡' : ''].filter(Boolean).map((v, i) => (i || st ? '，' : '：') + v).join('');
             return `<div class="d14-c${x.d === t ? ' today' : ''}" role="listitem" aria-label="${esc(aria)}"><i class="dot ${x.tr ? TREND_TONE[x.tr] : hasLog(x.e) ? 'faint' : 'none'}"></i>
                 <span class="d14-n">${Number(x.d.slice(8, 10))}</span>${MK.map(([k, m]) => `<span class="d14-m">${x[k] ? m : '&nbsp;'}</span>`).join('')}</div>`;
         }).join('')}</div>

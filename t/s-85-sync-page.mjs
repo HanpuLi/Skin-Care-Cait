@@ -41,7 +41,7 @@ const W8 = ms => `await new Promise(r=>setTimeout(r,${ms}));`;
 
 export default async function ({ origin, S }) {
     const CLOUD = { sk_jrnl1: [{ date: '2026-10-10', status: ['稳定'], products: [], note: 'fictional cloud note', phase: '' }],
-        sk_profile1: { minimalMode: false, onboarded: true, tour3: true, tourV2: true, name: 'Fictional', autoMatched: 'fic-a' } };
+        sk_profile1: { minimalMode: false, onboarded: true, tour3: true, tourV2: true, tour23: true, name: 'Fictional', autoMatched: 'fic-a' } };
     // ── 1. 离线改动 + 刷新 + 两个窗口 ──
     let br = await browser();
     try {

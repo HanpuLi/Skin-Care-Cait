@@ -1,13 +1,22 @@
 // ══ 今晚 ══════════════════════════════════════════════════════════════════════════════
-// 四层(IA 10/29,Cait 拍板):① 「今晚 · 夜型」+ 一句为什么 ② 今晚的情况(洗澡吗 / 刮胡吗,点了用真实排班的差异说影响)
-//   ③ 最多一张提醒卡(就医 > 注意 > 其余),其余折成「还有 N 条」;「顾问改了今晚 · 撤销」单独一行,始终可见
-//   ④ 步骤(每步一句为什么)→ 完整模式「完成今晚」进记皮肤流程 /「只记皮肤」;极简模式不打卡,只有活性步骤的「今晚没做」和「记一下皮肤」。
+// 一页从上到下(11/10 重排,Cait「重复的、没用的都删,重新考虑排版」):
+//   ① 眉题「今晚」+ 大标题夜型 + 一句为什么;完整模式的打卡进度在眉题那一行右边(不另占一行)
+//   ② 就医红线卡(若有,最高优先)
+//   ③ 洗澡模块(ui/shower.js showerCardHtml:全 App 只有它和它那一页排洗澡,按「隔几天洗」;货架空着也显示)+ 刮胡问句(只给开了刮胡的人)
+//   ④ 其余提醒:最多一张卡(注意 > 其余),其余折成「还有 N 条」
+//   ⑤ 「顾问改了今晚 · 撤销」贴在步骤上面,始终可见;步骤(每步一句为什么)
+//   ⑥ 完整模式「完成今晚」/「只记皮肤」;极简模式不打卡,只有活性步骤的「今晚没做」
+//   ⑦ 最后一行安静的小字:只在要她动手时出现(先看一下 / 换上 / 再试一次 / 让顾问重排)
+//   删掉的(都是重复或纯状态):洗澡问句和「还没排洗澡」卡(洗澡模块管)、「今晚的步骤 · 离线排法」小标题和「默认全做」、
+//   在排 / 离线 / 没登录 / 没开通 / 额度这些来源状态、「今晚不用的 N 样」、「问一句」(顾问 tab 有对话)、
+//   极简模式的「记一下皮肤」(记录 tab 有;记录 tab 藏起来时留一个安静入口)、「接下来 7 晚」行(那一页搬去顾问 #/advisor/week)。
 // 【AI 为核心】今晚由顾问写(POST /api/tonight),结果过安全闸(ai/apply.js tonightPlan → gateTonightPlan),被拦的写明原因;
-//   顾问不可用 / 离线 / 没开通 / 没登录 → 离线排法(engine/schedule.js),界面标明「离线排法」。
+//   顾问不可用 / 离线 / 没开通 / 没登录 → 离线排法(engine/schedule.js);页面不再标「离线排法」(她照着步骤做就行),
+//   步骤列表上的 data-src / data-state 留给测试和排查用。
 //   缓存在本机 sk_ai_tonight1 = {uid, date, sig, data | err, at}:sig = 日期 + 洗澡 / 刮胡 + 模式 + 方案版本 + 货架签名。
 //   什么时候调(和「要不要买」同一套口径):
 //     · 新的一天(这个账号今天还没有任何一份)→ 自动调一次;页面在后台(document.hidden)时不调,等她看得见这一屏;
-//     · 本机操作(这一屏的洗澡 / 刮胡开关、「让顾问重排」;别的屏通过 localChange(app, why))→ 签名变了才调,防抖;今晚已经做完了就不再调;
+//     · 本机操作(这一屏的刮胡开关、洗澡模块(经 app.tonightChanged)、「让顾问重排」;别的屏通过 localChange(app, why))→ 签名变了才调,防抖;今晚已经做完了就不再调;
 //     · 同步来的改动、自动重出的方案:**不调**,只标「情况变了」+「让顾问重排」:
 //         - 只是方案版本 / 货架变了(前提没变)→ 还用顾问那份,按现在的情况重新过一遍闸;
 //         - 洗澡 / 刮胡 / 模式变了(顾问那份的前提不成立了)→ 先用离线排法。
@@ -17,25 +26,24 @@
 //   刮胡夜不上酸(闸里也拦);极简模式「今晚没做」只在活性步骤上,点了第二天不会被推定成用了(model/journal.js);
 //   极简模式下顾问版的活性和排班(sk_planday1)对齐:排班之外的不上(第二天按排班推定,多上一次酸会漏记);
 //   排班里有、顾问却没排的放回来,顾问说了「今晚可以不用」就写在这一步上,她点「今晚没做」才算没做(不在渲染时替她写记录)。
-import { K, LOCAL_KEYS } from '../store.js';
+import { LOCAL_KEYS } from '../store.js';
 import { dowOf, addDays, mdOf } from '../clock.js';
 import { jrnlEntry, saveJrnl, toggleSkipped, writeTnSteps } from '../model/journal.js';
-import { toggleTn, showersAhead, applyShowerPlan } from '../model/week.js';
-import { updateProfile } from '../model/profile.js';
+import { toggleTn } from '../model/week.js';
 import { setMedical, restoreMedical } from '../model/profile.js';
-import { ROLE_LABEL, ROLE_ORDER, cleanseStrength } from '../model/products.js';
+import { ROLE_LABEL, cleanseStrength } from '../model/products.js';
 import { tonight as offlineTonight, computePlan, acidHistory } from '../engine/schedule.js';
 import { safetyGate } from '../engine/gate.js';
 import { shelfSignature } from '../engine/regimen.js';
 import { prodByName } from '../engine/util.js';
-import { acidTiming, tonightOverride, repairUse } from '../engine/rules.js';
+import { tonightOverride, repairUse } from '../engine/rules.js';
 import { tonightPlan, TONIGHT_TXT, applyTonight, undoTonightChange, shownTonight, tonightTicks, tonightBy } from '../ai/apply.js';
 import { buildSkincareContext } from '../ai/context.js';
 import { esc, ico, toast, openSheet } from './sheets.js';
 import { openSkinSheet, feedbackHtml, hasLog, feedbackOn } from './record.js';
-import { openStepSheet, quickHtml, askQuick, resetStep, setQuickDraft } from './tonight-step.js';
-import { lastTonightRec, lastRegimenRec, revAct, dataNoticeSeen, openDataNotice, weekHtml, bindWeek } from './advisor.js';
-import { navRow, weekSettingsHtml, bindWeekSettings } from './settings.js';
+import { openStepSheet, resetStep } from './tonight-step.js';
+import { lastTonightRec, lastRegimenRec, revAct, dataNoticeSeen, openDataNotice } from './advisor.js';
+import { showerCardHtml, bindShowerCard, showerPage } from './shower.js';
 
 export const id = 'tonight';
 export const title = '今晚';
@@ -43,13 +51,12 @@ const WEEK = ['周日', '周一', '周二', '周三', '周四', '周五', '周�
 const ACTIVE = ['acid', 'mask', 'retinol'];
 const ACT_N = { acid: '酸', retinol: '维 A', mask: '面膜' };
 const DEBOUNCE = 1500;
-const st = { more: false, busy: false, pending: '', timer: null, tried: {}, lastProbe: 0, redo: null, fx: null, medUndo: null, shPlan: [] };
+const st = { more: false, busy: false, pending: '', timer: null, tried: {}, lastProbe: 0, redo: null, fx: null, medUndo: null };
 // 换账号:模块里的半截状态(「已撤销 · 重做」、刚点的开关说明、就医的撤销)都属于上一个人,清掉(app.js 的 clearLocalExtras 调)
 export function resetForUser() {
-    st.shPlan = [];
     clearTimeout(st.timer);
     Object.assign(st, { more: false, pending: '', timer: null, tried: {}, lastProbe: 0, redo: null, fx: null, medUndo: null });
-    resetStep();   // 单步面板、「问一句」的草稿和答案
+    resetStep();   // 单步面板
 }
 const ownerOf = app => (app.store && app.store.state && app.store.state.owner) || '';
 
@@ -214,27 +221,26 @@ function offlineWhy(W, name, kind, off) {
               // 今晚页不提「屏障」这个词(v1 IA 起的口径:分数和「屏障」都不上今晚页,讲原理在顾问页 / 常识)
               moist: '封住水分，前面涂的才留得住。', repair: repairUse(W) === 'spot' ? '封闭性强，点涂兜住刺激就够，不闷闭口。' : '全脸薄涂一层，把皮肤护住。', spf: '' })[role] || '';
 }
-function splitWhy(x) { const m = String(x || '').match(/^(.*?)（(.*)）$/); return m ? { product: m[1], why: m[2] } : { product: String(x || ''), why: '' }; }
 function hm(iso) { const d = new Date(iso); return isNaN(d) ? '' : String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
 function joinCn(a) { return a.length <= 1 ? a.join('') : a.slice(0, -1).join('、') + '和' + a[a.length - 1]; }
 function nextAcidNight(W) {
     try { const d = computePlan(W).find(x => x.isFuture && (x.items || []).some(it => it.type === 'acid')); return d ? WEEK[dowOf(d.date)] : ''; } catch (e) { return ''; }
 }
 
-// ── 今晚的情况:点了以后拿「点之前 / 点之后」两份真实排班比,说影响了什么(不写死)──
+// ── 刮胡问句:点了以后拿「点之前 / 点之后」两份真实排班比,说影响了什么(不写死)──
+//   洗澡那一半搬去了洗澡模块(ui/shower.js),这里只剩刮胡
 function snapOf(W) { try { return offlineTonight(W).steps.map(x => ({ p: x.p, kind: x.kind })); } catch (e) { return []; } }
-function effectText(W, k, on, b, a) {
-    const lead = k === 'shave' ? (on ? '刮胡夜' : '今晚不刮') : (on ? '洗澡夜' : '今晚不洗澡');
+function effectText(W, on, b, a) {
+    const lead = on ? '刮胡夜' : '今晚不刮';
     const has = (L, p) => L.some(x => x.p === p);
     const gone = b.filter(x => !has(a, x.p)), come = a.filter(x => !has(b, x.p));
     const kinds = L => [...new Set(L.filter(x => ACT_N[x.kind]).map(x => ACT_N[x.kind]))];
     const parts = [], kg = kinds(gone), kc = kinds(come);
     if (kg.length) {
-        const why = (k === 'shower' && on && acidTiming(W) === 'avoid' && kg.indexOf('酸') >= 0) ? '（刚洗完热水澡更容易刺激）' : '';
         const nxt = kg.indexOf('酸') >= 0 ? nextAcidNight(W) : '';
-        parts.push(joinCn(kg) + '今晚不上' + why + (nxt ? '，下次刷酸在' + nxt : ''));
+        parts.push(joinCn(kg) + '今晚不上' + (nxt ? '，下次刷酸在' + nxt : ''));
     }
-    if (kc.length) parts.push(joinCn(kc) + '今晚排上' + (k === 'shower' && on && acidTiming(W) === 'prefer' && kc.indexOf('酸') >= 0 ? '（刷酸时机选了洗澡夜优先）' : ''));
+    if (kc.length) parts.push(joinCn(kc) + '今晚排上');
     const pOf = x => x && prodByName(W, x.p);
     const isCl = x => { const q = pOf(x); return !!q && (q.role === 'cleanse' || q.role === 'precleanse'); };
     const cb = b[0], ca = a[0], swapped = isCl(cb) && isCl(ca) && cb.p !== ca.p;
@@ -247,12 +253,11 @@ function effectText(W, k, on, b, a) {
     if (rc.length) parts.push(rc.join('、') + '排回来');
     return lead + '：' + (parts.length ? parts.join('，') : '今晚步骤不变') + '。';
 }
-function defaultFx(k, on, acidTonight, g) {
-    if (k === 'shave') {
-        if (g.medical) return '就医提醒亮着，今晚本来就不上酸。';
-        return on ? '刮胡夜：酸、维 A、泥膜今晚都不上，刮完先用凉水冲。' : (acidTonight ? '不刮，今晚照常刷酸。' : '不刮。');
-    }
-    return on ? (acidTonight ? '洗澡夜也照常刷：洗完等脸干透再上酸，别趁刚洗完。' : '洗澡时一起洗脸。') : (acidTonight ? '不洗澡也能刷：洗手池洗脸，等脸干透再上酸。' : '不洗澡就在洗手池洗脸。');
+// 没点过时问句下面那一行:只在刮的晚上说做法(刮完先用凉水冲);不刮就不写,「不刮。」「不刮，今晚照常刷酸。」
+//   和标题、步骤说的是同一件事,是噪音
+function defaultFx(on, g) {
+    if (!on) return '';
+    return g.medical ? '就医提醒亮着，今晚本来就不上酸；刮完先用凉水冲。' : '刮胡夜：酸、维 A、泥膜今晚都不上，刮完先用凉水冲。';
 }
 
 // ══ 步骤打卡(完整模式):sk_tnsteps1 + 当天日志的 stepsDone / products(和 v1 同一种写法)══════════════
@@ -283,7 +288,7 @@ function model(app) {
     let plan = null;
     try { plan = shownTonight(W, hasShelf ? ai.data : null); } catch (e) { plan = null; }
     if (!plan) plan = Object.assign(tonightPlan(W, null), { changed: new Set(), fellBack: false });
-    const changed = plan.changed || new Set(), fellBack = !!plan.fellBack;
+    const changed = plan.changed || new Set();
     const isAi = plan.source === 'ai';
     // 她自己在今晚页改的(by:'user')那几步:竖线用中性色,不冒充顾问的 --rev(§3.6)
     const mine = new Set(ov ? ov.ops.filter(o => o.by === 'user' && o.op !== 'skip').map(o => o.to || o.product) : []);
@@ -293,7 +298,6 @@ function model(app) {
                  why: (isAi && s.why) || offlineWhy(W, name, s.kind, off), chg: !!s.chg || changed.has(s.product), you: mine.has(s.product),
                  low: !!(p && (W.low || []).indexOf(p.id) >= 0), product: !!s.product };
     });
-    const skips = plan.skips.map(x => isAi ? x : Object.assign({}, x, splitWhy(x.product)));
     const kinds = steps.map(s => s.kind);
     const type = !hasShelf ? '还没排' : off.shave ? '刮胡夜' : kinds.indexOf('acid') >= 0 ? '刷酸夜' : kinds.indexOf('mask') >= 0 ? '面膜夜' : kinds.indexOf('retinol') >= 0 ? '维 A 夜' : '修护夜';
     const blockedAct = (plan.blocked || []).some(b => { if (b.act) return true; const p = prodByName(W, b.product); return p && (ACTIVE.indexOf((p.schedule || {}).type) >= 0 || p.role === 'acid'); });
@@ -324,35 +328,30 @@ function model(app) {
     (plan.dropped || []).forEach(n => cards.push({ tone: 'info', text: '顾问提到的「' + n + '」不在货架上，没排。' }));
     if (type === '刷酸夜' && cards.every(c => !/防晒/.test(c.text || ''))) cards.push({ tone: 'info', text: '明早防晒别忘：刷酸后第二天对光更敏感。' });
     let noticeSeen = true; try { noticeSeen = dataNoticeSeen(app); } catch (e) { }
-    const sdkMiss = !!(app.sync && app.sync.state && app.sync.state.sdkMissing && ownerOf(app));
-    return { W, P, t, minimal, hasShelf, off, g, ai, ov, plan, isAi, fellBack, steps, skips, type, lead, cards, noticeSeen, sdkMiss, regRec };
+    return { W, P, t, minimal, hasShelf, off, g, ai, ov, plan, isAi, steps, type, lead, cards, noticeSeen, regRec };
 }
 
-function srcLine(m) {
+// 页尾那一行安静的小字:只在要她动手时出现(11/10)。
+//   留下的:第一次「先看一下顾问会看到什么」、新的一份排好了「换上」、连不上「再试一次」、出错 / 前提变了 / 一直没排上「让顾问重排」。
+//   不再写的纯状态:在排、离线排法、没登录、没开通、额度用完、「情况变了先用之前那份」、顾问的步骤都没过闸(被拦的已经在提醒卡里写了原因)。
+//   她照着步骤做就行,排法从哪来不用她操心;今晚做完了也不再出(再排一遍没用)。
+function actLine(app, m) {
     const a = m.ai;
-    if (!m.hasShelf) return '';
-    let txt = '', btn = '';
-    if (a.ready && !doneToday(m.W)) return `<p class="note tn-src" id="tn-src">顾问${a.readyAt ? ' ' + esc(hm(a.readyAt)) : ''}排好了新的一份；你已经开始照这份做了，先不换。 <button type="button" class="btn-link sm" data-act="swapin">换上</button></p>`;
-    if (m.isAi) {
-        if (a.state !== 'kept' || doneToday(m.W)) return '';
-        txt = a.busy ? '顾问在按现在的情况重排，排好了会换上。' : '情况变了（方案或货架有变化）：先用顾问之前排的这份，已按现在的情况重新过了安全闸。';
-        if (!a.busy) btn = '让顾问重排';
-        return `<p class="note tn-src" id="tn-src">${esc(txt)}${btn ? ` <button type="button" class="btn-link sm" data-act="ask">${btn}</button>` : ''}</p>`;
-    }
-    if (a.busy) txt = '顾问在排今晚，排好了会换上；先看离线排法。';
-    else if (m.fellBack) txt = '顾问排的步骤都没过安全闸，用的是离线排法。';
-    else if (a.state === 'out') txt = m.sdkMiss ? '离线（登录服务没加载出来），用的是离线排法。' : '没登录，用的是离线排法。';
-    else if (a.state === 'none' || a.state === 'mismatch') txt = '顾问没开通，用的是离线排法。';
-    else if (a.state === 'quota') txt = a.err + '今晚用的是离线排法。';
-    else if (a.state === 'down') { txt = '顾问连不上，用的是离线排法。'; btn = '再试一次'; }
-    else if (a.state === 'err') {
+    if (!m.hasShelf || a.busy || doneToday(m.W)) return '';
+    const line = (txt, act, label) => `<p class="note tn-src" id="tn-src">${esc(txt)} <button type="button" class="btn-link sm" data-act="${act}">${label}</button></p>`;
+    if (a.ready) return line('顾问' + (a.readyAt ? ' ' + hm(a.readyAt) + ' ' : '') + '排好了新的一份。', 'swapin', '换上');
+    if (m.isAi) return '';
+    if (a.state === 'pending' && !m.noticeSeen) return line('想让顾问来排今晚，先看一下它会看到什么。', 'notice', '先看一下');
+    if (a.state === 'down') return line('顾问没连上。', 'ask', '再试一次');
+    if (a.state === 'err') {
+        // 「顾问没认出你的登录，到设置里退出再登录」这类本身就是要她做的事,照原话写;别的(没给出步骤、超时…)不展开
         const e = String(a.err || '').replace(/[。.]$/, '');
-        txt = /^顾问/.test(e) ? e + '，用的是离线排法。' : '顾问这次没排成（' + e + '），用的是离线排法。'; btn = '让顾问重排';
+        return line(/^顾问/.test(e) ? e + '。' : '顾问这次没排成。', 'ask', '让顾问重排');
     }
-    else if (a.state === 'stale') { txt = '情况变了，先用离线排法。'; btn = '让顾问重排'; }
-    else if (a.state === 'pending' && !m.noticeSeen) return `<p class="note tn-src" id="tn-src">顾问会看你的记录来排今晚；先看一下它会看到什么，现在用的是离线排法。 <button type="button" class="btn-link sm" data-act="notice">先看一下</button></p>`;
-    else if (a.state === 'pending') { txt = '用的是离线排法。'; btn = '让顾问排今晚'; }
-    return `<p class="note tn-src" id="tn-src">${esc(txt)}${btn ? ` <button type="button" class="btn-link sm" data-act="ask">${btn}</button>` : ''}</p>`;
+    if (a.state === 'stale') return line('今晚的情况变了，顾问还没按新的排。', 'ask', '让顾问重排');
+    // 今天已经自动试过、却还是什么都没有(核开通没过、货架刚加上…):给一个手动的口子;第一次进来自动调之前不出,免得一闪
+    if (a.state === 'pending' && st.tried[uidOf(app) + '|' + m.t]) return line('顾问还没排今晚。', 'ask', '让顾问排今晚');
+    return '';
 }
 // 她对这一轮红线的回应:「看过了」(上一轮的)当没有回应;「先不」过了 7 天、或「先不 / 已约了」是上一轮点的(早于这一轮开始那天)也当没有回应,
 //   回到完整的就医理由(v1 的「7 天后恢复完整提醒」)
@@ -378,11 +377,22 @@ function medicalCard(m) {
         <p>${esc(text)}</p><div class="med-acts">${btns.map(([k, l]) => `<button type="button" class="btn" data-med="${k}" aria-pressed="${fu === k}">${l}</button>`).join('')}</div>
         ${fu === 'booked' ? '<button type="button" class="btn-link sm quiet med-unbook" data-med="unbook">还没约上</button>' : ''}</div>`;
 }
-// more = 「还有 N 条」按钮:放在第一张卡的眉题那一行右边(不另占一行)
+// ④ 其余提醒:最多一张卡,其余折成「还有 N 条」。more 按钮放在第一张卡的眉题那一行右边(不另占一行)。
+//   就医卡亮着时它已经是最显眼的一张(在洗澡模块上面),其余全部折起来,只留一行「还有 N 条提醒」:不和红线卡抢,也给步骤留出第一屏
 function cardHtml(c, more) {
     if (c.tone === 'medical') return '';
     if (c.tone === 'caution') return `<div class="note-caution" role="note"${c.safety ? ' data-safety="1"' : ''}><div class="nc-h"><span class="nc-eb">注意</span>${more || ''}</div><p>${esc(c.text)}</p></div>`;
     return `<div class="note-info" role="note"><div class="nc-h"><span class="ni-eb">${esc(c.head || '提醒')}</span>${more || ''}</div><p>${esc(c.text)}</p></div>`;
+}
+function cardsHtml(m) {
+    const list = m.cards.filter(c => c.tone !== 'medical');
+    if (!list.length) return '';
+    const first = m.g.medical ? null : list[0], rest = first ? list.slice(1) : list;
+    const nCaution = rest.filter(c => c.tone === 'caution').length;
+    const more = rest.length ? `<button type="button" class="btn-link sm quiet tn-more-b" data-act="more" aria-expanded="${st.more}" aria-controls="tn-more" id="tn-more-b">${st.more ? '收起' : '还有 ' + rest.length + ' 条' + (first ? '' : '提醒') + (nCaution ? '（' + nCaution + ' 条注意）' : '')}${ico('chev', 'sm')}</button>` : '';
+    let h = `<div class="tn-cards${first ? '' : ' folded'}" id="tn-cards">${first ? cardHtml(first, more) : more}`;
+    if (rest.length) h += `<ul class="list tn-more" id="tn-more"${st.more ? '' : ' hidden'}>${rest.map(c => `<li class="${c.tone === 'caution' ? 'is-caution' : ''}"${c.safety ? ' data-safety="1"' : ''}>${c.tone === 'caution' ? '<span class="nc-eb">注意 · </span>' : ''}${esc(c.text)}</li>`).join('')}</ul>`;
+    return h + '</div>';
 }
 function revHtml(m, app) {
     const ov = m.ov;
@@ -390,20 +400,22 @@ function revHtml(m, app) {
     try { lr = app ? lastTonightRec(app) : null; } catch (e) { lr = null; }
     // 今晚页自己的「重做」只认:同一个账号、同一天、而且之后没有更新的改动(有了新的,旧的重做作废,和对话那条对得上)
     if (st.redo && (ov || st.redo.date !== m.t || st.redo.owner !== ownerOf(app) || (lr && (+new Date(lr.rec.at) || 0) > st.redo.at))) st.redo = null;
-    // 一行:「顾问 · 时:分 · 改了今晚」+ 改了什么(太长就截断,整句在 title 里)+ 撤销;贴在「今晚的步骤」下面,被改的步骤自带 --rev 竖线
-    const bar = (id, who, what, btn, you) => `<div class="revbar${you ? ' you' : ''}" id="${id}"><span class="who">${esc(who)}</span><span class="what" title="${esc(what)}">${esc(what)}</span>${btn}</div>`;
+    // 一段话:小字「顾问 10:58 改了今晚」打头,接着写改了什么,最多折两行(再长才截断,整句在 title 里);右边撤销。贴在步骤上面,被改的步骤自己也带标记。
+    //   11/11 前硬压成一行「顾问 10:58 · 改了今晚 | 今晚跳过「MZ Skin So…」」,她不点开就不知道跳过了哪一步;
+    //   也不把「谁改的」另起一行:那样修订线高出一截,最挤的时候(刮胡 + 还没排洗澡 + 提醒卡)第一步会被挤出第一屏(s-10 守着)
+    const bar = (id, who, what, btn, you) => `<div class="revbar${you ? ' you' : ''}" id="${id}"><p class="rev-t" title="${esc(what)}"><span class="who">${esc(who)}</span><span class="what">${esc(what)}</span></p>${btn}</div>`;
     let out = '';
     if (ov) {
         const txt = ov.ops.map(c => (TONIGHT_TXT[c.op] ? TONIGHT_TXT[c.op](c) : c.op) + (c.why ? '：' + c.why : '')).join('；');
         const you = tonightBy(ov.ops) === 'user';   // 全是她自己在步骤里点的:标「你改了今晚」;有顾问的(含「让顾问挑」)标顾问
-        out = bar('tn-rev', you ? '你改了今晚' + (ov.at ? ' ' + hm(ov.at) : '') : '顾问' + (ov.at ? ' ' + hm(ov.at) : '') + ' · 改了今晚', txt, '<button type="button" class="btn-link" data-act="undo">撤销</button>', you);
-    } else if (st.redo) { const you = tonightBy(st.redo.rec.ops) === 'user'; out = bar('tn-rev', you ? '你改了今晚' : '顾问 · 改了今晚', '已撤销，今晚恢复成上一版。', '<button type="button" class="btn-link" data-act="redo">重做</button>', you); }
+        out = bar('tn-rev', you ? '你改了今晚' + (ov.at ? ' ' + hm(ov.at) : '') : '顾问' + (ov.at ? ' ' + hm(ov.at) : '') + ' 改了今晚', txt, '<button type="button" class="btn-link" data-act="undo">撤销</button>', you);
+    } else if (st.redo) { const you = tonightBy(st.redo.rec.ops) === 'user'; out = bar('tn-rev', you ? '你改了今晚' : '顾问改了今晚', '已撤销，今晚恢复成上一版。', '<button type="button" class="btn-link" data-act="redo">重做</button>', you); }
     // 在对话里撤的:今晚页也给「已撤销 · 重做」,点了走顾问页同一个 recAct(两边状态一定对得上)
-    else if (lr && lr.state === 'undone') out = bar('tn-rev', '顾问 · 改了今晚', '已撤销，今晚恢复成上一版。', `<button type="button" class="btn-link" data-act="redo-chat" data-key="${esc(lr.key)}">重做</button>`);
+    else if (lr && lr.state === 'undone') out = bar('tn-rev', '顾问改了今晚', '已撤销，今晚恢复成上一版。', `<button type="button" class="btn-link" data-act="redo-chat" data-key="${esc(lr.key)}">重做</button>`);
     // 顾问今天在对话 / 复盘 / 出方案里改了方案:和对话里那条同源(撤销 / 重做走顾问页的 recAct)
     const rr = m.regRec;
     if (rr && (rr.state === 'applied' || rr.state === 'undone')) {
-        const r = rr.rec, head = (rr.key === 'review' ? '复盘' : '顾问') + (r.at ? ' ' + hm(r.at) : '') + ' · ' + (r.kind === 'plan' ? '出了方案 v' + r.v : '改了方案 v' + r.v);
+        const r = rr.rec, head = (rr.key === 'review' ? '复盘' : '顾问') + (r.at ? ' ' + hm(r.at) : '') + ' ' + (r.kind === 'plan' ? '出了方案 v' + r.v : '改了方案 v' + r.v);
         const what = rr.state === 'undone' ? '已撤销，方案回到上一版。' : (rr.text || '方案换成了顾问这一版。');
         out += bar('tn-rev-reg', head, what, `<button type="button" class="btn-link" data-act="redo-chat" data-key="${esc(rr.key)}">${rr.state === 'undone' ? '重做' : '撤销'}</button>`);
     }
@@ -414,86 +426,85 @@ function revHtml(m, app) {
 function opsBtn(x) {
     return x.product ? `<button type="button" class="step-ops" data-act="step-ops" data-name="${esc(x.key)}" aria-label="调整「${esc(x.name)}」" aria-haspopup="dialog">${ico('more')}</button>` : '<span></span>';
 }
+// ③ 洗澡模块(ui/shower.js;样式归它自己的 shower.css,这里只管它在页里的位置和上下间距)。
+//   货架空着也显示:洗澡不依赖货架。它出了错只丢这一块,不拖垮整页(步骤比洗澡要紧)
+function showerSlot(app) {
+    let s = '';
+    try { s = showerCardHtml(app) || ''; } catch (e) { try { console.error(e); } catch (x) { } }
+    return s ? `<div class="tn-slot">${s}</div>` : '';
+}
+// 刮胡问句:刮胡夜不上酸是安全规则,临时刮了得能说,所以开了刮胡的人(Cait)两种模式都问。
+//   下面那一行:刚点过 = 用真实排班的差异说影响;没点过 = 只在刮的晚上说做法(defaultFx);空着就不占地方
+function shaveHtml(m) {
+    const on = !!m.off.shave, t = m.t;
+    const fresh = !!(st.fx && st.fx.date === t && st.fx.k === 'shave');
+    const fx = fresh ? st.fx.text : defaultFx(on, m.g);
+    return `<section class="tn-sit" id="tn-sit" aria-label="今晚的情况"><div class="sit-q" id="tn-q-shave"><div class="sit-row"><span class="sit-l" id="tn-ql-shave">今晚刮胡吗？</span><div class="sit-btns seg" role="group" aria-labelledby="tn-ql-shave">
+        <button type="button" data-sit="shave" data-v="1" aria-pressed="${on}" id="tn-shave-y">刮</button><button type="button" data-sit="shave" data-v="0" aria-pressed="${!on}" id="tn-shave-n">不刮</button></div></div>
+        <p class="note sit-fx${fresh ? ' changed' : ''}" id="tn-fx-shave" aria-live="polite">${esc(fx)}</p></div></section>`;
+}
+// 一步的序号:纸墨写「01」(页边栏里的编号),无衬线在小圆里只写「1」:补位的 0 单独包一层,无衬线把它藏掉
+function idxHtml(i) { const n = i + 1; return (n < 10 ? '<span class="idx0">0</span>' : '') + n; }
+// 一步的正文:角色 / 产品名 / 怎么用 / 为什么都是 .step 网格的直接子元素,两套外观各自用 grid-template-areas 摆
+//   (纸墨:序号和角色在左边页边栏,正文在右;无衬线:序号圈和产品名同一行,角色是名字上面的小灰字)。空的不出元素,行自己收起来
+function stepBody(x) {
+    return (x.role ? `<span class="step-role">${esc(x.role)}</span>` : '')
+        + `<span class="step-name">${esc(x.name)}</span>`
+        + (x.how ? `<span class="step-how">${esc(x.how)}${x.low ? '<span class="faint"> · 快用完</span>' : ''}</span>` : '')
+        + (x.why ? `<span class="step-why">${esc(x.why)}</span>` : '');
+}
 export function render(app) {
     const m = model(app);
-    const { W, P, t, minimal, hasShelf, off, g, steps, skips, cards } = m;
-    let h = `<h1 class="page-title" id="tonight-h"><span class="pre">今晚 · </span>${esc(m.type)}</h1><p class="tn-lead" id="tn-lead">${esc(m.lead)}</p>`;
-    const rev = revHtml(m, app);
+    const { W, P, t, minimal, hasShelf, g, steps } = m;
+    const s = stepState(W);
+    // ① 眉题 + 大标题 + 一句为什么。不再是「今晚 · 修护夜」挤一行:眉题小、夜型大,层级靠字号(纸墨)/ 字重(无衬线)拉开。
+    //   h1 里两段都在(读屏读「今晚修护夜」);完整模式要打卡,进度放眉题那一行右边,像手册的页眉页码:不另占一行,不抢标题
+    const doneN = minimal ? 0 : steps.filter(x => s.done.has(x.key)).length;
+    const prog = hasShelf && !minimal && steps.length ? `<span class="tn-prog" id="tn-progress">${doneN} / ${steps.length}</span>` : '';
+    let h = `<header class="tn-head" id="tn-head"><h1 class="page-title" id="tonight-h"><span class="tn-eb">今晚</span><span class="tn-type">${esc(m.type)}</span></h1>${prog}<p class="tn-lead" id="tn-lead">${esc(m.lead)}</p></header>`;
     // 刚点了「看过了」:留一行撤销(手机上误点就把所有酸放开了,卡片一灭就再没入口改回去)
     const mu = st.medUndo;
     if (mu && (mu.date !== t || mu.owner !== ownerOf(app) || !(P.medical && P.medical.state === 'seen' && P.medical.seenAt === t))) st.medUndo = null;
     // 这一条是她自己点的,不是顾问的改动:不用 --rev(§3.6),用中性竖线
-    if (st.medUndo) h += `<div class="revbar mine" id="tn-med-undo"><span class="who">就医提醒</span><span class="what">记下了「看过医生了」，提醒已解除。</span>
+    if (st.medUndo) h += `<div class="revbar mine" id="tn-med-undo"><p class="rev-t"><span class="who">就医提醒</span><span class="what">记下了「看过医生了」，提醒已解除。</span></p>
         <button type="button" class="btn-link" data-act="med-undo">撤销</button></div>`;
-    // ② 今晚的情况。完整模式是问句;极简模式直接写「今晚排了 / 没排洗澡」(Cici 照安排办事:页面不写就不洗,Cait 11/04),一样能点改。
-    //    刮胡夜不上酸是安全规则,临时刮了得能说,所以开了刮胡的两种模式都问。极简模式接下来 7 晚一次澡都没排:下面出一张卡,选每周哪几天
-    if (hasShelf) {
-        const ahead = showersAhead(W, t), needPlan = minimal && !ahead.length && !P.noShowerPlan;   // 完整模式有问句和页头入口,不再占第一屏
-        const acidTonight = m.type === '刷酸夜';
-        const q = (k, label, yes, no, on) => {
-            const fx = st.fx && st.fx.date === t && st.fx.k === k ? st.fx.text : (k === 'shower' && !on && ahead.length ? '下次洗澡：' + (ahead[0] === addDays(t, 1) ? '明晚' : WEEK[dowOf(ahead[0])]) + '。' : '') + defaultFx(k, on, acidTonight, g);
-            return `<div class="sit-q" id="tn-q-${k}"><div class="sit-row"><span class="sit-l" id="tn-ql-${k}">${label}</span><div class="sit-btns" role="group" aria-labelledby="tn-ql-${k}">
-                <button type="button" data-sit="${k}" data-v="1" aria-pressed="${on}" id="tn-${k}-y">${yes}</button><button type="button" data-sit="${k}" data-v="0" aria-pressed="${!on}" id="tn-${k}-n">${no}</button></div></div>
-                <p class="note sit-fx${st.fx && st.fx.date === t && st.fx.k === k ? ' changed' : ''}" id="tn-fx-${k}" aria-live="polite">${esc(fx)}</p></div>`;
-        };
-        // 没有单独的小标题行(问句自己就说清楚了;按每周习惯预填写在 title 里):省下的高度留给步骤,真机一屏要看得到第一步
-        const sit = (needPlan ? '' : q('shower', minimal ? (off.shower ? '今晚排了洗澡' : '今晚没排洗澡') : '今晚洗澡吗？', '洗', '不洗', !!off.shower)) + (P.shaving ? q('shave', '今晚刮胡吗？', '刮', '不刮', !!off.shave) : '');
-        if (sit) h += `<section class="tn-sit" id="tn-sit" aria-label="今晚的情况（按每周习惯先填好了）">${sit}</section>`;
-        if (needPlan) h += showerPlanHtml();
-    }
-    // ③ 最多一张提醒卡 + 「还有 N 条」
-    if (cards.length) {
-        const first = cards[0], rest = cards.slice(1);
-        const nCaution = rest.filter(c => c.tone === 'caution').length;
-        const more = rest.length ? `<button type="button" class="btn-link sm quiet tn-more-b" data-act="more" aria-expanded="${st.more}" aria-controls="tn-more" id="tn-more-b">${st.more ? '收起' : '还有 ' + rest.length + ' 条' + (nCaution ? '（' + nCaution + ' 条注意）' : '')}${ico('chev', 'sm')}</button>` : '';
-        h += `<div class="tn-cards" id="tn-cards">${first.tone === 'medical' ? medicalCard(m) + more : cardHtml(first, more)}`;
-        if (rest.length) h += `<ul class="list tn-more" id="tn-more"${st.more ? '' : ' hidden'}>${rest.map(c => `<li class="${c.tone === 'caution' ? 'is-caution' : ''}"${c.safety ? ' data-safety="1"' : ''}>${c.tone === 'caution' ? '<span class="nc-eb">注意 · </span>' : ''}${esc(c.text)}</li>`).join('')}</ul>`;
-        h += '</div>';
-    }
-    // ④ 步骤
+    // ② 就医红线:最高优先,任何模式都显示
+    if (g.medical) h += medicalCard(m);
+    // ③ 今晚的情况:洗澡模块 + 刮胡问句
+    h += showerSlot(app);
+    if (hasShelf && P.shaving) h += shaveHtml(m);
+    // ④ 其余提醒
+    h += cardsHtml(m);
+    const rev = revHtml(m, app);
     if (!hasShelf) {
         h += rev;
         h += `<div class="empty" id="tn-empty"><p class="lede">货架还是空的。</p><p class="note">先放一支洁面和一支保湿，今晚就能排。</p><div class="btn-row"><button type="button" class="btn" data-act="products">去「产品」添加</button></div></div>`;
-        return h + weekRow(W);
+        return h;
     }
-    const s = stepState(W);
-    const doneN = minimal ? 0 : steps.filter(x => s.done.has(x.key)).length;
-    const head = m.isAi ? '今晚的步骤 · 顾问' + (m.ai.at ? ' ' + hm(m.ai.at) : '') + ' 排的' : '今晚的步骤 · 离线排法';
+    // ⑤ 修订线 + 步骤。没有可见的小标题(夜型标题已经说了这是今晚的步骤);读屏用一个隐藏的 h2 给这一组起名。
+    //   data-src / data-state:今晚用的是顾问版还是离线排法、顾问那份处在什么状态。页面上不写(纯状态),留给测试和排查
     const missed = n => s.skipped.has(n);
-    const nMiss = minimal ? steps.filter(x => missed(x.key)).length : 0;
-    h += `<section class="tn-steps" aria-labelledby="tn-steps-h"><div class="sec-h"><span class="sec-t" id="tn-steps-h">${esc(head)}</span><span class="meta" id="tn-progress">${minimal ? (nMiss ? (steps.length - nMiss) + ' 步做了 · ' + nMiss + ' 步没做' : '默认全做') : doneN + ' / ' + steps.length}</span></div>`;
-    h += rev + srcLine(m);
-    if (minimal) h += `<p class="note tn-mini-hint">不用打勾，排上的默认都算做了。${steps.some(x => ACTIVE.indexOf(x.kind) >= 0) ? '刷酸这类哪一步没做，点一下「今晚没做」。' : ''}</p>`;
-    h += `<ol class="steps" id="tn-plan" aria-label="今晚的步骤">${steps.map((x, i) => {
-        const idx = String(i + 1).padStart(2, '0');
-        const how = x.how ? `<span class="step-how">${esc(x.how)}${x.low ? '<span class="faint"> · 快用完</span>' : ''}</span>` : '';
-        const why = x.why ? `<span class="step-why">${esc(x.why)}</span>` : '';
+    h += `<section class="tn-steps" id="tn-steps" aria-labelledby="tn-steps-h"><h2 class="sr" id="tn-steps-h">今晚的步骤</h2>${rev}`;
+    h += `<ol class="steps${minimal ? ' mini' : ''}" id="tn-plan" data-src="${m.isAi ? 'ai' : 'offline'}" data-state="${esc(m.ai.state || '')}${m.ai.busy ? ' busy' : ''}">${steps.map((x, i) => {
         if (minimal) {
+            // 极简模式不打卡:排上的默认都算做了;只有活性步骤能点「今晚没做」(第二天不会被推定成用了,model/journal.js)
             const act = ACTIVE.indexOf(x.kind) >= 0, ms = missed(x.key);
-            return `<li class="step-li"><div class="step mini${ms ? ' missed' : ''}${x.chg ? ' changed' : ''}${x.you ? ' you' : ''}" data-kind="${x.kind}"><span class="step-idx">${idx}<span class="step-role">${esc(x.role)}</span></span>
-                <span class="step-body"><span class="step-name">${esc(x.name)}</span>${how}${why}</span>
-                ${act ? `<button type="button" class="btn-link sm step-miss" data-miss="${esc(x.key)}" aria-pressed="${ms}">${ms ? '撤回' : '今晚没做'}</button>` : '<span></span>'}</div>${opsBtn(x)}</li>`;
+            return `<li class="step-li"><div class="step mini${ms ? ' missed' : ''}${x.chg ? ' changed' : ''}${x.you ? ' you' : ''}" data-kind="${x.kind}"><span class="step-idx">${idxHtml(i)}</span>${stepBody(x)}${act ? `<button type="button" class="btn-link sm step-miss" data-miss="${esc(x.key)}" aria-pressed="${ms}">${ms ? '撤回' : '今晚没做'}</button>` : ''}</div>${opsBtn(x)}</li>`;
         }
         const dn = s.done.has(x.key);
         return `<li class="step-li"><button type="button" class="step${dn ? ' done' : ''}${x.chg ? ' changed' : ''}${x.you ? ' you' : ''}" role="checkbox" aria-checked="${dn}" data-step="${esc(x.key)}" data-kind="${x.kind}" id="tn-step-${i}">
-            <span class="step-idx">${dn ? ico('check', 'sm') : idx}<span class="step-role">${esc(x.role)}</span></span>
-            <span class="step-body"><span class="step-name">${esc(x.name)}</span>${how}${why}</span><span class="step-box" aria-hidden="true">${ico('check', 'sm')}</span></button>${opsBtn(x)}</li>`;
-    }).join('')}</ol>`;
-    if (skips.length) {
-        h += `<details class="skips" id="tn-skips"><summary><span>今晚不用的 ${skips.length} 样</span></summary><ul class="rows">${skips.map(x =>
-            `<li class="row"><span class="row-main"><span class="lede skip-name">${esc(x.product)}</span>${x.why ? `<span class="note">${esc(x.why)}</span>` : ''}</span><span class="note">今晚不用</span></li>`).join('')}</ul></details>`;
-    }
-    h += '</section>';
-    h += quickHtml(app, t);   // 问一句(没登录 / 没开通顾问时是空串)
-    // 完成今晚 / 记一下皮肤
+            <span class="step-idx">${dn ? ico('check', 'sm') : idxHtml(i)}</span>${stepBody(x)}<span class="step-box" aria-hidden="true">${ico('check', 'sm')}</span></button>${opsBtn(x)}</li>`;
+    }).join('')}</ol></section>`;
+    // ⑥ 完成今晚(完整模式)
     const en = entryOf(W, t);
     const aiOn = feedbackOn(app);   // 顾问用不了 / 还没看过「顾问会看到什么」(反馈不会自动发)就别承诺「会回你 / 会看到」
     if (minimal) {
-        h += `<div class="tn-finish" id="tn-finish"><button type="button" class="btn btn-block" data-act="skin" id="tn-logskin">${hasLog(en) ? '今天的皮肤 · 再看看' : '记一下皮肤'}</button>
+        // 极简模式记皮肤在「记录」tab;记录 tab 被藏起来(hide-rec)时她没别处可记,留一个安静的入口,顾问看完的回话也跟着它
+        if (P.hideRecords) h += `<div class="tn-finish quiet" id="tn-finish"><button type="button" class="btn-link sm quiet" data-act="skin" id="tn-logskin">${hasLog(en) ? '看看今天记的' : '记一下皮肤'}</button>
             <div class="fb-box" data-fb-date="${esc(t)}">${feedbackHtml(app, t)}</div></div>`;
     } else if (en && en.done) {
         const logged = hasLog(en);
-        h += `<div class="tn-finish done" id="tn-finish"><span class="meta tn-done-at">做完了${en.doneAt ? ' · ' + esc(hm(en.doneAt)) : ''}</span>
+        h += `<div class="tn-finish done" id="tn-finish"><span class="meta tn-done-at">${en.doneAt ? esc(hm(en.doneAt)) + ' ' : ''}做完了</span>
             ${logged ? '' : `<p class="note">皮肤今天怎么样？一句话或一张照片就够${aiOn ? '，顾问看完会回你' : ''}。</p>`}
             <div class="btn-row"><button type="button" class="btn" data-act="done-sheet">${logged ? '皮肤和反馈' : '记一笔'}</button><button type="button" class="btn-link sm quiet" data-act="unfinish">撤回</button></div>
             <div class="fb-box" data-fb-date="${esc(t)}">${feedbackHtml(app, t)}</div></div>`;
@@ -501,38 +512,11 @@ export function render(app) {
         h += `<div class="tn-finish" id="tn-finish"><button type="button" class="btn btn-primary btn-block" data-act="finish" id="tn-finish-b">完成今晚</button>
             <p class="note faint tn-finish-n">没点的步骤记成「没做」${aiOn ? '，顾问会看到' : ''}。</p><button type="button" class="btn-link sm quiet" data-act="skin">只记皮肤</button></div>`;
     }
-    return h + weekRow(W);
+    // ⑦ 要她动手时才有的一行小字
+    return h + actLine(app, m);
 }
-// 「→」行:接下来 7 晚(右边一句现状:下次刷酸是哪晚)。主事之后、页尾
-// 还没有洗澡安排:选每周哪几天,一点就排好(习惯 + 今晚起两周)。不替她定默认值;「先不排」记在档案里,不再出
-const SH_WD = [[1, '一'], [2, '二'], [3, '三'], [4, '四'], [5, '五'], [6, '六'], [0, '日']];
-const SH_PRESETS = [['每天', [1, 2, 3, 4, 5, 6, 0]], ['隔一天', [1, 3, 5, 0]], ['一周两次', [3, 0]]];
-function showerPlanHtml() {
-    const sel = st.shPlan;
-    return `<section class="tn-shplan" id="tn-shplan" aria-labelledby="tn-shplan-h"><p class="lede" id="tn-shplan-h">接下来 7 晚还没排洗澡。</p>
-        <p class="note">每周哪几天洗？排好之后，今晚页会写今晚洗不洗。</p>
-        <div class="btn-row">${SH_PRESETS.map((x, i) => `<button type="button" class="btn-link sm" data-act="shplan-preset" data-i="${i}">${x[0]}</button>`).join('')}</div>
-        <div class="chips set-days" role="group" aria-label="每周哪几天洗澡">${SH_WD.map(([d, n]) => `<button type="button" class="chip" aria-pressed="${sel.indexOf(d) >= 0}" data-act="shplan-day" data-d="${d}" aria-label="周${n}洗澡">${n}</button>`).join('')}</div>
-        <div class="btn-row">${sel.length ? '<button type="button" class="btn btn-primary" data-act="shplan-save" id="tn-shplan-save">就这几天</button>' : ''}<button type="button" class="btn-link sm quiet" data-act="shplan-off">先不排</button></div></section>`;
-}
-function weekRow(W) {
-    const nxt = (W.products || []).some(p => !p.hidden) ? nextAcidNight(W) : '';
-    const sh = showersAhead(W, W.today).filter(d => d !== W.today)[0];
-    return `<nav class="grp nav-list" aria-label="今晚以外">${navRow('#/tonight/week', '接下来 7 晚', (sh ? '下次洗澡 ' + WEEK[dowOf(sh)] + ' · ' : '') + (nxt ? '下次刷酸 ' + nxt : '这 7 晚没排酸'), 'tn-go-week')}</nav>`;
-}
-// 二级页 #/tonight/week:接下来 7 晚 + 每周洗澡 / 刮胡习惯 + 刷酸时机(这些全 App 只在这里改;设置里不再有)
-function weekPageHtml(app) {
-    const W = app.world();
-    const wk = weekHtml(W, app) || `<section class="sec" id="adv-week"><div class="empty"><p class="lede">还没有产品，排不出 7 晚。</p><p class="note">先在「产品」里加一支洁面和一支保湿。习惯可以先在下面选好。</p></div></section>`;
-    return wk + `<div class="wk-set" id="wk-set">${weekSettingsHtml(app)}</div>`;
-}
-export const pages = {
-    week: {
-        title: '接下来 7 晚',
-        render: app => weekPageHtml(app),
-        mount: (body, app) => { bindWeek(body, app); const el = body.querySelector('#wk-set'); if (el) bindWeekSettings(el, app); }
-    }
-};
+// 二级页 #/tonight/shower:洗澡那一页(ui/shower.js)。「接下来 7 晚」那一页搬去了顾问(#/advisor/week)
+export const pages = { shower: showerPage };
 
 // ══ 事件 ══════════════════════════════════════════════════════════════════════════════
 const _bound = new WeakSet();
@@ -548,41 +532,30 @@ export function mount(root, app) {
         if (c && c.err && c.down && c.retryAt) writeCache(app, Object.assign({}, c, { retryAt: app.store.now() }));
         if (root.classList.contains('active')) maybeAuto(app);
     });
-    // 「问一句」输入框按回车 = 发(输入法选字时的回车不算)
-    root.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing && e.target && e.target.id === 'qk-q') { e.preventDefault(); askQuick(app); } });
-    root.addEventListener('input', e => { if (e.target && e.target.id === 'qk-q') setQuickDraft(e.target.value); });
+    // 洗澡模块的事件归 ui/shower.js(委托在 root 上,和这一屏一样只挂一次);它出错不影响这一屏别的按钮
+    try { bindShowerCard(root, app); } catch (e) { try { console.error(e); } catch (x) { } }
     root.addEventListener('click', e => {
         const tg = e.target && e.target.closest && e.target.closest('[data-act],[data-step],[data-miss],[data-sit],[data-med]');
         if (!tg || !root.contains(tg)) return;
         const store = app.store, t = app.today();
         if (tg.dataset.step !== undefined) { if (!(app.world().profile || {}).minimalMode) { tickStep(app, tg.dataset.step); app.renderAll(); } return; }
         if (tg.dataset.miss !== undefined) { toggleSkipped(store, t, tg.dataset.miss, t); app.renderAll(); return; }
-        if (tg.dataset.sit) {
-            const k = tg.dataset.sit, v = tg.dataset.v === '1';
+        if (tg.dataset.sit === 'shave') {   // 只剩刮胡(洗澡在洗澡模块里改,它自己调 app.tonightChanged)
+            const v = tg.dataset.v === '1';
             const W0 = app.world(), off0 = offlineTonight(W0);
-            if ((k === 'shower' ? !!off0.shower : !!off0.shave) === v) return;
+            if (!!off0.shave === v) return;
             const before = snapOf(W0);
-            toggleTn(store, k, v, t);
+            toggleTn(store, 'shave', v, t);
             const W1 = app.world();
-            st.fx = { date: t, k, text: effectText(W1, k, v, before, snapOf(W1)) };
+            st.fx = { date: t, k: 'shave', text: effectText(W1, v, before, snapOf(W1)) };
             app.renderAll();
-            localChange(app, k === 'shave' ? '今晚刮胡改了' : '今晚洗澡改了');
+            localChange(app, '今晚刮胡改了');
             return;
         }
         if (tg.dataset.med) { medicalAct(app, tg.dataset.med); return; }
         const a = tg.dataset.act;
         if (a === 'more') { st.more = !st.more; app.renderScreen('tonight'); }
-        else if (a === 'shplan-day') { const d = +tg.dataset.d; st.shPlan = st.shPlan.indexOf(d) >= 0 ? st.shPlan.filter(x => x !== d) : st.shPlan.concat(d); app.renderScreen('tonight'); }
-        else if (a === 'shplan-preset') { st.shPlan = SH_PRESETS[+tg.dataset.i][1].slice(); app.renderScreen('tonight'); }
-        else if (a === 'shplan-save') {
-            if (!st.shPlan.length) return;
-            const names = SH_WD.filter(x => st.shPlan.indexOf(x[0]) >= 0).map(x => x[1]).join('、');
-            applyShowerPlan(app.store, st.shPlan, app.today()); st.shPlan = [];
-            app.renderAll(); localChange(app, '洗澡排好了'); toast('排好了：每周' + names + '洗澡');
-        }
-        else if (a === 'shplan-off') { updateProfile(app.store, p => { p.noShowerPlan = true; }); st.shPlan = []; app.renderAll(); toast('先不排。想排了去「接下来 7 晚」。'); }
         else if (a === 'step-ops') { const x = model(app).steps.find(y => y.key === tg.dataset.name); if (x && x.product) openStepSheet(app, x); }
-        else if (a === 'qk-go') askQuick(app);
         else if (a === 'ask') { if (dataNoticeSeen(app)) fetchTonight(app, 'manual'); else openDataNotice(app, () => fetchTonight(app, 'manual')); }
         else if (a === 'notice') openDataNotice(app, () => { repaint(app); maybeAuto(app); });
         else if (a === 'swapin') {   // 换上顾问新排的那份(打过勾的照样留在列表里,ai/apply.js keepDone)

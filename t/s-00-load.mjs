@@ -17,7 +17,7 @@ export default async function ({ origin, S, open }) {
             }
             return out`);
         S.ok(p.errors.length === 0, `${who}:加载 0 报错`, p.errors);
-        S.ok(r.tn > 20 && /^今晚 · \S/.test(r.h), `${who}:今晚页有内容(不白屏),标题「今晚 · …」`, r);
+        S.ok(r.tn > 20 && /^今晚\S/.test(r.h) && !/·/.test(r.h), `${who}:今晚页有内容(不白屏),标题「今晚」+ 夜型(2.3.0 起两段,不再有「·」)`, r);
         S.ok(Object.values(r.screens).every(v => v === true), `${who}:四屏都画得出来(顾问层模块跟着 App 一起加载)`, r.screens);
         S.ok(r.minimal === (who === 'minimal'), `${who}:模式 class 对`, r.minimal);
         S.ok(!p.errors.length, `${who}:切完四屏 0 报错`, p.errors);

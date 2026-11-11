@@ -1,7 +1,7 @@
 // A 路 · 记录页 + 记皮肤的 sheet + 脸部地图(无头 Chrome,假顾问后端,不花钱):
 //   顶部随时记一笔(一句话 → 本机看出状态 / 位置,只是建议,点了才写;按分句配位置)、拍一张(不分析时只存本机)
 //   首页 #/record:记一笔 · 拍照分析 · 今天记下的(+ 顾问反馈)· 两条「→」行(变化 / 历史,各带一句现状)
-//   二级页 #/record/changes:本月、近 14 天(酸 / 澡 / 刮标记)、脸部热度(点区看哪几天)、走势、HRT(最近 12 条,只在本人开了时);#/record/history:历史(点一天补记 / 改)
+//   二级页 #/record/changes:本月、近 14 天(酸 / 刮标记;洗澡 2.3.0 起只在洗澡页)、脸部热度(点区看哪几天)、走势、HRT(最近 12 条,只在本人开了时);#/record/history:历史(点一天补记 / 改)
 //   补齐(v1 → v2):❌1 某一天「那晚用了哪些活性」chip(写 products、清 auto)· ❓2 那晚做了 / 没做 · ❌3 缩略图点开看大图 · ❌4 顾问反馈「照这个调」→ 顾问页预填 · ❓1 HRT 最近 12 条
 //   记皮肤的 sheet:状态标签、脸部地图(11 区,只点区域;完整模式勾了闭口这类顺手展开、极简默认收起但入口一直在)、备注;关掉后要顾问反馈
 //   顾问反馈:本机操作后才调、按「这天记了什么」去重(重画 / 没改不重调)、出错可重试、note_add 一点加进记录
@@ -39,7 +39,7 @@ await run('v2-a-record', [
         S.ok(v.secs.join() === 'rec-month,rec-14,rec-heat,rec-trend', '变化页顺序:本月 → 近 14 天 → 位置 → 走势(没开 HRT 没有 HRT)', v.secs);
         S.ok(/完成今晚/.test(v.month) && /刷了酸/.test(v.month), '变化页:本月小结', v.month);
         S.ok(v.d14 === 14 && v.today === 1, '近 14 天:14 格,今天那格标出来', v);
-        S.ok(v.marks.includes('酸') && v.marks.includes('澡') && v.marks.includes('刮'), '近 14 天里标了刷酸 / 洗澡 / 刮胡', v.marks);
+        S.ok(v.marks.includes('酸') && !v.marks.includes('澡') && v.marks.includes('刮'), '近 14 天里标了刷酸 / 刮胡;洗澡不在这里标(2.3.0 起洗澡只在洗澡页的日历里看、改)', v.marks);
         S.ok(v.fm && v.zoneBtns === 11, '脸部热度:同一张脸,11 个区', v);
         S.ok(/^下巴 .*3 天/.test(v.heatTop[0] || '') && v.heatTop.some(x => /^额头 .*1 天/.test(x)), '常出现的位置:下巴 3 天在最前,额头 1 天', v.heatTop);
         S.ok(v.trend.some(x => /闭口/.test(x)), '走势:这 7 天和前 7 天各几天', v.trend);
