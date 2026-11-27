@@ -46,7 +46,7 @@ export default async function ({ origin, S }) {
             const again = await p.eval(`${tab('advisor')}return !!document.getElementById('ai-privacy')`);
             S.ok(!again, '刷新后再进:不弹', again);
             // v1 弹过的(同一个键、同一种格式)也算看过;别的账号看过的不算
-            const other = await p.eval(`localStorage.setItem('sk_aiprivacy1',JSON.stringify({uid:'u-other',at:1}));${tab('products')}${tab('advisor')}return !!document.getElementById('ai-privacy')`);
+            const other = await p.eval(`localStorage.setItem('sk_aiprivacy1',JSON.stringify({uid:'u-other',at:1}));${tab('products')}${tab('advisor')}for(let i=0;i<30&&!document.getElementById('ai-privacy');i++)${W8(100)}return !!document.getElementById('ai-privacy')`);   // 全量跑机器忙时弹窗晚出来,最多等 3 秒
             S.ok(other, '只记着别的账号看过:这个账号进顾问页照样弹(按账号)', other);
             S.ok(!p.errors.length, '数据说明 0 报错', p.errors);
         } finally { p.done(); }

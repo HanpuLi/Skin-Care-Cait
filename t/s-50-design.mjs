@@ -29,7 +29,7 @@ const SCREENS = [
     ['tonight', `const b=document.querySelector('#tonight [data-act="skin"]');if(b)b.click();else{${TAB('record')}document.getElementById('rec-more').click()}`, '记皮肤'],
     // 2.3.0:洗澡页(今晚的二级页)和「接下来 7 晚」(搬到顾问下)
     ['tonight', `location.hash='#/tonight/shower'`, '洗澡页'],
-    ['advisor', `location.hash='#/advisor/week'`, '接下来 7 晚']
+    ['advisor', `location.hash='#/advisor/week';${W8(800)}`, '接下来 7 晚']   // 刚切过来那一下量会把转场中的字也算进去(11/27 量到 14.8~15.3,稳定后约 10)
 ];
 const pass = (r, scheme) => !r.emoji.length && r.minFs >= 12 && r.pctLt14 <= 15 && !r.lowCr.length && !r.smallN && !r.inputsLt16 && r.red <= 2 && (scheme === 'light' || !r.brightN) && !r.styleAttrs.length;
 export default async function ({ origin, S, open }) {
@@ -69,7 +69,7 @@ export default async function ({ origin, S, open }) {
         await p.eval(`return __seed.full({profile:{showJournal:true},status:i=>i>=-9?['闭口']:['出油']})`);
         await p.reload(900);
         await p.eval(PROBE + ';return 1');
-        for (const [tab, act, name] of [['advisor', `location.hash='#/advisor/week'`, '接下来 7 晚'], ['tonight', `document.getElementById('btn-settings').click()`, '设置'], ['record', ''], ['tonight', `location.hash='#/tonight/shower'`, '洗澡页']]) {
+        for (const [tab, act, name] of [['advisor', `location.hash='#/advisor/week';${W8(800)}`, '接下来 7 晚'], ['tonight', `document.getElementById('btn-settings').click()`, '设置'], ['record', ''], ['tonight', `location.hash='#/tonight/shower'`, '洗澡页']]) {
             const tag = `full/light/${width}/${tab}${name ? ' + ' + name : ''}`;
             const r = await p.eval(`${CLEAR}${TAB(tab)}try{${act ? act + ';' + W8(250) : ''}}catch(e){return {miss:String(e.message)}}const o=__probe();o.hscroll=document.documentElement.scrollWidth>document.documentElement.clientWidth;
                 o.trendH=Math.max(0,...[...document.querySelectorAll('#rec-trend .trend-rows li')].map(li=>li.getBoundingClientRect().height));return o`);

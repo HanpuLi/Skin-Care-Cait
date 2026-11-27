@@ -28,22 +28,79 @@ export function serve() {
     });
 }
 
+// 🔴 收拾干净(2026-11-11 加):以前 close() 直接 proc.kill(),再 500ms 后删 profile,结果两样都会留下:
+//   · Chrome 每次启动会把整个 app 克隆一份到 $TMPDIR/../X/com.google.Chrome.code_sign_clone/,
+//     正常退出会删,被 kill 就留下。11 月攒了 2235 份(约 300 万个文件)。
+//   · 进程先退出(或 process.exit)时 500ms 定时器来不及跑,$TMPDIR 里剩 125 个 skin-t-*(约 6.7G)。
+// 现在:① 启动带 --disable-features=MacAppCodeSignClone,根本不建克隆(实测有效);
+//       ② 关的时候先发 CDP Browser.close 让它正常退出(实测正常退出也会删克隆,万一以后 Chrome 去掉这个开关还有这层),
+//          3 秒不退再 SIGTERM,6 秒再 SIGKILL;等进程真的退出了再删 profile;
+//       ③ 测试进程退出(含 process.exit / Ctrl-C)时同步杀掉还开着的 Chrome、删掉 profile;
+//       ④ 每次加载顺手清掉 6 小时前崩溃残留的 skin-t-*(别同时跑两轮,见 run.mjs)。
+const live = new Set();   // 还没收拾完的 { proc, prof }
+process.on('exit', () => {
+    for (const b of live) { try { b.proc.kill('SIGKILL'); } catch { } try { fs.rmSync(b.prof, { recursive: true, force: true }); } catch { } }
+});
+for (const [sig, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
+    if (!process.listenerCount(sig)) process.once(sig, () => process.exit(code));
+}
+try {
+    const old = Date.now() - 6 * 3600e3;
+    for (const n of fs.readdirSync(os.tmpdir())) {
+        if (!n.startsWith('skin-t-')) continue;
+        const p = path.join(os.tmpdir(), n);
+        try { if (fs.statSync(p).mtimeMs < old) fs.rmSync(p, { recursive: true, force: true }); } catch { }
+    }
+} catch { }
+
 export async function browser() {
     const prof = fs.mkdtempSync(path.join(os.tmpdir(), 'skin-t-'));
     const port = 9300 + Math.floor(Math.random() * 500);
     // CHROME_LOG=文件 时把 Chrome 的 stderr 写下来(排查无头 Chrome 中途退出用)
     const logTo = process.env.CHROME_LOG ? fs.openSync(process.env.CHROME_LOG, 'a') : 'ignore';
-    const proc = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${port}`, '--user-data-dir=' + prof, '--no-first-run', '--no-default-browser-check', '--disable-background-networking', 'about:blank'], { stdio: ['ignore', 'ignore', logTo] });
+    const proc = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${port}`, '--user-data-dir=' + prof, '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--disable-features=MacAppCodeSignClone', 'about:blank'], { stdio: ['ignore', 'ignore', logTo] });
+    const me = { proc, prof };
+    live.add(me);
+    const exited = new Promise(r => proc.once('exit', r));
     proc.on('exit', (code, sig) => { if (!proc._closing) console.log(`  [chrome 退出了 code=${code} signal=${sig}]`); });
     let ver;
     for (let i = 0; i < 100; i++) { try { ver = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json(); break; } catch { } await sleep(100); }
-    if (!ver) throw new Error('chrome 没起来');
-    return { port, proc, close: () => { proc._closing = true; try { proc.kill(); } catch { } setTimeout(() => fs.rmSync(prof, { recursive: true, force: true }), 500); } };
+    if (!ver) {
+        proc._closing = true;
+        if (proc.exitCode === null && proc.signalCode === null) { try { proc.kill('SIGKILL'); } catch { } await exited; }
+        fs.rmSync(prof, { recursive: true, force: true }); live.delete(me);
+        throw new Error('chrome 没起来');
+    }
+    let closing = null;
+    // close() 返回 Promise:要等它真的关完就 await;不 await 也行,测试进程退出时 ③ 兜底
+    const close = () => closing || (closing = (async () => {
+        proc._closing = true;
+        if (proc.exitCode === null && proc.signalCode === null) {
+            try {
+                const ws = new WebSocket(ver.webSocketDebuggerUrl);
+                ws.onopen = () => ws.send(JSON.stringify({ id: 1, method: 'Browser.close' }));
+                ws.onerror = () => { };
+            } catch { }
+            const t1 = setTimeout(() => { try { proc.kill('SIGTERM'); } catch { } }, 3000);
+            const t2 = setTimeout(() => { try { proc.kill('SIGKILL'); } catch { } }, 6000);
+            await exited;
+            clearTimeout(t1); clearTimeout(t2);
+        }
+        fs.rmSync(prof, { recursive: true, force: true });
+        live.delete(me);
+    })());
+    return { port, proc, close };
 }
 
 // 一个页面 = 一个 target。opts.pre:每次文档加载前注入的脚本(假 fetch / 种子数据)
 export async function page(br, origin, opts = {}) {
-    const t = await (await fetch(`http://127.0.0.1:${br.port}/json/new?about:blank`, { method: 'PUT' })).json();
+    // Chrome 刚起来、机器忙时 /json/new 偶尔回一行纯文本「Could not create ...」而不是 JSON(11/27 全量跑踩到):重试几次再报错
+    let t = null, last = '';
+    for (let i = 0; i < 20 && !t; i++) {
+        const body = await (await fetch(`http://127.0.0.1:${br.port}/json/new?about:blank`, { method: 'PUT' })).text();
+        try { t = JSON.parse(body); } catch { last = body.slice(0, 80); await sleep(200); }
+    }
+    if (!t) throw new Error('开不了新页:' + last);
     const ws = new WebSocket(t.webSocketDebuggerUrl);
     await new Promise(r => ws.onopen = r);
     let id = 0; const pend = {};
