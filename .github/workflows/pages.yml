@@ -32,6 +32,9 @@ jobs:
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: "."
+      # 11/27 连着两次:包上传完 0.4 秒就去取,GitHub 还没登记好,报「No artifacts named github-pages」,重跑就过。等一会儿再部署
+      - name: Wait for artifact to register
+        run: sleep 20
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
