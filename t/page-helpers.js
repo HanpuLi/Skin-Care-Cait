@@ -108,7 +108,9 @@
                       { name: 'La Roche-Posay Toleriane Dermallergo Fluid', where: 'Boots', price: '£21', why: '成分也短，略贵', url: '' },
                       { name: 'Bioderma Sensibio Light', where: 'Superdrug', price: '£15', why: '质地最轻，保湿弱一点', url: '' },
                       { name: 'CeraVe PM Lotion', where: 'Boots', price: '£14', why: '有烟酰胺，个别人会刺', url: '' }] },
-            { need: '防晒备用', urgency: 'optional', what: 'SPF50 清爽型', why: '现在这支还够用两个月', cover: '现在这支', replaces: '', picks: [] }
+            // 11/26 新形状:每一环只交替她拍板的 1 支,产品名当标题
+            { need: '防晒备用', urgency: 'optional', what: '白天出门前最后一步', why: '现在这支还够用两个月', cover: '现在这支', replaces: '',
+              basis: '比同类几支更清爽、不闷闭口、无香精', picks: [{ name: 'Ultra Violette Queen Screen SPF50 50ml', where: 'Space NK', price: '£38', why: '质地像精华，不搓泥', url: '' }] }
         ],
         skip: [{ name: 'B5 修复霜', why: '只点涂，用得很慢' }, { name: '杏仁酸', why: '家里这支还有大半瓶' }]
     };

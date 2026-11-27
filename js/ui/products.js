@@ -337,8 +337,25 @@ function shopOfflineHtml(W) {
 // 一条要买的:缺哪一环(h3)→ 买哪类 / 为什么 / 买到之前谁顶 → 同类排名(排序依据一句 + 名次 1~5 的列表,第 1 名最好)。
 //   名次是顾问按「这一支对她这张脸好不好」排的,不按价格:所以价钱和在哪买退到名字下面一行,不跟名次抢位置。
 //   顾问一个都没查实时 picks 是空的,basis 里写了查过哪些渠道,照实给出来,不留一个空的排名标题
+// 11/26 起顾问每一环只交 1 支(替她拍板,不给类别让她挑):产品名当标题,价格 · 在哪买紧跟着,「用来干什么」退到下面一行。
+//   多个型号的(11/26 之前存在本机的排名结果)照旧画成名次列表。
+function shopOneHtml(x) {
+    const k = x.picks[0], pw = [k.price, k.where].filter(Boolean).join(' · ');
+    const nm = k.url ? `<a class="pick-n shop-buy-n" href="${esc(k.url)}" target="_blank" rel="noopener noreferrer">${esc(k.name)}</a>` : esc(k.name);
+    const use = [x.need, x.what].filter(Boolean).join('：');
+    return `<div class="shop-it shop-one">
+            <h3 class="shop-need shop-buy">${nm}</h3>
+            ${pw ? `<p class="pick-m">${esc(pw)}</p>` : ''}
+            ${use || x.replaces ? `<p class="note">用来${use ? '：' + esc(use) : ''}${x.replaces ? `，接班「${esc(x.replaces)}」` : ''}</p>` : ''}
+            ${k.why ? `<p class="note ink">${esc(k.why)}</p>` : ''}
+            ${x.basis ? `<p class="note shop-basis">为什么是它：${esc(x.basis)}</p>` : ''}
+            ${x.why ? `<p class="note">为什么要买：${esc(x.why)}</p>` : ''}
+            ${x.cover ? `<p class="note">买到之前：${esc(x.cover)}</p>` : ''}
+        </div>`;
+}
 function shopItemHtml(x) {
     const n = x.picks.length;
+    if (x.ranked && n === 1) return shopOneHtml(x);
     // 没排名次的是改规则之前存下的旧结果(最多 3 个、没按名次排):只叫「型号」,不冒充排名
     const hd = !x.ranked ? '型号' : n > 1 ? '同类前 ' + n + ' 名，第 1 名最好' : '同类只查实了 1 个';
     const rank = !n ? (x.basis ? `<p class="note shop-basis">型号没查实：${esc(x.basis)}</p>` : '')
@@ -363,7 +380,7 @@ export function shopHtml(app, W) {
     const head = (btn, meta) => `<div class="sec-h"><h2 class="pr-h">要不要买新的</h2>${btn}</div>${meta ? `<p class="meta" id="pr-shop-meta">${meta}</p>` : ''}`;
     const copy = `<button type="button" class="btn-link sm quiet" id="pr-shop-copy">复制清单</button>`;
     if (acc !== 'on') {
-        const why = acc === 'out' ? '登录并开通顾问后，顾问会联网查英国能买到的同类型号，按好坏排出前几名。下面是离线判断。' : acc === 'none' ? '顾问还没开通（邀请制），下面是离线判断。' : '这个账号用不了顾问，下面是离线判断。';
+        const why = acc === 'out' ? '登录并开通顾问后，顾问会联网查英国能买到的，直接告诉你每样买哪一支。下面是离线判断。' : acc === 'none' ? '顾问还没开通（邀请制），下面是离线判断。' : '这个账号用不了顾问，下面是离线判断。';
         return head(copy, '') + `<p class="note faint" id="pr-shop-st">${esc(why)}</p><div id="pr-shop-off">${shopOfflineHtml(W)}</div>`;
     }
     const uid = (curUser(app) || {}).uid, rec = shopRec(app);
@@ -372,10 +389,10 @@ export function shopHtml(app, W) {
     const fresh = !!rec && rec.sig === shopSig(W);
     const redo = ready ? `<button type="button" class="btn-link sm" id="pr-shop-redo"${busy ? ' disabled' : ''}>${busy ? '在查…' : rec ? '重新判断' : '让顾问判断'}</button>` : '';
     if (!rec || (!fresh && err && !busy)) {
-        const line = busy ? '顾问在查英国能买到的同类型号、排名次，要一分钟以上。下面先按离线规则看。'
+        const line = busy ? '顾问在查英国能买到的、替你挑定每样买哪一支，要一分钟以上。下面先按离线规则看。'
             : err ? '顾问这次没查成（' + err.msg + '），下面先按离线规则看。'
                 : queued ? '货架变了，过几秒让顾问判断。下面先按离线规则看。'
-                    : ready ? '还没让顾问判断过。下面先按离线规则看。' : '顾问连上之后能联网查同类型号、排出前几名。下面先按离线规则看。';
+                    : ready ? '还没让顾问判断过。下面先按离线规则看。' : '顾问连上之后能联网查、直接告诉你买哪一支。下面先按离线规则看。';
         return head(`<span class="btn-row">${redo}${copy}</span>`, '') + `<p class="note" id="pr-shop-st" role="status">${esc(line)}</p><div id="pr-shop-off">${shopOfflineHtml(W)}</div>`;
     }
     const d = rec.data;
@@ -383,10 +400,11 @@ export function shopHtml(app, W) {
     // meta 照实说这份结果是哪种:改规则之前存在本机的旧结果没排名次,不能写「同类按好坏排名」。
     //   旧结果不自动重判(货架没变就不花这笔钱),只把话说清楚,要排名她点「重新判断」。用逗号分句,不用「A · B · C」串联
     const ranked = d.items.some(x => x.ranked), oldShape = d.verdict === 'buy' && !ranked;
-    const meta = esc(md(rec.at) + ' ' + hm(rec.at) + ' 顾问判断的，' + (oldShape ? '这是改规则之前的结果，型号没排名次' : '同类按好坏排了名次') + '，货架变了会自动重判。');
+    const many = d.items.some(x => x.ranked && x.picks.length > 1);   // 11/26 之前存的排名结果(每样 3~5 个)
+    const meta = esc(md(rec.at) + ' ' + hm(rec.at) + ' 顾问判断的，' + (oldShape ? '这是改规则之前的结果，型号没排名次' : many ? '这是改规则之前的结果，每样列了几个' : '每样直接给了要买的那一支') + '，货架变了会自动重判。');
     let h = head(`<span class="btn-row">${redo}${copy}</span>`, meta);
     if (st) h += `<p class="note shop-st" id="pr-shop-st" role="status">${esc(st)}</p>`;
-    else if (oldShape && ready) h += `<p class="note shop-st" id="pr-shop-st" role="status">规则改了：现在同类按好坏排前 3 到 5 名。点「重新判断」看排名。</p>`;
+    else if ((oldShape || many) && ready) h += `<p class="note shop-st" id="pr-shop-st" role="status">规则改了：现在每样直接告诉你买哪一支。点「重新判断」看。</p>`;
     h += `<p class="lede pr-shop-sum">${d.verdict === 'none' ? '现在不用买。' : ''}${esc(d.summary || '')}</p>`;
     if (rec.trigger) h += `<p class="note faint">这次判断是因为：${esc(rec.trigger)}</p>`;
     h += '<div id="pr-shop-list">';
@@ -410,6 +428,14 @@ function shopCopyText(app, W) {
             lines.push('', label);
             // 发给对方一起挑:每个型号带名次(第 1 名最好)和为什么排这里,一环的排序依据写在型号前面
             list.forEach((x, i) => {
+                if (x.ranked && x.picks.length === 1) {   // 11/26 起:每一环只有替她拍板的那一支,产品名打头
+                    const k = x.picks[0], pw = [k.price, k.where].filter(Boolean);
+                    lines.push((i + 1) + '. ' + k.name + (pw.length ? '（' + pw.join('，') + '）' : '') + (k.url ? ' ' + k.url : ''));
+                    const use = [x.need, x.what].filter(Boolean).join('：');
+                    if (use || x.replaces) lines.push('   用来' + (use ? '：' + use : '') + (x.replaces ? '，接班「' + x.replaces + '」' : ''));
+                    if (x.basis) lines.push('   为什么是它：' + x.basis);
+                    return;
+                }
                 lines.push((i + 1) + '. ' + (x.need || x.what) + (x.replaces ? '（接班「' + x.replaces + '」）' : ''));
                 if (x.what && x.need) lines.push('   买哪类：' + x.what);
                 if (x.why) lines.push('   为什么：' + x.why);

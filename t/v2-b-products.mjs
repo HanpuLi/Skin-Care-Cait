@@ -175,6 +175,11 @@ await run('v2-b-products', [
         const nw = rk.find(x => /轻薄保湿/.test(x.need)), old = rk.find(x => /强清洁/.test(x.need));
         S.ok(nw && nw.h === '同类前 4 名，第 1 名最好' && /^排序依据：按成分短/.test(nw.basis) && nw.nos === '1,2,3,4' && nw.whys === 4 && nw.meta[0] === '£18 · LookFantastic', '新形状:「同类前 4 名，第 1 名最好」+ 排序依据 + 名次 1~4,每个写价格 · 在哪买、为什么排这里', nw);
         S.ok(old && old.h === '型号' && !old.basis && old.nos === '1,2', '旧形状(没 basis):标题只叫「型号」,没有排序依据', old);
+        // 11/26 每一环只给 1 支:产品名当标题,紧跟价格 · 在哪买,下面「用来」「为什么是它」;不画名次、不叫「同类」
+        const one = await p.eval(`const it=[...document.querySelectorAll('#pr-shop-list .shop-one')][0];return it?{h:it.querySelector('.shop-need').textContent,m:(it.querySelector('.pick-m')||{}).textContent||'',t:it.innerText,nos:it.querySelectorAll('.pick-no').length}:null`);
+        S.ok(one && /^Ultra Violette Queen Screen/.test(one.h) && one.m === '£38 · Space NK' && /用来：防晒备用：白天出门前最后一步/.test(one.t) && /为什么是它：比同类几支/.test(one.t) && !one.nos && !/名/.test(one.h), '只给一支:产品名当标题 + 价格 · 在哪买 + 用来 + 为什么是它,没有名次', one);
+        const meta = await text(p, '#pr-shop-meta');
+        S.ok(/每样列了几个/.test(meta), '本机还存着多支排名的旧结果时,meta 照实说是改规则之前的', meta);
         S.ok(/这些不用买/.test(v.skip) && /B5 修复霜/.test(v.skip), '「这些不用买」一段', v.skip);
         const rec = await p.eval(`return {local:JSON.parse(localStorage.getItem('sk_ai_shop1')||'null'),cloud:'sk_ai_shop1' in ${DATA}}`);
         S.ok(rec.local && rec.local.uid === 'u-test' && rec.local.sig && !rec.cloud, '结果按账号存本机 sk_ai_shop1(带 uid / 签名),不进云', { uid: rec.local && rec.local.uid, cloud: rec.cloud });

@@ -45,6 +45,8 @@
 a.pick-n{position:relative;text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:1px;text-decoration-color:var(--line-ctl)}
 a.pick-n::after{content:"";position:absolute;left:0;right:0;top:calc(-1 * var(--sp-3));bottom:calc(-1 * var(--sp-3))}
 .pick-m{font:14px/var(--lh-note) var(--serif);color:var(--muted);font-variant-numeric:lining-nums}
+.shop-buy>.pick-n{font:inherit}   /* 只给一支时产品名就是标题,别被 .pick-n 缩到 16px */
+.shop-one>.pick-m{margin-top:var(--sp-1)}
 .pick-w{margin-top:var(--sp-1);font:14px/var(--lh-note) var(--serif);color:var(--ink)}
 
 /* 同类排名(无衬线 ·「仪器」):在 #pr-shop 那张卡片里,名次是小圆标(第 1 名墨色实心,其余浅灰底),
